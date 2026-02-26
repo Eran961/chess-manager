@@ -296,14 +296,48 @@
         </div>
         <button class="btn btn-outline btn-sm" onclick="openEditCurrentPlayer()">✏️ עריכה</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
-        <div class="mini-stat"><div class="mini-stat-val" id="profileRating">—</div><div class="mini-stat-label">מד כושר</div></div>
+      <!-- Info Cards -->
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
+        <div class="mini-stat">
+          <div class="mini-stat-val" id="profileRating">—</div>
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-top:2px" id="profileExpected"></div>
+          <div class="mini-stat-label">מד כושר</div>
+        </div>
         <div class="mini-stat"><div class="mini-stat-val" id="profileAge">—</div><div class="mini-stat-label">שנת לידה</div></div>
-        <div class="mini-stat"><div class="mini-stat-val" id="profileGroup">—</div><div class="mini-stat-label">מדריך</div></div>
       </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
+        <div class="mini-stat"><div class="mini-stat-val" id="profileGroup" style="font-size:1rem">—</div><div class="mini-stat-label">מדריך</div></div>
+        <div class="mini-stat"><div class="mini-stat-val" id="profileFide" style="font-size:1rem">—</div><div class="mini-stat-label">מספר FIDE</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
+        <div class="mini-stat"><div class="mini-stat-val" id="profileRank" style="font-size:1rem">—</div><div class="mini-stat-label">דרגה</div></div>
+        <div class="mini-stat"><div class="mini-stat-val" id="profileCard" style="font-size:0.85rem">—</div><div class="mini-stat-label">תוקף כרטיס</div></div>
+      </div>
+
+      <!-- Tournaments -->
+      <div class="form-card" id="profileTournamentsCard" style="display:none">
+        <div class="table-title" style="margin-bottom:12px">🏆 תחרויות אחרונות</div>
+        <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.76rem">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:right;padding:6px 8px;color:var(--text-dim);white-space:nowrap">תאריך התחלה</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--text-dim);white-space:nowrap">עדכון מד כושר</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--text-dim)">תחרות</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text-dim)">משחקים</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text-dim)">נקודות</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text-dim)">רמת ביצוע</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text-dim)">תוצאה</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text-dim)">שינוי מד כושר</th>
+          </tr></thead>
+          <tbody id="profileTournamentsTbody"></tbody>
+        </table>
+        </div>
+      </div>
+
+      <!-- Coach Notes -->
       <div class="form-card">
         <div class="table-title" style="margin-bottom:16px">הערות מדריך</div>
-        <textarea id="profileNotes" rows="4" placeholder="הערות..." style="width:100%"></textarea>
+        <textarea id="profileNotes" rows="3" placeholder="הערות..." style="width:100%"></textarea>
         <button class="btn btn-gold btn-sm" style="margin-top:8px" onclick="saveProfileNotes()">שמור הערות</button>
       </div>
     </div>
@@ -621,16 +655,46 @@ window.openProfile = (id, pData) => {
   if (!p) return;
   currentProfileId = id;
   document.getElementById('profileName').textContent = p.name;
-  document.getElementById('profileMeta').textContent = [p.fedId&&`מספר איגוד: ${p.fedId}`, p.phone].filter(Boolean).join(' • ');
-  document.getElementById('profileRating').textContent = p.rating||'—';
+  document.getElementById('profileMeta').textContent = [p.phone, p.email].filter(Boolean).join(' • ');
   document.getElementById('profileAge').textContent = p.birth_year||'—';
   document.getElementById('profileGroup').textContent = p.coach||'—';
-  document.getElementById('profileNotes').value = p.notes||'';;
+  document.getElementById('profileNotes').value = p.notes||'';
+
+  // Parse extra fields from notes (stored as "FIDE: xxx | דרגה: xxx | ...")
+  const notes = p.notes||'';
+  const fideMatch = notes.match(/FIDE:\s*(\d+)/);
+  const rankMatch = notes.match(/דרגה:\s*([^|]+)/);
+  const cardMatch = notes.match(/תוקף כרטיס:\s*([^|]+)/);
+  const ratingMatch = notes.match(/מד כושר ישראלי:\s*(\d+)/);
+  const expectedMatch = notes.match(/צפוי:\s*(\d+)/);
+
+  // Rating display
+  const currentRating = p.rating || (ratingMatch ? ratingMatch[1] : null);
+  document.getElementById('profileRating').textContent = currentRating||'—';
+  const expEl = document.getElementById('profileExpected');
+  if (expEl) expEl.textContent = expectedMatch ? `(צפוי: ${expectedMatch[1]})` : '';
+
+  document.getElementById('profileFide').textContent = fideMatch ? fideMatch[1] : (p.fedId||'—');
+  document.getElementById('profileRank').textContent = rankMatch ? rankMatch[1].trim() : '—';
+  
+  const cardEl = document.getElementById('profileCard');
+  if (cardMatch) {
+    const cardText = cardMatch[1].trim();
+    const expired = cardText.includes('⚠️');
+    cardEl.textContent = cardText.replace(' ⚠️ פג!','');
+    cardEl.style.color = expired ? 'var(--danger)' : 'var(--success)';
+  } else { cardEl.textContent = '—'; }
+
   document.getElementById('profileTags').innerHTML = [
-    p.rating&&`<span class="tag tag-gold">♟ ${p.rating}</span>`,
+    currentRating&&`<span class="tag tag-gold">♟ ${currentRating}</span>`,
     p.group&&`<span class="tag tag-blue" style="font-size:0.7rem">${p.group}</span>`,
     p.coach&&`<span class="tag tag-green">מדריך: ${p.coach}</span>`
   ].filter(Boolean).join('');
+
+  // Show tournaments if stored
+  if (window._lastFetchedTournaments && window._lastFetchedFedId === String(p.fedId||p.id)) {
+    showProfileTournaments(window._lastFetchedTournaments);
+  }
   showPage('profile');
 };
 
@@ -725,6 +789,25 @@ window.openModal = id => document.getElementById(id).classList.add('open');
 window.closeModal = id => document.getElementById(id).classList.remove('open');
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }));
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open')); });
+
+function showProfileTournaments(tournaments) {
+  const card = document.getElementById('profileTournamentsCard');
+  const tbody = document.getElementById('profileTournamentsTbody');
+  if (!card || !tbody) return;
+  if (!tournaments || tournaments.length === 0) return;
+  card.style.display = 'block';
+  tbody.innerHTML = tournaments.map(t => `
+    <tr style="border-bottom:1px solid rgba(42,42,42,0.4)">
+      <td style="padding:6px 8px;color:var(--text-dim);white-space:nowrap">${t.dateStart||'—'}</td>
+      <td style="padding:6px 8px;color:var(--text-dim);white-space:nowrap">${t.updateDate||'—'}</td>
+      <td style="padding:6px 8px"><a href="https://www.chess.org.il/Tournaments/PlayerInTournament.aspx?Id=${t.id}" target="_blank" style="color:var(--gold);text-decoration:none">${t.name}</a></td>
+      <td style="padding:6px 8px;text-align:center">${t.games||'—'}</td>
+      <td style="padding:6px 8px;text-align:center">${t.points||'—'}</td>
+      <td style="padding:6px 8px;text-align:center;color:var(--text-dim)">${t.level||'—'}</td>
+      <td style="padding:6px 8px;text-align:center;color:var(--text-dim)">+${t.wins||0}-${t.losses||0}=${t.draws||0}</td>
+      <td style="padding:6px 8px;text-align:center;font-weight:600;color:${t.resultColor==='green'?'var(--success)':'var(--danger)'}">${t.resultColor==='green'?'+':''}${t.ratingChange||'—'}</td>
+    </tr>`).join('');
+}
 
 function showToast(msg) {
   const t = document.createElement('div'); t.className='toast'; t.textContent=msg;
