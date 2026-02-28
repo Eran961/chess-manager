@@ -830,11 +830,21 @@ document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open')); });
 
 // ========== CLUB TOURNAMENTS FROM FEDERATION ==========
-async function syncClubTournaments() {
+window.syncClubTournaments = async function() {
   const statusEl = document.getElementById('syncStatus');
   const card = document.getElementById('fedTournamentsCard');
+  const btn = document.querySelector('button[onclick="syncClubTournaments()"]');
+
+  // Show loading state on button
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ טוען...'; }
   statusEl.style.display = 'block';
-  statusEl.innerHTML = '⏳ מושך תחרויות מאתר האיגוד...';
+  statusEl.style.background = 'rgba(212,175,55,0.08)';
+  statusEl.style.borderRadius = '8px';
+  statusEl.style.padding = '12px 16px';
+  statusEl.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+    <div style="width:18px;height:18px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0"></div>
+    <span>מתחבר לאתר האיגוד...</span>
+  </div>`;
 
   try {
     const proxyUrl = 'https://api.allorigins.win/get?url=';
@@ -855,11 +865,16 @@ async function syncClubTournaments() {
     }));
 
     if (fedTournaments.length === 0) {
-      statusEl.innerHTML = '⚠️ לא נמצאו תחרויות';
+      statusEl.style.background = 'rgba(255,80,80,0.08)';
+      statusEl.innerHTML = '⚠️ לא נמצאו תחרויות באתר האיגוד';
+      if (btn) { btn.disabled = false; btn.innerHTML = '🔄 סנכרן מהאיגוד'; }
       return;
     }
 
-    statusEl.innerHTML = `✅ נמצאו ${fedTournaments.length} תחרויות. בודק שחקני המועדון...`;
+    statusEl.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+      <div style="width:18px;height:18px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0"></div>
+      <span>נמצאו ${fedTournaments.length} תחרויות, בונה טבלה...</span>
+    </div>`;
     
     // For each tournament, check which of our players participated
     const tbody = document.getElementById('fedTournamentsTbody');
@@ -876,24 +891,34 @@ async function syncClubTournaments() {
         <td style="padding:8px;text-align:center;color:var(--text-dim)">${t.participants}</td>
         <td style="padding:8px;text-align:center" id="ourplayers-${t.id}"><span style="color:var(--text-dim);font-size:0.75rem">לחץ לבדוק</span></td>
         <td style="padding:8px;text-align:center;white-space:nowrap">
-          <button class="btn btn-sm" style="font-size:0.72rem;padding:3px 8px;background:var(--card);border:1px solid var(--border)" onclick="loadTournamentPlayers('${t.id}','${t.name.replace(/'/g,"\\'")}')">👥 שחקנים</button>
+          <button class="btn btn-sm" style="font-size:0.72rem;padding:3px 8px;background:var(--card);border:1px solid var(--border)" onclick="window.loadTournamentPlayers('${t.id}','${t.name.replace(/'/g,"\\'")}')">👥 שחקנים</button>
         </td>
       </tr>`).join('');
 
-    statusEl.innerHTML = `✅ ${fedTournaments.length} תחרויות נטענו. לחץ "שחקנים" לראות מי ממועדוננו השתתף`;
+    statusEl.style.background = 'rgba(80,200,120,0.08)';
+    statusEl.innerHTML = `✅ ${fedTournaments.length} תחרויות נטענו בהצלחה. לחץ "👥 שחקנים" לראות מי ממועדוננו השתתף`;
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 סנכרן מהאיגוד'; }
 
   } catch(e) {
-    statusEl.innerHTML = '❌ שגיאה בטעינה: ' + e.message;
+    statusEl.style.background = 'rgba(255,80,80,0.08)';
+    statusEl.innerHTML = `❌ שגיאה בטעינה: ${e.message}<br><span style="font-size:0.78rem;color:var(--text-dim)">בדוק חיבור לאינטרנט ונסה שוב</span>`;
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 סנכרן מהאיגוד'; }
   }
 }
 
-async function loadTournamentPlayers(tournamentId, tournamentName) {
+window.loadTournamentPlayers = async function(tournamentId, tournamentName) {
   const modal = document.getElementById('tournamentPlayersModal');
   const content = document.getElementById('tournamentPlayersContent');
   const title = document.getElementById('tournamentPlayersTitle');
+  const rowBtn = document.querySelector(`#fedrow-${tournamentId} button`);
+
+  if (rowBtn) { rowBtn.disabled = true; rowBtn.innerHTML = '⏳'; }
   
   title.textContent = '👥 ' + tournamentName;
-  content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)">⏳ טוען שחקנים...</div>';
+  content.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-dim)">
+    <div style="width:32px;height:32px;border:3px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
+    <div>טוען שחקנים מהאיגוד...</div>
+  </div>`;
   modal.style.display = 'block';
 
   try {
@@ -919,7 +944,12 @@ async function loadTournamentPlayers(tournamentId, tournamentName) {
     }));
 
     if (tourPlayers.length === 0) {
-      content.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:16px">לא נמצאו שחקנים</div>';
+      content.innerHTML = `<div style="text-align:center;padding:24px">
+        <div style="font-size:2rem;margin-bottom:8px">🤷</div>
+        <div style="color:var(--text-dim)">לא נמצאו שחקנים בתחרות זו</div>
+        <div style="font-size:0.78rem;color:var(--text-dim);margin-top:4px">ייתכן שהתחרות עדיין לא עודכנה באיגוד</div>
+      </div>`;
+      if (rowBtn) { rowBtn.disabled = false; rowBtn.innerHTML = '👥 שחקנים'; }
       return;
     }
 
@@ -980,7 +1010,7 @@ async function loadTournamentPlayers(tournamentId, tournamentName) {
               <td style="padding:5px;text-align:center">${p.points}</td>
               <td style="padding:5px;text-align:center">
                 <button class="btn btn-sm" style="font-size:0.7rem;padding:2px 6px;background:rgba(212,175,55,0.15);border:1px solid var(--gold);color:var(--gold)" 
-                  onclick="addPlayerFromTournament('${p.fedId}','${p.name.replace(/'/g,"\\'")}','${p.rating}','${p.age}','${p.gender}')">+ הוסף</button>
+                  onclick="window.addPlayerFromTournament('${p.fedId}','${p.name.replace(/'/g,"\\'")}','${p.rating}','${p.age}','${p.gender}')">+ הוסף</button>
               </td>
             </tr>`).join('')}
           </tbody>
@@ -990,13 +1020,20 @@ async function loadTournamentPlayers(tournamentId, tournamentName) {
     }
 
     content.innerHTML = html2 || '<div style="color:var(--text-dim);text-align:center;padding:16px">לא נמצאו שחקנים</div>';
+    if (rowBtn) { rowBtn.disabled = false; rowBtn.innerHTML = '👥 שחקנים'; }
 
   } catch(e) {
-    content.innerHTML = '<div style="color:var(--danger);padding:16px">❌ שגיאה בטעינה: ' + e.message + '</div>';
+    content.innerHTML = `<div style="padding:20px;text-align:center">
+      <div style="color:var(--danger);font-size:1.5rem;margin-bottom:8px">❌</div>
+      <div style="color:var(--danger);font-weight:600">שגיאה בטעינה</div>
+      <div style="color:var(--text-dim);font-size:0.82rem;margin-top:6px">${e.message}</div>
+      <div style="color:var(--text-dim);font-size:0.78rem;margin-top:4px">בדוק חיבור לאינטרנט ונסה שוב</div>
+    </div>`;
+    if (rowBtn) { rowBtn.disabled = false; rowBtn.innerHTML = '👥 שחקנים'; }
   }
 }
 
-async function addPlayerFromTournament(fedId, name, rating, age, gender) {
+window.addPlayerFromTournament = async function(fedId, name, rating, age, gender) {
   if (!confirm(`להוסיף את ${name} למאגר השחקנים?`)) return;
   try {
     const birthYear = age ? (new Date().getFullYear() - parseInt(age)) : '';
