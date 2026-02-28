@@ -175,6 +175,7 @@
     <div class="nav-item" onclick="showPage('players')"><span class="icon">♟</span> שחקנים</div>
     <div class="nav-item" onclick="showPage('groups')"><span class="icon">👥</span> חוגים</div>
     <div class="nav-item" onclick="showPage('tournaments')"><span class="icon">🏆</span> תחרויות</div>
+    <div class="nav-item" onclick="showPage('club-members')"><span class="icon">🎖️</span> פנקס מתחרה</div>
     <div class="nav-item" onclick="showPage('attendance')"><span class="icon">✅</span> נוכחות</div>
   </nav>
   <div class="user-badge">
@@ -283,6 +284,7 @@
           <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
             <thead><tr style="border-bottom:1px solid var(--border)">
               <th style="text-align:right;padding:8px;color:var(--text-dim)">שם תחרות</th>
+              <th style="text-align:center;padding:8px;color:var(--text-dim)">סטטוס</th>
               <th style="text-align:center;padding:8px;color:var(--text-dim);white-space:nowrap">תאריך פתיחה</th>
               <th style="text-align:center;padding:8px;color:var(--text-dim);white-space:nowrap">תאריך סיום</th>
               <th style="text-align:center;padding:8px;color:var(--text-dim)">משתתפים</th>
@@ -309,6 +311,26 @@
           <div id="tournamentPlayersContent"></div>
         </div>
       </div>
+    </div>
+
+    <!-- CLUB MEMBERS (פנקס מתחרה) -->
+    <div class="page" id="page-club-members">
+      <div class="table-card" style="margin-bottom:16px">
+        <div class="table-header">
+          <div class="table-title">🎖️ פנקס מתחרה — שחקני המועדון</div>
+          <button class="btn btn-gold btn-sm" onclick="openAddClubMember()">+ הוסף שחקן</button>
+        </div>
+        <div style="padding:10px 0;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding:12px 0 0">
+          <input type="text" id="clubMemberSearch" placeholder="חיפוש שחקן..." oninput="renderClubMembers()" style="flex:1;min-width:150px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.85rem">
+          <select id="clubMemberFilter" onchange="renderClubMembers()" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem">
+            <option value="all">כולם</option>
+            <option value="youth">נוער (עד 18)</option>
+            <option value="active">פעיל בחוג</option>
+            <option value="no-group">ללא חוג</option>
+          </select>
+        </div>
+      </div>
+      <div id="clubMembersGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
     </div>
 
     <!-- ATTENDANCE -->
@@ -415,6 +437,37 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="addClubMemberModal">
+  <div class="modal">
+    <div class="modal-title">🎖️ הוסף שחקן לפנקס המתחרה</div>
+    <div class="form-grid">
+      <div class="form-group full"><label>מספר שחקן באיגוד *</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="cmFedId" placeholder="למשל: 207139">
+          <button class="btn btn-gold btn-sm" onclick="fetchClubMemberFromFed()">🔍 משוך</button>
+        </div>
+        <div id="cmFetchStatus" style="font-size:0.78rem;margin-top:4px;color:var(--text-dim)"></div>
+      </div>
+      <div class="form-group full"><label>שם מלא *</label><input type="text" id="cmName"></div>
+      <div class="form-group"><label>מד כושר ישראלי</label><input type="number" id="cmRating"></div>
+      <div class="form-group"><label>שנת לידה</label><input type="number" id="cmBirthYear" placeholder="למשל: 2010"></div>
+      <div class="form-group"><label>מגדר</label>
+        <select id="cmGender"><option value="זכר">זכר</option><option value="נקבה">נקבה</option></select>
+      </div>
+      <div class="form-group"><label>מספר FIDE</label><input type="text" id="cmFide"></div>
+      <div class="form-group"><label>חוג (אם רשום)</label>
+        <select id="cmGroup"><option value="">ללא חוג</option></select>
+      </div>
+      <div class="form-group"><label>טלפון הורה</label><input type="text" id="cmPhone"></div>
+      <div class="form-group full"><label>הערות</label><textarea id="cmNotes" rows="2"></textarea></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('addClubMemberModal')">ביטול</button>
+      <button class="btn btn-gold" onclick="saveClubMember()">שמור</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="addTournamentModal">
   <div class="modal">
     <div class="modal-title">+ הוסף תחרות</div>
@@ -492,9 +545,28 @@ onAuthStateChanged(auth, async user => {
 });
 
 async function loadAll() {
-  await Promise.all([loadPlayers(), loadGroups(), loadTournaments()]);
+  await Promise.all([loadPlayers(), loadGroups(), loadTournaments(), loadClubMembers()]);
   updateDashboard();
   populateGroupSelects();
+  checkAutoSync(); // auto-sync federation tournaments if >1 day since last sync
+}
+
+async function checkAutoSync() {
+  const lastSync = localStorage.getItem('lastFedSync');
+  const now = Date.now();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  if (!lastSync || (now - parseInt(lastSync)) > oneDayMs) {
+    // Show subtle banner on tournaments page
+    const statusEl = document.getElementById('syncStatus');
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'rgba(212,175,55,0.06)';
+      statusEl.style.borderRadius = '8px';
+      statusEl.style.padding = '10px 14px';
+      const lastDate = lastSync ? new Date(parseInt(lastSync)).toLocaleDateString('he-IL') : 'מעולם';
+      statusEl.innerHTML = `<span style="color:var(--text-dim);font-size:0.8rem">⏰ עדכון אחרון: ${lastDate} — </span><a href="#" onclick="syncClubTournaments();return false;" style="color:var(--gold);font-size:0.8rem;text-decoration:none">עדכן עכשיו</a>`;
+    }
+  }
 }
 
 // ===== SYNC SEED DATA =====
@@ -807,8 +879,8 @@ function populateGroupSelects() {
   document.getElementById('filterGroup').innerHTML = '<option value="">כל החוגים</option>' + glist.map(g=>`<option value="${g.name}">${g.name}</option>`).join('');
 }
 
-const pageTitles = { dashboard:'לוח בקרה', players:'שחקנים', groups:'חוגים', 'group-detail':'פירוט חוג', tournaments:'תחרויות', attendance:'נוכחות', profile:'פרופיל שחקן' };
-const pageActions = { players:{text:'+ הוסף שחקן',fn:'openAddPlayer'}, tournaments:{text:'+ תחרות',fn:'openTournamentModal'} };
+const pageTitles = { dashboard:'לוח בקרה', players:'שחקנים', groups:'חוגים', 'group-detail':'פירוט חוג', tournaments:'תחרויות', attendance:'נוכחות', profile:'פרופיל שחקן', 'club-members':'🎖️ פנקס מתחרה' };
+const pageActions = { players:{text:'+ הוסף שחקן',fn:'openAddPlayer'}, tournaments:{text:'+ תחרות',fn:'openTournamentModal'}, 'club-members':{text:'+ הוסף שחקן',fn:'openAddClubMember'} };
 
 window.showPage = id => {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -881,11 +953,33 @@ window.syncClubTournaments = async function() {
     document.getElementById('fedTourCount').textContent = `(${fedTournaments.length})`;
     card.style.display = 'block';
 
-    tbody.innerHTML = fedTournaments.map(t => `
-      <tr style="border-bottom:1px solid rgba(42,42,42,0.3)" id="fedrow-${t.id}">
+    const todayStr = new Date().toLocaleDateString('he-IL').split('.').reverse().join('/'); // rough
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    function parseILDate(s) {
+      if (!s) return null;
+      const p = s.split('/'); 
+      if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+      return null;
+    }
+
+    function getTournamentStatus(t) {
+      const start = parseILDate(t.dateStart);
+      const end = parseILDate(t.dateEnd);
+      if (!start) return { label:'—', style:'color:var(--text-dim)', rowStyle:'' };
+      if (end && today > end) return { label:'הסתיים', style:'background:rgba(100,100,100,0.15);color:var(--text-dim);padding:2px 8px;border-radius:12px;font-size:0.72rem', rowStyle:'' };
+      if (start <= today && (!end || today <= end)) return { label:'🟢 פעיל עכשיו', style:'background:rgba(80,200,120,0.18);color:#50c878;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600', rowStyle:'background:rgba(80,200,120,0.04);' };
+      return { label:'עתידי', style:'background:rgba(212,175,55,0.15);color:var(--gold);padding:2px 8px;border-radius:12px;font-size:0.72rem', rowStyle:'' };
+    }
+
+    tbody.innerHTML = fedTournaments.map(t => {
+      const status = getTournamentStatus(t);
+      return `
+      <tr style="border-bottom:1px solid rgba(42,42,42,0.3);${status.rowStyle}" id="fedrow-${t.id}">
         <td style="padding:8px">
           <a href="https://www.chess.org.il/Tournaments/TournamentPage.aspx?Id=${t.id}" target="_blank" style="color:var(--gold);text-decoration:none;font-size:0.85rem">${t.name}</a>
         </td>
+        <td style="padding:8px;text-align:center"><span style="${status.style}">${status.label}</span></td>
         <td style="padding:8px;text-align:center;color:var(--text-dim);font-size:0.8rem;white-space:nowrap">${t.dateStart}</td>
         <td style="padding:8px;text-align:center;color:var(--text-dim);font-size:0.8rem;white-space:nowrap">${t.dateEnd}</td>
         <td style="padding:8px;text-align:center;color:var(--text-dim)">${t.participants}</td>
@@ -893,10 +987,12 @@ window.syncClubTournaments = async function() {
         <td style="padding:8px;text-align:center;white-space:nowrap">
           <button class="btn btn-sm" style="font-size:0.72rem;padding:3px 8px;background:var(--card);border:1px solid var(--border)" onclick="window.loadTournamentPlayers('${t.id}','${t.name.replace(/'/g,"\\'")}')">👥 שחקנים</button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
     statusEl.style.background = 'rgba(80,200,120,0.08)';
     statusEl.innerHTML = `✅ ${fedTournaments.length} תחרויות נטענו בהצלחה. לחץ "👥 שחקנים" לראות מי ממועדוננו השתתף`;
+    localStorage.setItem('lastFedSync', Date.now().toString());
     if (btn) { btn.disabled = false; btn.innerHTML = '🔄 סנכרן מהאיגוד'; }
 
   } catch(e) {
@@ -1049,6 +1145,179 @@ window.addPlayerFromTournament = async function(fedId, name, rating, age, gender
     showToast('שגיאה: ' + e.message);
   }
 }
+
+// ========== CLUB MEMBERS (פנקס מתחרה) ==========
+let clubMembers = [];
+
+async function loadClubMembers() {
+  try {
+    const snap = await getDocs(query(collection(db,'clubMembers'), orderBy('createdAt','desc')));
+    clubMembers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch { clubMembers = []; }
+  renderClubMembers();
+}
+
+window.renderClubMembers = function() {
+  const grid = document.getElementById('clubMembersGrid');
+  if (!grid) return;
+  const search = (document.getElementById('clubMemberSearch')?.value || '').toLowerCase();
+  const filter = document.getElementById('clubMemberFilter')?.value || 'all';
+  const today = new Date();
+
+  let filtered = clubMembers.filter(m => {
+    const nameMatch = m.name?.toLowerCase().includes(search) || m.fedId?.toString().includes(search);
+    if (!nameMatch) return false;
+    if (filter === 'youth') {
+      const age = m.birth_year ? today.getFullYear() - m.birth_year : null;
+      return age !== null && age < 18;
+    }
+    if (filter === 'active') return !!m.group;
+    if (filter === 'no-group') return !m.group;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim)">
+      <div style="font-size:2rem;margin-bottom:8px">🎖️</div>
+      <div>אין שחקנים בפנקס המתחרה עדיין</div>
+      <div style="font-size:0.8rem;margin-top:4px">הוסף שחקנים שמשתתפים בתחרויות רשמיות</div>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(m => {
+    const age = m.birth_year ? today.getFullYear() - m.birth_year : null;
+    const isYouth = age !== null && age < 18;
+    const wb = m.whiteBlack || { white: 0, black: 0 };
+    const total = (wb.white || 0) + (wb.black || 0);
+    const whitePct = total > 0 ? Math.round((wb.white / total) * 100) : 50;
+
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;transition:box-shadow 0.2s" onmouseenter="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.3)'" onmouseleave="this.style.boxShadow=''">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-weight:600;font-size:0.95rem">${m.name}</div>
+          <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px">${m.fedId ? 'איגוד: ' + m.fedId : 'ללא מספר איגוד'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          ${isYouth ? `<span style="background:rgba(212,175,55,0.15);color:var(--gold);padding:1px 7px;border-radius:10px;font-size:0.7rem">נוער ${age}</span>` : ''}
+          ${m.group ? `<span style="background:rgba(100,149,237,0.12);color:cornflowerblue;padding:1px 7px;border-radius:10px;font-size:0.68rem;max-width:120px;text-align:center;line-height:1.3">${m.group}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        ${m.rating ? `<div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:var(--gold)">${m.rating}</div><div style="font-size:0.65rem;color:var(--text-dim)">מד כושר</div></div>` : ''}
+        ${m.fide ? `<div style="text-align:center"><div style="font-size:0.9rem;font-weight:600">${m.fide}</div><div style="font-size:0.65rem;color:var(--text-dim)">FIDE</div></div>` : ''}
+        ${m.gender ? `<div style="text-align:center"><div style="font-size:0.9rem">${m.gender === 'נקבה' ? '♀' : '♂'}</div><div style="font-size:0.65rem;color:var(--text-dim)">${m.gender}</div></div>` : ''}
+      </div>
+      ${total > 0 ? `
+      <div style="margin-bottom:10px">
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:4px;display:flex;justify-content:space-between">
+          <span>⬜ לבן: ${wb.white} (${whitePct}%)</span>
+          <span>⬛ שחור: ${wb.black} (${100-whitePct}%)</span>
+        </div>
+        <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${whitePct}%;background:linear-gradient(90deg,#e8e8e8,#fff);border-radius:3px"></div>
+        </div>
+      </div>` : `<div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:10px">אין נתוני לבן/שחור עדיין</div>`}
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-sm" style="font-size:0.7rem;padding:3px 8px;background:var(--surface2);border:1px solid var(--border)" onclick="window.editClubMemberWB('${m.id}','${m.name.replace(/'/g,"\\'")}',${wb.white||0},${wb.black||0})">⬜⬛ לבן/שחור</button>
+        <button class="btn btn-sm btn-danger" style="font-size:0.7rem;padding:3px 8px" onclick="window.deleteClubMember('${m.id}','${m.name.replace(/'/g,"\\'")}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+};
+
+window.openAddClubMember = function() {
+  // Populate group select
+  const sel = document.getElementById('cmGroup');
+  if (sel) {
+    sel.innerHTML = '<option value="">ללא חוג</option>' + groups.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+  }
+  ['cmFedId','cmName','cmRating','cmBirthYear','cmFide','cmPhone','cmNotes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('cmFetchStatus').textContent = '';
+  openModal('addClubMemberModal');
+};
+
+window.fetchClubMemberFromFed = async function() {
+  const fedId = document.getElementById('cmFedId').value.trim();
+  if (!fedId) { showToast('הזן מספר שחקן באיגוד'); return; }
+  const statusEl = document.getElementById('cmFetchStatus');
+  statusEl.style.color = 'var(--gold)';
+  statusEl.textContent = '⏳ מושך נתונים מהאיגוד...';
+  try {
+    const proxyUrl = 'https://api.allorigins.win/get?url=';
+    const playerUrl = encodeURIComponent(`https://www.chess.org.il/Players/Player.aspx?Id=${fedId}`);
+    const resp = await fetch(proxyUrl + playerUrl);
+    const data = await resp.json();
+    const html = data.contents;
+    const nameMatch = html.match(/<h2>\s*([^<]+?)\s*<\/h2>/);
+    const ratingMatch = html.match(/מד כושר ישראלי<span>:\s*(\d+)<\/span>/);
+    const fideMatch = html.match(/FIDE[^<]*<span[^>]*>:\s*(\d+)<\/span>/);
+    const birthMatch = html.match(/שנת לידה[^<]*<span[^>]*>:\s*(\d{4})<\/span>/);
+    const genderMatch = html.match(/מגדר[^<]*<span[^>]*>:\s*([^<]+)<\/span>/);
+    if (nameMatch) document.getElementById('cmName').value = nameMatch[1].trim();
+    if (ratingMatch) document.getElementById('cmRating').value = ratingMatch[1];
+    if (fideMatch) document.getElementById('cmFide').value = fideMatch[1];
+    if (birthMatch) document.getElementById('cmBirthYear').value = birthMatch[1];
+    if (genderMatch) {
+      const g = genderMatch[1].trim();
+      document.getElementById('cmGender').value = g.includes('נ') ? 'נקבה' : 'זכר';
+    }
+    statusEl.style.color = 'var(--success, #50c878)';
+    statusEl.textContent = nameMatch ? `✅ נמצא: ${nameMatch[1].trim()}` : '⚠️ לא נמצאו נתונים — מלא ידנית';
+  } catch(e) {
+    statusEl.style.color = 'var(--danger, #f44)';
+    statusEl.textContent = '❌ שגיאה בטעינה — מלא ידנית';
+  }
+};
+
+window.saveClubMember = async function() {
+  const name = document.getElementById('cmName').value.trim();
+  const fedId = document.getElementById('cmFedId').value.trim();
+  if (!name) { showToast('נא להזין שם'); return; }
+  try {
+    await addDoc(collection(db,'clubMembers'), {
+      name, fedId,
+      rating: parseInt(document.getElementById('cmRating').value) || null,
+      birth_year: parseInt(document.getElementById('cmBirthYear').value) || null,
+      gender: document.getElementById('cmGender').value,
+      fide: document.getElementById('cmFide').value.trim(),
+      group: document.getElementById('cmGroup').value,
+      phone: document.getElementById('cmPhone').value.trim(),
+      notes: document.getElementById('cmNotes').value.trim(),
+      whiteBlack: { white: 0, black: 0 },
+      createdAt: serverTimestamp()
+    });
+    showToast(`✅ ${name} נוסף לפנקס המתחרה!`);
+    closeModal('addClubMemberModal');
+    await loadClubMembers();
+  } catch(e) { showToast('שגיאה: ' + e.message); }
+};
+
+window.editClubMemberWB = async function(id, name, white, black) {
+  const newWhite = prompt(`${name}\nכמה פעמים שיחק בלבן? (כרגע: ${white})`, white);
+  if (newWhite === null) return;
+  const newBlack = prompt(`כמה פעמים שיחק בשחור? (כרגע: ${black})`, black);
+  if (newBlack === null) return;
+  try {
+    await updateDoc(doc(db,'clubMembers',id), {
+      whiteBlack: { white: parseInt(newWhite)||0, black: parseInt(newBlack)||0 }
+    });
+    showToast('✅ עודכן!');
+    await loadClubMembers();
+  } catch(e) { showToast('שגיאה: ' + e.message); }
+};
+
+window.deleteClubMember = async function(id, name) {
+  if (!confirm(`למחוק את ${name} מפנקס המתחרה?`)) return;
+  try {
+    await deleteDoc(doc(db,'clubMembers',id));
+    showToast('נמחק');
+    await loadClubMembers();
+  } catch(e) { showToast('שגיאה: ' + e.message); }
+};
 
 function showProfileTournaments(tournaments) {
   const card = document.getElementById('profileTournamentsCard');
