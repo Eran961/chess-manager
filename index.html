@@ -473,6 +473,31 @@ let currentProfileId = null, attendanceState = {};
 let lastPage = 'players';
 
 // AUTH
+
+// ===== PROXY HELPER =====
+async function fetchViaProxy(targetUrl) {
+  const proxies = [
+    u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  ];
+  let lastErr = '';
+  for (const makeUrl of proxies) {
+    try {
+      const resp = await fetch(makeUrl(targetUrl), { signal: AbortSignal.timeout(12000) });
+      const text = await resp.text();
+      if (text.trim().startsWith('{')) {
+        const data = JSON.parse(text);
+        if (data.contents) return data.contents;
+        lastErr = 'proxy returned error page'; continue;
+      }
+      if (text.length > 500) return text;
+      lastErr = 'response too short';
+    } catch(e) { lastErr = e.message; }
+  }
+  throw new Error(`כל ה-proxies נכשלו: ${lastErr}`);
+}
+
 window.doLogin = async () => {
   const email = document.getElementById('loginEmail').value;
   const pass = document.getElementById('loginPassword').value;
@@ -882,11 +907,7 @@ window.syncClubTournaments = async function() {
   </div>`;
 
   try {
-    const proxyUrl = 'https://api.allorigins.win/get?url=';
-    const clubUrl = encodeURIComponent('https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=TournamentsCompleted');
-    const resp = await fetch(proxyUrl + clubUrl);
-    const data = await resp.json();
-    const html = data.contents;
+    const html = await fetchViaProxy('https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=TournamentsCompleted');
 
     // Parse tournaments from table
     const rows = [...html.matchAll(/<a[^>]+href="\.\.\/Tournaments\/TournamentPage\.aspx\?Id=(\d+)"[^>]*>([^<]+)<\/a>[\s\S]*?<td>\s*([\d\/]+)\s*<\/td>\s*<td>\s*([\d\/]+)\s*<\/td>\s*<td>\s*(\d+)\s*<\/td>/g)];
@@ -981,11 +1002,7 @@ window.loadTournamentPlayers = async function(tournamentId, tournamentName) {
   modal.style.display = 'block';
 
   try {
-    const proxyUrl = 'https://api.allorigins.win/get?url=';
-    const tourUrl = encodeURIComponent(`https://www.chess.org.il/Tournaments/TournamentPage.aspx?Id=${tournamentId}`);
-    const resp = await fetch(proxyUrl + tourUrl);
-    const data = await resp.json();
-    const html = data.contents;
+    const html = await fetchViaProxy(`https://www.chess.org.il/Tournaments/TournamentPage.aspx?Id=${tournamentId}`);
 
     // Parse players from TournamentTableGrid
     const playerRows = [...html.matchAll(/<tr>\s*<td>\s*(\d+)\s*<\/td>\s*<td>\s*<a[^>]+href="PlayerInTournament\.aspx\?Id=(\d+)"[^>]*>([^<]+)<\/a>\s*<\/td>\s*<td>(\d+)<\/td>\s*<td>\s*(\d+)\s*<\/td>[\s\S]*?<td>\s*(\d+)\s*<\/td>\s*<td>\s*([זנ])\s*<\/td>\s*<td>(\d+)<\/td>\s*<td>([\d.]+)<\/td>/g)];
@@ -1216,18 +1233,35 @@ window.syncFedPlayers = async function() {
   </div>`;
 
   try {
-    const proxyUrl = 'https://api.allorigins.win/get?url=';
-    const url = encodeURIComponent('https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=Players');
-    const resp = await fetch(proxyUrl + url);
-    const data = await resp.json();
-    const html = data.contents;
+    // Try multiple proxies with fallback
+    const targetUrl = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=Players';
+    const proxies = [
+      u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+      u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    ];
 
-    // Parse player rows: fedId, name, rating, age, cardExpiry, leagueGroup
-    const rows = [...html.matchAll(
-      /<tr[^>]*>[\s\S]*?<td[^>]*>\s*(\d+)\s*<\/td>\s*<td[^>]*>\s*<a[^>]+href="[^"]*Player[^"]*Id=(\d+)[^"]*"[^>]*>([^<]+)<\/a>\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>[\s\S]*?<\/tr>/g
-    )];
+    let html = null;
+    let lastErr = '';
+    for (const makeUrl of proxies) {
+      try {
+        const resp = await fetch(makeUrl(targetUrl), { signal: AbortSignal.timeout(10000) });
+        const text = await resp.text();
+        // allorigins returns JSON; others return raw HTML
+        if (text.trim().startsWith('{')) {
+          const data = JSON.parse(text);
+          if (data.contents && data.contents.includes('Player.aspx')) { html = data.contents; break; }
+          if (data.contents) { lastErr = 'proxy החזיר דף שגיאה'; continue; }
+        } else if (text.includes('Player.aspx')) {
+          html = text; break;
+        } else {
+          lastErr = 'תגובה לא תקינה מה-proxy';
+        }
+      } catch(e) { lastErr = e.message; }
+    }
+    if (!html) throw new Error(`כל ה-proxies נכשלו: ${lastErr}`);
 
-    // Simpler approach - find all player links and surrounding data
+    // Find all player links and surrounding data
     const playerMatches = [...html.matchAll(/<a[^>]+href="[^"]*Players\/Player\.aspx\?Id=(\d+)[^"]*"[^>]*>([^<]+)<\/a>/g)];
     
     if (playerMatches.length === 0) {
@@ -1338,11 +1372,7 @@ window.fetchFromFederation = async () => {
 
   try {
     const url = `https://www.chess.org.il/Players/Player.aspx?Id=${fedId}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl);
-    const data = await res.json();
-    const html = data.contents;
-    
+    const html = await fetchViaProxy(url);
     if (!html || html.length < 1000) throw new Error('שחקן לא נמצא');
 
     // === NAME ===
@@ -1503,12 +1533,7 @@ window.fetchFromFederation = async () => {
 
   try {
     const url = `https://www.chess.org.il/Players/Player.aspx?Id=${fedId}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    
-    const res = await fetch(proxyUrl);
-    const data = await res.json();
-    const html = data.contents;
-    
+    const html = await fetchViaProxy(url);
     if (!html || html.includes('Object moved') || html.includes('Page not found')) {
       throw new Error('שחקן לא נמצא');
     }
