@@ -265,10 +265,49 @@
 
     <!-- TOURNAMENTS -->
     <div class="page" id="page-tournaments">
+      <div class="table-card" style="margin-bottom:16px">
+        <div class="table-header">
+          <div class="table-title">🏆 תחרויות המועדון</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-gold btn-sm" onclick="syncClubTournaments()">🔄 סנכרן מהאיגוד</button>
+            <button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border)" onclick="openModal('addTournamentModal')">+ הוסף ידנית</button>
+          </div>
+        </div>
+        <div id="syncStatus" style="display:none;padding:10px;font-size:0.82rem;color:var(--text-dim);border-top:1px solid var(--border)"></div>
+      </div>
+
+      <!-- Federation tournaments -->
+      <div class="table-card" id="fedTournamentsCard" style="display:none;margin-bottom:16px">
+        <div class="table-title" style="margin-bottom:12px">📋 תחרויות מהאיגוד <span id="fedTourCount" style="font-size:0.8rem;color:var(--text-dim)"></span></div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+            <thead><tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:right;padding:8px;color:var(--text-dim)">שם תחרות</th>
+              <th style="text-align:center;padding:8px;color:var(--text-dim);white-space:nowrap">תאריך פתיחה</th>
+              <th style="text-align:center;padding:8px;color:var(--text-dim);white-space:nowrap">תאריך סיום</th>
+              <th style="text-align:center;padding:8px;color:var(--text-dim)">משתתפים</th>
+              <th style="text-align:center;padding:8px;color:var(--text-dim)">שחקנינו</th>
+              <th style="text-align:center;padding:8px;color:var(--text-dim)">פעולות</th>
+            </tr></thead>
+            <tbody id="fedTournamentsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Local tournaments -->
       <div class="table-card">
-        <div class="table-header"><div class="table-title">🏆 תחרויות</div><button class="btn btn-gold btn-sm" onclick="openModal('addTournamentModal')">+ הוסף</button></div>
+        <div class="table-title" style="margin-bottom:12px">📁 תחרויות שמורות</div>
         <table><thead><tr><th>שם</th><th>תאריך</th><th>מקום</th><th>פעולות</th></tr></thead>
         <tbody id="tournamentsTbody"><tr><td colspan="4" class="empty-state">אין תחרויות עדיין</td></tr></tbody></table>
+      </div>
+
+      <!-- Players in tournament modal -->
+      <div id="tournamentPlayersModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;overflow-y:auto">
+        <div style="background:var(--bg-secondary);border-radius:16px;max-width:700px;margin:40px auto;padding:24px;position:relative">
+          <button onclick="document.getElementById('tournamentPlayersModal').style.display='none'" style="position:absolute;top:16px;left:16px;background:none;border:none;color:var(--text-dim);font-size:1.5rem;cursor:pointer">✕</button>
+          <div class="table-title" id="tournamentPlayersTitle" style="margin-bottom:16px"></div>
+          <div id="tournamentPlayersContent"></div>
+        </div>
       </div>
     </div>
 
@@ -789,6 +828,190 @@ window.openModal = id => document.getElementById(id).classList.add('open');
 window.closeModal = id => document.getElementById(id).classList.remove('open');
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }));
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open')); });
+
+// ========== CLUB TOURNAMENTS FROM FEDERATION ==========
+async function syncClubTournaments() {
+  const statusEl = document.getElementById('syncStatus');
+  const card = document.getElementById('fedTournamentsCard');
+  statusEl.style.display = 'block';
+  statusEl.innerHTML = '⏳ מושך תחרויות מאתר האיגוד...';
+
+  try {
+    const proxyUrl = 'https://api.allorigins.win/get?url=';
+    const clubUrl = encodeURIComponent('https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=TournamentsCompleted');
+    const resp = await fetch(proxyUrl + clubUrl);
+    const data = await resp.json();
+    const html = data.contents;
+
+    // Parse tournaments from table
+    const rows = [...html.matchAll(/<a[^>]+href="\.\.\/Tournaments\/TournamentPage\.aspx\?Id=(\d+)"[^>]*>([^<]+)<\/a>[\s\S]*?<td>\s*([\d\/]+)\s*<\/td>\s*<td>\s*([\d\/]+)\s*<\/td>\s*<td>\s*(\d+)\s*<\/td>/g)];
+
+    const fedTournaments = rows.map(m => ({
+      id: m[1],
+      name: m[2].trim(),
+      dateStart: m[3].trim(),
+      dateEnd: m[4].trim(),
+      participants: parseInt(m[5])
+    }));
+
+    if (fedTournaments.length === 0) {
+      statusEl.innerHTML = '⚠️ לא נמצאו תחרויות';
+      return;
+    }
+
+    statusEl.innerHTML = `✅ נמצאו ${fedTournaments.length} תחרויות. בודק שחקני המועדון...`;
+    
+    // For each tournament, check which of our players participated
+    const tbody = document.getElementById('fedTournamentsTbody');
+    document.getElementById('fedTourCount').textContent = `(${fedTournaments.length})`;
+    card.style.display = 'block';
+
+    tbody.innerHTML = fedTournaments.map(t => `
+      <tr style="border-bottom:1px solid rgba(42,42,42,0.3)" id="fedrow-${t.id}">
+        <td style="padding:8px">
+          <a href="https://www.chess.org.il/Tournaments/TournamentPage.aspx?Id=${t.id}" target="_blank" style="color:var(--gold);text-decoration:none;font-size:0.85rem">${t.name}</a>
+        </td>
+        <td style="padding:8px;text-align:center;color:var(--text-dim);font-size:0.8rem;white-space:nowrap">${t.dateStart}</td>
+        <td style="padding:8px;text-align:center;color:var(--text-dim);font-size:0.8rem;white-space:nowrap">${t.dateEnd}</td>
+        <td style="padding:8px;text-align:center;color:var(--text-dim)">${t.participants}</td>
+        <td style="padding:8px;text-align:center" id="ourplayers-${t.id}"><span style="color:var(--text-dim);font-size:0.75rem">לחץ לבדוק</span></td>
+        <td style="padding:8px;text-align:center;white-space:nowrap">
+          <button class="btn btn-sm" style="font-size:0.72rem;padding:3px 8px;background:var(--card);border:1px solid var(--border)" onclick="loadTournamentPlayers('${t.id}','${t.name.replace(/'/g,"\\'")}')">👥 שחקנים</button>
+        </td>
+      </tr>`).join('');
+
+    statusEl.innerHTML = `✅ ${fedTournaments.length} תחרויות נטענו. לחץ "שחקנים" לראות מי ממועדוננו השתתף`;
+
+  } catch(e) {
+    statusEl.innerHTML = '❌ שגיאה בטעינה: ' + e.message;
+  }
+}
+
+async function loadTournamentPlayers(tournamentId, tournamentName) {
+  const modal = document.getElementById('tournamentPlayersModal');
+  const content = document.getElementById('tournamentPlayersContent');
+  const title = document.getElementById('tournamentPlayersTitle');
+  
+  title.textContent = '👥 ' + tournamentName;
+  content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)">⏳ טוען שחקנים...</div>';
+  modal.style.display = 'block';
+
+  try {
+    const proxyUrl = 'https://api.allorigins.win/get?url=';
+    const tourUrl = encodeURIComponent(`https://www.chess.org.il/Tournaments/TournamentPage.aspx?Id=${tournamentId}`);
+    const resp = await fetch(proxyUrl + tourUrl);
+    const data = await resp.json();
+    const html = data.contents;
+
+    // Parse players from TournamentTableGrid
+    const playerRows = [...html.matchAll(/<tr>\s*<td>\s*(\d+)\s*<\/td>\s*<td>\s*<a[^>]+href="PlayerInTournament\.aspx\?Id=(\d+)"[^>]*>([^<]+)<\/a>\s*<\/td>\s*<td>(\d+)<\/td>\s*<td>\s*(\d+)\s*<\/td>[\s\S]*?<td>\s*(\d+)\s*<\/td>\s*<td>\s*([זנ])\s*<\/td>\s*<td>(\d+)<\/td>\s*<td>([\d.]+)<\/td>/g)];
+
+    const tourPlayers = playerRows.map(m => ({
+      rank: m[1],
+      inTourId: m[2],
+      name: m[3].trim(),
+      fedId: m[4],
+      rating: m[5],
+      age: m[6],
+      gender: m[7],
+      games: m[8],
+      points: m[9]
+    }));
+
+    if (tourPlayers.length === 0) {
+      content.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:16px">לא נמצאו שחקנים</div>';
+      return;
+    }
+
+    // Match against our players by fedId
+    const ourPlayerIds = new Set(players.map(p => String(p.fedId)).filter(Boolean));
+    const ourPlayersInTour = tourPlayers.filter(tp => ourPlayerIds.has(String(tp.fedId)));
+    const newPlayers = tourPlayers.filter(tp => !ourPlayerIds.has(String(tp.fedId)));
+
+    // Update the "our players" count in the table row
+    const ourEl = document.getElementById(`ourplayers-${tournamentId}`);
+    if (ourEl) ourEl.innerHTML = ourPlayersInTour.length > 0 
+      ? `<span style="color:var(--gold);font-weight:600">${ourPlayersInTour.length}</span>`
+      : '<span style="color:var(--text-dim)">0</span>';
+
+    let html2 = '';
+    
+    if (ourPlayersInTour.length > 0) {
+      html2 += `<div style="margin-bottom:16px">
+        <div style="color:var(--success);font-weight:600;margin-bottom:8px">✅ שחקני המועדון שלנו (${ourPlayersInTour.length})</div>
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:right;padding:6px;color:var(--text-dim)">#</th>
+            <th style="text-align:right;padding:6px;color:var(--text-dim)">שם</th>
+            <th style="text-align:center;padding:6px;color:var(--text-dim)">מד כושר</th>
+            <th style="text-align:center;padding:6px;color:var(--text-dim)">משחקים</th>
+            <th style="text-align:center;padding:6px;color:var(--text-dim)">נקודות</th>
+          </tr></thead>
+          <tbody>${ourPlayersInTour.map(p => `
+            <tr style="border-bottom:1px solid rgba(42,42,42,0.3)">
+              <td style="padding:6px;color:var(--text-dim)">${p.rank}</td>
+              <td style="padding:6px;color:var(--gold)">${p.name}</td>
+              <td style="padding:6px;text-align:center">${p.rating}</td>
+              <td style="padding:6px;text-align:center">${p.games}</td>
+              <td style="padding:6px;text-align:center;font-weight:600">${p.points}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }
+
+    if (newPlayers.length > 0) {
+      html2 += `<div style="margin-bottom:16px">
+        <div style="color:var(--text-dim);font-size:0.85rem;margin-bottom:8px">👤 שחקנים אחרים בתחרות (${newPlayers.length})</div>
+        <div style="max-height:250px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:right;padding:5px;color:var(--text-dim)">#</th>
+            <th style="text-align:right;padding:5px;color:var(--text-dim)">שם</th>
+            <th style="text-align:center;padding:5px;color:var(--text-dim)">מד כושר</th>
+            <th style="text-align:center;padding:5px;color:var(--text-dim)">נק'</th>
+            <th style="text-align:center;padding:5px;color:var(--text-dim)">הוסף</th>
+          </tr></thead>
+          <tbody>${newPlayers.map(p => `
+            <tr style="border-bottom:1px solid rgba(42,42,42,0.2)">
+              <td style="padding:5px;color:var(--text-dim)">${p.rank}</td>
+              <td style="padding:5px">${p.name}</td>
+              <td style="padding:5px;text-align:center;color:var(--text-dim)">${p.rating}</td>
+              <td style="padding:5px;text-align:center">${p.points}</td>
+              <td style="padding:5px;text-align:center">
+                <button class="btn btn-sm" style="font-size:0.7rem;padding:2px 6px;background:rgba(212,175,55,0.15);border:1px solid var(--gold);color:var(--gold)" 
+                  onclick="addPlayerFromTournament('${p.fedId}','${p.name.replace(/'/g,"\\'")}','${p.rating}','${p.age}','${p.gender}')">+ הוסף</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        </div>
+      </div>`;
+    }
+
+    content.innerHTML = html2 || '<div style="color:var(--text-dim);text-align:center;padding:16px">לא נמצאו שחקנים</div>';
+
+  } catch(e) {
+    content.innerHTML = '<div style="color:var(--danger);padding:16px">❌ שגיאה בטעינה: ' + e.message + '</div>';
+  }
+}
+
+async function addPlayerFromTournament(fedId, name, rating, age, gender) {
+  if (!confirm(`להוסיף את ${name} למאגר השחקנים?`)) return;
+  try {
+    const birthYear = age ? (new Date().getFullYear() - parseInt(age)) : '';
+    await addDoc(collection(db,'players'), {
+      name, fedId, rating: parseInt(rating)||0, birth_year: birthYear,
+      gender: gender === 'נ' ? 'נקבה' : 'זכר',
+      notes: `מד כושר ישראלי: ${rating}`,
+      createdAt: serverTimestamp()
+    });
+    showToast(`✅ ${name} נוסף!`);
+    await loadPlayers();
+  } catch(e) {
+    showToast('שגיאה: ' + e.message);
+  }
+}
 
 function showProfileTournaments(tournaments) {
   const card = document.getElementById('profileTournamentsCard');
