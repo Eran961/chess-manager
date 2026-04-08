@@ -4208,7 +4208,7 @@ async function loadSubmissions() {
   if (!panel) return;
   panel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">טוען...</div>';
   try {
-    const snap = await db.ref('contactSubmissions').orderByChild('ts').get();
+    const snap = await db.ref('contactSubmissions').get();
     const items = [];
     snap.forEach(c => items.push({ id: c.key, ...c.val() }));
     items.reverse();
