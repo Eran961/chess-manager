@@ -2768,7 +2768,6 @@ function renderAttendancePanel() {
     `<option value="${i}">${g.name}</option>`
   ).join('');
 
-  console.log('renderAttendancePanel: groups.length=', groups.length, 'attState.groupIdx=', attState.groupIdx);
   const g = groups[attState.groupIdx];
   if (!g) return '<div style="padding:24px;text-align:center;color:#888;">אין חוגים זמינים</div>';
   const subGroupOptions = g.subGroups.map((sg, i) =>
@@ -4018,7 +4017,6 @@ function initAuth() {
     }
     // Logged in
     const roleData = await loadUserRole(firebaseUser.uid);
-    console.log('roleData full:', JSON.stringify(roleData));
     currentUser = {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
@@ -4026,7 +4024,6 @@ function initAuth() {
       role: roleData?.role || 'admin',
       groups: roleData?.groups || [],
     };
-    console.log('currentUser.role:', currentUser.role);
     // All logged-in users see all groups
     groups = ALL_GROUPS;
     // Show app, hide landing
@@ -4209,9 +4206,9 @@ async function loadSubmissions() {
   panel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">טוען...</div>';
   try {
     const snap = await db.ref('contactSubmissions').get();
-    const items = [];
-    snap.forEach(c => items.push({ id: c.key, ...c.val() }));
-    items.reverse();
+    const val = snap.val() || {};
+    const items = Object.entries(val).map(([key, v]) => ({ id: key, ...v }));
+    items.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     if (!items.length) {
       panel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">אין פניות עדיין</div>';
       return;
