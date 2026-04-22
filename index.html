@@ -589,6 +589,12 @@
       max-height: 88vh;
       display: flex;
       flex-direction: column;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      overflow: hidden;
+      max-width: calc(100vw - 32px);
+      animation: modalIn 0.18s ease;
     }
     .profile-modal-body {
       overflow-y: auto;
@@ -4278,6 +4284,34 @@ calBtn.addEventListener('click', () => {
   document.getElementById('panel-calendar').innerHTML = renderCalendarPanel();
 });
 
+// Friday Leagues tab
+const fridayBtn = document.createElement('button');
+fridayBtn.className = 'tab-btn';
+fridayBtn.dataset.tab = 'friday';
+fridayBtn.textContent = '🏆 ליגות שישי';
+fridayBtn.style.color = '#276749';
+fridayBtn.onclick = () => { switchTab('friday'); loadFridayLeague(_fridayActiveLeague); };
+tabsBar.appendChild(fridayBtn);
+const fridayPanel = document.createElement('div');
+fridayPanel.className = 'tab-panel';
+fridayPanel.id = 'panel-friday';
+fridayPanel.innerHTML = renderFridayPanel();
+content.appendChild(fridayPanel);
+
+// Hours tab — all users
+const hoursBtn = document.createElement('button');
+hoursBtn.className = 'tab-btn';
+hoursBtn.dataset.tab = 'hours';
+hoursBtn.textContent = '⏱️ שעות';
+hoursBtn.style.color = '#744210';
+hoursBtn.onclick = () => { switchTab('hours'); loadHoursHistory(); };
+tabsBar.appendChild(hoursBtn);
+const hoursPanel = document.createElement('div');
+hoursPanel.className = 'tab-panel';
+hoursPanel.id = 'panel-hours';
+hoursPanel.innerHTML = renderHoursPanel();
+content.appendChild(hoursPanel);
+
 // Submissions tab (admin only)
 if (currentUser.role === 'admin') {
   const subBtn = document.createElement('button');
@@ -4311,6 +4345,1143 @@ content.appendChild(settingsPanel);
 
   initData();
 } // end buildApp
+
+// ===== FRIDAY LEAGUES =====
+function getFridaysBetween(start, end) {
+  const dates = [];
+  const d = new Date(start);
+  while (d.getDay() !== 5) d.setDate(d.getDate() + 1);
+  const endDate = new Date(end);
+  while (d <= endDate) {
+    dates.push(d.toISOString().split('T')[0]);
+    d.setDate(d.getDate() + 7);
+  }
+  return dates;
+}
+
+function getLastFriday() {
+  const d = new Date();
+  while (d.getDay() !== 5) d.setDate(d.getDate() - 1);
+  return d.toISOString().split('T')[0];
+}
+const FRIDAY_LEAGUES = [
+  { id: 'fourth', name: 'ליגה רביעית', color: '#276749' },
+  { id: 'third',  name: 'ליגה שלישית', color: '#2b6cb0' },
+  { id: 'second', name: 'ליגה שנייה',  color: '#6b46c1' },
+  { id: 'first',  name: 'ליגה ראשונה', color: '#c05621' },
+];
+let _fridayActiveLeague = 'fourth';
+let _fridayData = {};
+let _fridaySubTab = {}; // { leagueId: 'players' | 'tournament' }
+
+function renderFridayPanel() {
+  return `
+    <div class="att-card" style="max-width:100%">
+      <div class="att-card-header">🏆 ימי שישי — ליגות בלתי מדורגות</div>
+      <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;overflow-x:auto;justify-content:space-between;align-items:flex-end">
+        <div style="display:flex;gap:0">
+          ${FRIDAY_LEAGUES.map(l => `
+            <button onclick="switchFridayLeague('${l.id}')" id="fl-tab-${l.id}"
+              style="padding:12px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;border-bottom:3px solid ${l.id===_fridayActiveLeague?l.color:'transparent'};color:${l.id===_fridayActiveLeague?l.color:'#718096'};margin-bottom:-2px">
+              ${l.name}
+            </button>`).join('')}
+        </div>
+        <button onclick="switchFridayLeague('reports')" id="fl-tab-reports"
+          style="padding:12px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;border-bottom:3px solid ${'reports'===_fridayActiveLeague?'#6b46c1':'transparent'};color:${'reports'===_fridayActiveLeague?'#6b46c1':'#718096'};margin-bottom:-2px">
+          📊 דוחות
+        </button>
+      </div>
+      <div id="friday-league-content" style="padding:20px">
+        <div style="text-align:center;color:#a0aec0;padding:20px">טוען...</div>
+      </div>
+    </div>`;
+}
+
+function switchFridayLeague(id) {
+  _fridayActiveLeague = id;
+  const allTabs = [...FRIDAY_LEAGUES.map(l => ({ id: l.id, color: l.color })), { id: 'reports', color: '#6b46c1' }];
+  allTabs.forEach(t => {
+    const tab = document.getElementById('fl-tab-' + t.id);
+    if (!tab) return;
+    tab.style.borderBottomColor = t.id === id ? t.color : 'transparent';
+    tab.style.color = t.id === id ? t.color : '#718096';
+  });
+  if (id === 'reports') { loadFridayReports(); return; }
+  loadFridayLeague(id);
+}
+
+async function loadFridayLeague(leagueId) {
+  const content = document.getElementById('friday-league-content');
+  if (!content) return;
+  content.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:20px">טוען...</div>';
+  try {
+    const snap = await db.ref('fridayLeagues/' + leagueId).get();
+    _fridayData[leagueId] = snap.val() || {};
+    renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
+  } catch(e) { content.innerHTML = `<div style="color:#c53030;padding:16px">שגיאה: ${e.message}</div>`; }
+}
+
+function renderFridayLeagueContent(leagueId, data) {
+  const content = document.getElementById('friday-league-content');
+  if (!content) return;
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  const subTab = _fridaySubTab[leagueId] || 'players';
+  const subTabBar = `
+    <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
+      <button onclick="switchFridaySubTab('${leagueId}','players')" style="padding:10px 18px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${subTab==='players'?league.color:'transparent'};color:${subTab==='players'?league.color:'#718096'};margin-bottom:-2px">👥 משתתפים</button>
+      <button onclick="switchFridaySubTab('${leagueId}','tournament')" style="padding:10px 18px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${subTab==='tournament'?league.color:'transparent'};color:${subTab==='tournament'?league.color:'#718096'};margin-bottom:-2px">♟️ טבלת ליגה</button>
+    </div>`;
+  if (subTab === 'tournament') {
+    content.innerHTML = subTabBar + renderFridayTournamentView(leagueId, data);
+    return;
+  }
+  const players = data.players ? Object.entries(data.players).map(([id,p]) => ({id,...p})) : [];
+  const dates = data.dates ? Object.values(data.dates).sort() : [];
+
+  const dateHeaders = dates.map(d => {
+    const dd = new Date(d);
+    return `<th style="text-align:center;min-width:46px;font-size:11px;padding:4px 2px;border-bottom:2px solid #e2e8f0;background:#f7fafc;font-weight:700;color:#4a5568">
+      <div>${dd.getDate()}/${dd.getMonth()+1}</div>
+      <button onclick="removeFridayDate('${leagueId}','${d}')" title="הסר תאריך" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:10px;padding:0;line-height:1">✕</button>
+    </th>`;
+  }).join('');
+
+  const playerRows = players.map(p => {
+    const att = p.attendance || {};
+    const presentCount = dates.filter(d => att[d]).length;
+    const payments = p.payments ? Object.values(p.payments) : [];
+    const totalPaid = payments.reduce((s,pay) => s+(pay.amount||0), 0);
+    const attCells = dates.map(d => `
+      <td style="text-align:center;padding:6px 4px" onclick="event.stopPropagation()">
+        <button onclick="toggleFridayAttendance('${leagueId}','${p.id}','${d}')"
+          style="width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;font-size:13px;background:${att[d]?'#c6f6d5':'#fed7d7'};color:${att[d]?'#276749':'#c53030'}">
+          ${att[d]?'✓':'✗'}
+        </button>
+      </td>`).join('');
+    return `<tr style="border-bottom:1px solid #f0f4f8;cursor:pointer" onclick="openFridayPlayerProfile('${leagueId}','${p.id}')">
+      <td style="padding:10px 12px">
+        <div style="font-size:14px;font-weight:600">${p.name}</div>
+        <div style="font-size:11px;color:#718096;margin-top:2px">${[p.age?`גיל ${p.age}`:'', p.grade?`כיתה ${p.grade}`:''].filter(Boolean).join(' · ')}</div>
+        ${p.parent||p.phone ? `<div style="font-size:11px;color:#a0aec0">${p.parent||''}${p.parent&&p.phone?' · ':''}${p.phone||''}</div>` : ''}
+      </td>
+      ${attCells}
+      <td style="padding:8px 10px;text-align:center;font-size:13px;color:#718096">${presentCount}/${dates.length}</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:700;color:${totalPaid>0?'#276749':'#a0aec0'}">${totalPaid>0?'₪'+totalPaid:'—'}</td>
+      <td style="padding:8px 8px;text-align:center;white-space:nowrap" onclick="event.stopPropagation()">
+        <button onclick="openFridayPaymentModal('${leagueId}','${p.id}')" title="הוסף תשלום" style="background:#ebf4ff;border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:12px;color:#2b6cb0;font-family:inherit">💳</button>
+        <button onclick="openFridayPaymentHistory('${leagueId}','${p.id}')" title="היסטוריית תשלומים" style="background:#f0fff4;border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:12px;color:#276749;font-family:inherit">📋</button>
+        <button onclick="openFridayNotes('${leagueId}','${p.id}')" title="הערות" style="background:${p.notes?'#fefcbf':'#f7fafc'};border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:12px;color:#744210;font-family:inherit">📝${p.notes?'·':''}</button>
+        <button onclick="removeFridayPlayer('${leagueId}','${p.id}')" title="הסר שחקן" style="background:none;border:none;cursor:pointer;font-size:14px;color:#fc8181">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const thS = 'padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+  content.innerHTML = subTabBar + `
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <button onclick="openAddFridayPlayerModal('${leagueId}')" style="background:${league.color};color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף שחקן</button>
+      <button onclick="openAddFridayDateModal('${leagueId}')" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#4a5568">📅 הוסף תאריך</button>
+      ${dates.length > 0 ? `<button onclick="clearAllFridayDates('${leagueId}')" style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#c53030">🗑 נקה תאריכים</button>` : ''}
+    </div>
+    ${players.length===0&&dates.length===0 ? `
+      <div style="text-align:center;color:#a0aec0;padding:48px 20px">
+        <div style="font-size:40px;margin-bottom:12px">🏆</div>
+        <div style="font-size:15px">אין שחקנים עדיין — לחץ "הוסף שחקן" להתחלה</div>
+      </div>` : `
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
+      <table style="width:100%;border-collapse:collapse;min-width:320px">
+        <thead><tr>
+          <th style="${thS}">שם</th>
+          ${dateHeaders}
+          <th style="${thS};text-align:center">נוכחות</th>
+          <th style="${thS};text-align:center">שולם</th>
+          <th style="${thS}"></th>
+        </tr></thead>
+        <tbody>${playerRows||'<tr><td colspan="20" style="text-align:center;padding:24px;color:#a0aec0">אין שחקנים</td></tr>'}</tbody>
+      </table>
+    </div>`}`;
+}
+
+async function toggleFridayAttendance(leagueId, playerId, date) {
+  const cur = _fridayData[leagueId]?.players?.[playerId]?.attendance?.[date];
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/players/${playerId}/attendance/${date}`).set(!cur);
+    if (!_fridayData[leagueId].players[playerId].attendance) _fridayData[leagueId].players[playerId].attendance = {};
+    _fridayData[leagueId].players[playerId].attendance[date] = !cur;
+    renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+function openAddFridayPlayerModal(leagueId) {
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-header"><span class="modal-title">➕ הוסף שחקן — ${league.name}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>שם פרטי <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="fp-first" placeholder="שם פרטי" class="modal-input" autofocus></div>
+            <div class="modal-field" style="flex:1"><label>שם משפחה <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="fp-last" placeholder="שם משפחה" class="modal-input"></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>גיל <span style="color:#e53e3e">*</span></label>
+              <input type="number" id="fp-age" placeholder="10" min="4" max="20" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>כיתה <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="fp-grade" placeholder="ד׳" class="modal-input"></div>
+          </div>
+          <div class="modal-field"><label>שם הורה <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="fp-parent" placeholder="שם ההורה" class="modal-input"></div>
+          <div class="modal-field"><label>טלפון הורה <span style="color:#e53e3e">*</span></label>
+            <input type="tel" id="fp-phone" placeholder="050-0000000" class="modal-input"></div>
+          <button onclick="saveFridayPlayer('${leagueId}')" style="background:${league.color};color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">שמור</button>
+        </div>
+      </div>
+    </div>`);
+  setTimeout(() => document.getElementById('fp-first')?.focus(), 50);
+}
+
+async function saveFridayPlayer(leagueId) {
+  const first  = document.getElementById('fp-first')?.value.trim();
+  const last   = document.getElementById('fp-last')?.value.trim();
+  const age    = document.getElementById('fp-age')?.value.trim();
+  const grade  = document.getElementById('fp-grade')?.value.trim();
+  const parent = document.getElementById('fp-parent')?.value.trim();
+  const phone  = document.getElementById('fp-phone')?.value.trim();
+  if (!first || !last)   { showToast('יש להזין שם פרטי ושם משפחה', 'error'); return; }
+  if (!age)              { showToast('יש להזין גיל', 'error'); return; }
+  if (!grade)            { showToast('יש להזין כיתה', 'error'); return; }
+  if (!parent)           { showToast('יש להזין שם הורה', 'error'); return; }
+  if (!phone)            { showToast('יש להזין טלפון הורה', 'error'); return; }
+  const name = `${first} ${last}`;
+  try {
+    await db.ref('fridayLeagues/' + leagueId + '/players').push({ name, first, last, age: parseInt(age), grade, parent, phone });
+    // Auto-add: last Friday + all future Fridays until YEAR_END
+    const lastFriday = getLastFriday();
+    const fridays = getFridaysBetween(lastFriday, YEAR_END);
+    const existing = new Set(Object.values(_fridayData[leagueId]?.dates || {}));
+    const toAdd = fridays.filter(d => !existing.has(d));
+    for (const d of toAdd) await db.ref('fridayLeagues/' + leagueId + '/dates').push(d);
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`השחקן נוסף ✅${toAdd.length > 0 ? ` · ${toAdd.length} תאריכי שישי נוספו` : ''}`);
+    loadFridayLeague(leagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+function openAddFridayDateModal(leagueId) {
+  const allFridays = getFridaysBetween(YEAR_START, YEAR_END);
+  const existing = new Set(Object.values(_fridayData[leagueId]?.dates || {}));
+  const available = allFridays.filter(d => !existing.has(d));
+  if (!available.length) { showToast('כל ימי השישי של השנה כבר נוספו', 'error'); return; }
+  const options = available.map(d => {
+    const dd = new Date(d);
+    return `<option value="${d}">${dd.toLocaleDateString('he-IL', {day:'numeric', month:'long', year:'numeric'})}</option>`;
+  }).join('');
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:320px">
+        <div class="modal-header"><span class="modal-title">📅 הוסף יום שישי</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div class="modal-field"><label>בחר יום שישי</label>
+            <select id="fd-date" class="modal-input">${options}</select></div>
+          <button onclick="saveFridayDate('${leagueId}')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">הוסף</button>
+        </div>
+      </div>
+    </div>`);
+}
+
+async function saveFridayDate(leagueId) {
+  const date = document.getElementById('fd-date')?.value;
+  if (!date) { showToast('יש לבחור תאריך', 'error'); return; }
+  try {
+    await db.ref('fridayLeagues/' + leagueId + '/dates').push(date);
+    document.querySelector('.friday-modal')?.remove();
+    showToast('התאריך נוסף ✅');
+    loadFridayLeague(leagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+function openFridayPaymentModal(leagueId, playerId) {
+  const player = _fridayData[leagueId]?.players?.[playerId];
+  const today = new Date().toISOString().split('T')[0];
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:380px">
+        <div class="modal-header"><span class="modal-title">💳 תשלום — ${player?.name||''}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="modal-field" style="flex:1;min-width:120px"><label>תאריך תשלום</label>
+              <input type="date" id="pay-date" value="${today}" class="modal-input"></div>
+            <div class="modal-field" style="min-width:90px"><label>סכום (₪)</label>
+              <input type="number" id="pay-amount" placeholder="50" min="1" class="modal-input"></div>
+          </div>
+          <div class="modal-field"><label>אמצעי תשלום</label>
+            <select id="pay-method" class="modal-input">
+              <option value="cash">מזומן</option>
+              <option value="transfer">העברה בנקאית</option>
+              <option value="bit">ביט</option>
+              <option value="other">אחר</option>
+            </select></div>
+          <div class="modal-field"><label>שולם ע"י</label>
+            <input type="text" id="pay-by" placeholder="שם ההורה / השחקן" class="modal-input"></div>
+          <div class="modal-field"><label>הערה (אופציונלי)</label>
+            <input type="text" id="pay-note" placeholder="..." class="modal-input"></div>
+          <button onclick="saveFridayPayment('${leagueId}','${playerId}')" style="background:#276749;color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">שמור תשלום</button>
+        </div>
+      </div>
+    </div>`);
+  setTimeout(() => document.getElementById('pay-amount')?.focus(), 50);
+}
+
+async function saveFridayPayment(leagueId, playerId) {
+  const date = document.getElementById('pay-date')?.value;
+  const amount = parseFloat(document.getElementById('pay-amount')?.value);
+  const method = document.getElementById('pay-method')?.value;
+  const paidBy = document.getElementById('pay-by')?.value.trim();
+  const note = document.getElementById('pay-note')?.value.trim();
+  if (!date || !amount || amount <= 0) { showToast('יש למלא תאריך וסכום', 'error'); return; }
+  const methodLabels = { cash:'מזומן', transfer:'העברה', bit:'ביט', other:'אחר' };
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/players/${playerId}/payments`).push({
+      date, amount, method, methodLabel: methodLabels[method], paidBy: paidBy||null, note: note||null, ts: Date.now()
+    });
+    document.querySelector('.friday-modal')?.remove();
+    showToast('התשלום נשמר ✅');
+    loadFridayLeague(leagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+function openFridayPaymentHistory(leagueId, playerId) {
+  const player = _fridayData[leagueId]?.players?.[playerId];
+  const payments = player?.payments ? Object.entries(player.payments).map(([id,p]) => ({id,...p})) : [];
+  payments.sort((a,b) => (b.ts||0)-(a.ts||0));
+  const total = payments.reduce((s,p) => s+(p.amount||0), 0);
+  const thS = 'padding:9px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+  const rows = payments.length ? payments.map(p => `
+    <tr style="border-bottom:1px solid #f0f4f8">
+      <td style="padding:9px 12px;font-size:13px">${p.date}</td>
+      <td style="padding:9px 12px;font-size:13px;font-weight:700;color:#276749">₪${p.amount}</td>
+      <td style="padding:9px 12px;font-size:13px">${p.methodLabel||p.method}</td>
+      <td style="padding:9px 12px;font-size:13px">${p.paidBy||'—'}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#718096">${p.note||''}</td>
+      <td style="padding:9px 8px;text-align:center"><button onclick="deleteFridayPayment('${leagueId}','${playerId}','${p.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button></td>
+    </tr>`).join('') : '<tr><td colspan="6" style="padding:20px;text-align:center;color:#a0aec0">אין תשלומים עדיין</td></tr>';
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:520px">
+        <div class="modal-header"><span class="modal-title">📋 היסטוריית תשלומים — ${player?.name||''}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+        <div class="modal-body" style="padding:0">
+          <div style="padding:12px 20px;background:#f0fff4;border-bottom:1px solid #e2e8f0;font-weight:700;color:#276749;font-size:14px">סה"כ שולם: ₪${total}</div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr><th style="${thS}">תאריך</th><th style="${thS}">סכום</th><th style="${thS}">אמצעי</th><th style="${thS}">שולם ע"י</th><th style="${thS}">הערה</th><th style="${thS}"></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`);
+}
+
+async function deleteFridayPayment(leagueId, playerId, payId) {
+  if (!confirm('למחוק תשלום זה?')) return;
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/players/${playerId}/payments/${payId}`).remove();
+    showToast('התשלום נמחק');
+    document.querySelector('.friday-modal')?.remove();
+    loadFridayLeague(leagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+// ---- PLAYER PROFILE ----
+function openFridayPlayerProfile(leagueId, playerId) {
+  const p = _fridayData[leagueId]?.players?.[playerId];
+  if (!p) return;
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  const dates = _fridayData[leagueId]?.dates ? Object.values(_fridayData[leagueId].dates).sort() : [];
+  const att = p.attendance || {};
+  const presentCount = dates.filter(d => att[d]).length;
+  const pct = dates.length > 0 ? Math.round(presentCount / dates.length * 100) : 0;
+  const pctColor = pct >= 80 ? '#276749' : pct >= 60 ? '#d69e2e' : '#e53e3e';
+  const payments = p.payments ? Object.values(p.payments).sort((a,b) => (b.ts||0)-(a.ts||0)) : [];
+  const totalPaid = payments.reduce((s, pay) => s + (pay.amount||0), 0);
+
+  const attDots = dates.map(d => {
+    const dd = new Date(d);
+    return `<div title="${dd.toLocaleDateString('he-IL')}"
+      style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-size:10px;font-weight:700;margin:2px;background:${att[d]?'#c6f6d5':'#fed7d7'};color:${att[d]?'#276749':'#c53030'}">
+      ${dd.getDate()}/${dd.getMonth()+1}
+    </div>`;
+  }).join('');
+
+  const payRows = payments.slice(0,5).map(pay => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f4f8;font-size:13px">
+      <span>${pay.date}</span>
+      <span style="font-weight:700;color:#276749">₪${pay.amount}</span>
+      <span style="color:#718096">${pay.methodLabel||pay.method}</span>
+      <span style="color:#718096">${pay.paidBy||''}</span>
+    </div>`).join('');
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="profile-modal-box" style="width:480px">
+        <div style="background:linear-gradient(135deg,${league.color},${league.color}dd);color:white;padding:18px 22px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:20px;font-weight:800">${p.name}</div>
+            <div style="font-size:13px;opacity:0.85;margin-top:3px">${league.name}</div>
+          </div>
+          <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
+        </div>
+        <div class="profile-modal-body">
+
+          <!-- פרטים אישיים -->
+          <div class="profile-section">
+            <div class="profile-section-header">
+              📋 פרטים אישיים
+              <button onclick="openFridayPlayerEdit('${leagueId}','${playerId}')" class="btn-profile-edit">✏️ ערוך</button>
+            </div>
+            <div id="fp-profile-details-${playerId}">
+              ${[
+                ['שם פרטי', p.first || p.name.split(' ')[0]],
+                ['שם משפחה', p.last || p.name.split(' ').slice(1).join(' ') || '—'],
+                ['גיל', p.age ? `${p.age}` : '—'],
+                ['כיתה', p.grade || '—'],
+                ['שם הורה', p.parent || '—'],
+                ['טלפון הורה', p.phone ? `<a href="tel:${p.phone}" style="color:#2b6cb0;text-decoration:none">${p.phone}</a>` : '—'],
+              ].map(([label, val]) => `
+                <div class="profile-detail-row">
+                  <span class="profile-label">${label}</span>
+                  <span class="profile-value">${val}</span>
+                </div>`).join('')}
+            </div>
+          </div>
+
+          <!-- נוכחות -->
+          <div class="profile-section">
+            <div class="profile-section-header">
+              📅 נוכחות
+              <span style="font-size:13px;font-weight:700;color:${pctColor}">${presentCount}/${dates.length} · ${pct}%</span>
+            </div>
+            <div style="line-height:2.2">${attDots || '<span style="color:#a0aec0;font-size:13px">אין תאריכים</span>'}</div>
+          </div>
+
+          <!-- תשלומים -->
+          <div class="profile-section">
+            <div class="profile-section-header">
+              💳 תשלומים
+              <span style="font-size:13px;font-weight:700;color:#276749">סה"כ: ₪${totalPaid}</span>
+            </div>
+            ${payRows || '<div style="color:#a0aec0;font-size:13px">אין תשלומים עדיין</div>'}
+            ${payments.length > 5 ? `<div style="font-size:12px;color:#718096;margin-top:6px">ועוד ${payments.length-5} תשלומים...</div>` : ''}
+          </div>
+
+          <!-- הערות -->
+          <div class="profile-section">
+            <div class="profile-section-header">📝 הערות</div>
+            <div style="font-size:14px;color:${p.notes?'#2d3748':'#a0aec0'};white-space:pre-wrap">${p.notes || 'אין הערות'}</div>
+          </div>
+        </div>
+
+        <div class="profile-modal-footer" style="flex-wrap:wrap;gap:8px">
+          <button onclick="openFridayPaymentModal('${leagueId}','${playerId}');this.closest('.modal-overlay').remove()" style="background:#ebf8ff;border:1px solid #bee3f8;color:#2b6cb0;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">💳 הוסף תשלום</button>
+          <button onclick="openFridayNotes('${leagueId}','${playerId}');this.closest('.modal-overlay').remove()" style="background:#fffff0;border:1px solid #fefcbf;color:#744210;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">📝 ערוך הערות</button>
+          <button onclick="openFridayTransfer('${leagueId}','${playerId}')" style="background:#f0fff4;border:1px solid #9ae6b4;color:#276749;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">🔀 העבר ליגה</button>
+          <button onclick="if(confirm('להסיר שחקן זה?')){removeFridayPlayer('${leagueId}','${playerId}');this.closest('.modal-overlay').remove()}" class="btn-remove-player">🗑 הסר שחקן</button>
+        </div>
+      </div>
+    </div>`);
+}
+
+function openFridayPlayerEdit(leagueId, playerId) {
+  const p = _fridayData[leagueId]?.players?.[playerId];
+  if (!p) return;
+  const detailsEl = document.getElementById(`fp-profile-details-${playerId}`);
+  if (!detailsEl) return;
+  detailsEl.innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <div class="modal-field" style="flex:1"><label>שם פרטי</label>
+        <input type="text" id="fpe-first" value="${p.first||p.name.split(' ')[0]||''}" class="modal-input"></div>
+      <div class="modal-field" style="flex:1"><label>שם משפחה</label>
+        <input type="text" id="fpe-last" value="${p.last||p.name.split(' ').slice(1).join(' ')||''}" class="modal-input"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <div class="modal-field" style="flex:1"><label>גיל</label>
+        <input type="number" id="fpe-age" value="${p.age||''}" min="4" max="20" class="modal-input"></div>
+      <div class="modal-field" style="flex:1"><label>כיתה</label>
+        <input type="text" id="fpe-grade" value="${p.grade||''}" class="modal-input"></div>
+    </div>
+    <div class="modal-field" style="margin-bottom:10px"><label>שם הורה</label>
+      <input type="text" id="fpe-parent" value="${p.parent||''}" class="modal-input"></div>
+    <div class="modal-field" style="margin-bottom:10px"><label>טלפון הורה</label>
+      <input type="tel" id="fpe-phone" value="${p.phone||''}" class="modal-input"></div>
+    <button onclick="saveFridayPlayerEdit('${leagueId}','${playerId}')"
+      style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">שמור</button>`;
+}
+
+async function saveFridayPlayerEdit(leagueId, playerId) {
+  const first  = document.getElementById('fpe-first')?.value.trim();
+  const last   = document.getElementById('fpe-last')?.value.trim();
+  const age    = document.getElementById('fpe-age')?.value.trim();
+  const grade  = document.getElementById('fpe-grade')?.value.trim();
+  const parent = document.getElementById('fpe-parent')?.value.trim();
+  const phone  = document.getElementById('fpe-phone')?.value.trim();
+  if (!first || !last) { showToast('יש להזין שם', 'error'); return; }
+  const updates = { first, last, name: `${first} ${last}`, age: parseInt(age)||null, grade: grade||null, parent: parent||null, phone: phone||null };
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/players/${playerId}`).update(updates);
+    Object.assign(_fridayData[leagueId].players[playerId], updates);
+    document.querySelector('.friday-modal')?.remove();
+    showToast('הפרטים עודכנו ✅');
+    renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+// ---- TOURNAMENT ----
+function switchFridaySubTab(leagueId, tab) {
+  _fridaySubTab[leagueId] = tab;
+  renderFridayLeagueContent(leagueId, _fridayData[leagueId] || {});
+}
+
+function renderFridayTournamentView(leagueId, data) {
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  // Players in insertion order
+  const players = data.players
+    ? Object.entries(data.players).map(([id,p]) => ({id,...p}))
+    : [];
+  if (players.length < 2) {
+    return `<div style="text-align:center;color:#a0aec0;padding:48px 20px">
+      <div style="font-size:36px;margin-bottom:12px">♟️</div>
+      <div>יש להוסיף לפחות 2 שחקנים כדי לנהל ליגה</div>
+    </div>`;
+  }
+  const results = data.tournamentResults || {};
+
+  // Score per player: as white + as black
+  function playerScore(pid) {
+    let score = 0;
+    players.forEach(op => {
+      if (op.id === pid) return;
+      const asW = results[pid]?.[op.id];
+      if (asW != null) score += parseFloat(asW);
+      const asB = results[op.id]?.[pid];
+      if (asB != null) score += 1 - parseFloat(asB);
+    });
+    return score;
+  }
+
+  // Cross-table header row
+  const thBase = 'padding:6px 4px;text-align:center;font-size:11px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc;min-width:38px';
+  const colHeaders = players.map((p,i) => `<th style="${thBase}" title="${p.name}">${i+1}</th>`).join('');
+
+  // Helper: combined score between two players (row's perspective)
+  function pairScore(rowId, colId) {
+    let r = 0, c = 0, played = 0;
+    const asW = results[rowId]?.[colId];
+    if (asW != null) { const v=parseFloat(asW); r+=v; c+=1-v; played++; }
+    const asB = results[colId]?.[rowId];
+    if (asB != null) { const v=parseFloat(asB); r+=1-v; c+=v; played++; }
+    return { r, c, played };
+  }
+
+  function fmtScore(v) { return v % 1 === 0 ? String(v) : v.toFixed(1); }
+
+  // Rows
+  const rows = players.map((row, ri) => {
+    const cells = players.map((col, ci) => {
+      if (ri === ci) return `<td style="background:#2d3748;min-width:56px"></td>`;
+      const { r, c, played } = pairScore(row.id, col.id);
+      let bg = '#f7fafc', label = '·', color = '#a0aec0', fw = '400';
+      if (played > 0) {
+        fw = '700';
+        if (r > c)      { bg='#c6f6d5'; color='#276749'; }
+        else if (r < c) { bg='#fed7d7'; color='#c53030'; }
+        else            { bg='#fefcbf'; color='#744210'; }
+        label = `${fmtScore(c)}-${fmtScore(r)}`;
+      }
+      return `<td style="text-align:center;padding:4px;min-width:56px">
+        <button onclick="openResultModal('${leagueId}','${row.id}','${col.id}')"
+          title="${row.name} vs ${col.name}"
+          style="min-width:50px;height:28px;border-radius:6px;border:1px solid #e2e8f0;background:${bg};color:${color};font-weight:${fw};font-size:12px;cursor:pointer;font-family:inherit;padding:0 4px;white-space:nowrap">
+          ${label}
+        </button>
+      </td>`;
+    }).join('');
+    const score = playerScore(row.id);
+    return `<tr style="border-bottom:1px solid #f0f4f8">
+      <td style="padding:8px 10px;font-size:13px;font-weight:600;white-space:nowrap">${ri+1}. ${row.name}</td>
+      ${cells}
+      <td style="padding:8px 10px;text-align:center;font-weight:800;font-size:15px;color:${league.color}">${fmtScore(score)}</td>
+    </tr>`;
+  }).join('');
+
+  // Standings — count per game (not per opponent)
+  const standings = [...players].map(p => {
+    let wins = 0, draws = 0, losses = 0, score = 0;
+    players.forEach(op => {
+      if (op.id === p.id) return;
+      const asW = results[p.id]?.[op.id];
+      if (asW != null) {
+        const v = parseFloat(asW);
+        score += v;
+        if (v === 1) wins++; else if (v === 0.5) draws++; else losses++;
+      }
+      const asB = results[op.id]?.[p.id];
+      if (asB != null) {
+        const v = 1 - parseFloat(asB);
+        score += v;
+        if (v === 1) wins++; else if (v === 0.5) draws++; else losses++;
+      }
+    });
+    return { ...p, score, wins, draws, losses, played: wins+draws+losses };
+  }).sort((a,b) => b.score - a.score);
+
+  const standingRows = standings.map((p, i) => `
+    <tr style="border-bottom:1px solid #f0f4f8">
+      <td style="padding:8px 12px;font-weight:700;text-align:center;color:#718096">${i+1}</td>
+      <td style="padding:8px 12px;font-size:14px;font-weight:600">${p.name}</td>
+      <td style="padding:8px 12px;text-align:center;color:#718096">${p.played}</td>
+      <td style="padding:8px 12px;text-align:center;color:#276749;font-weight:600">${p.wins}</td>
+      <td style="padding:8px 12px;text-align:center;color:#744210;font-weight:600">${p.draws}</td>
+      <td style="padding:8px 12px;text-align:center;color:#c53030;font-weight:600">${p.losses}</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:800;font-size:15px;color:${league.color}">${p.score % 1 === 0 ? p.score : p.score.toFixed(1)}</td>
+    </tr>`).join('');
+
+  const thS2 = 'padding:9px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+  return `
+    <div style="font-size:13px;color:#718096;margin-bottom:14px">
+      לחץ על תא בטבלה להזין תוצאה — שורה = <b>לבן</b>, עמודה = <b>שחור</b>
+    </div>
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:24px">
+      <table style="border-collapse:collapse">
+        <thead><tr>
+          <th style="${thBase};text-align:right;min-width:120px">שחקן</th>
+          ${colHeaders}
+          <th style="${thBase}">נק׳</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="font-size:15px;font-weight:700;color:#2d3748;margin-bottom:12px">🏅 טבלת דירוג</div>
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thS2};text-align:center">#</th>
+          <th style="${thS2}">שם</th>
+          <th style="${thS2};text-align:center">משחקים</th>
+          <th style="${thS2};text-align:center;color:#276749">✓ ניצח</th>
+          <th style="${thS2};text-align:center;color:#744210">½ תיקו</th>
+          <th style="${thS2};text-align:center;color:#c53030">✗ הפסיד</th>
+          <th style="${thS2};text-align:center">נקודות</th>
+        </tr></thead>
+        <tbody>${standingRows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openResultModal(leagueId, pid1, pid2) {
+  const data = _fridayData[leagueId] || {};
+  const p1 = data.players?.[pid1];
+  const p2 = data.players?.[pid2];
+
+  function gameRow(wPid, bPid) {
+    const wp = data.players?.[wPid], bp = data.players?.[bPid];
+    const cur = data.tournamentResults?.[wPid]?.[bPid] ?? '';
+    const rowId = `gr-${wPid}-${bPid}`;
+    const bs = (val) => {
+      const c = { '1':['#c6f6d5','#276749'], '0.5':['#fefcbf','#744210'], '0':['#fed7d7','#c53030'] }[val];
+      return `background:${cur===val?c[0]:'#f7fafc'};color:${cur===val?c[1]:'#718096'};border:2px solid ${cur===val?c[1]:'#e2e8f0'};border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit`;
+    };
+    return `
+      <div id="${rowId}" data-w="${wPid}" data-b="${bPid}" data-val="${cur}" style="background:#f7fafc;border-radius:10px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px">
+          <span>⬜ <b>${wp?.name||'?'}</b></span>
+          <span style="color:#718096">vs</span>
+          <span>⬛ <b>${bp?.name||'?'}</b></span>
+        </div>
+        <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          <button onclick="selectFridayResult('${rowId}','1')" id="${rowId}-1" style="${bs('1')}">1–0<br><span style="font-size:10px;font-weight:400">לבן ניצח</span></button>
+          <button onclick="selectFridayResult('${rowId}','0.5')" id="${rowId}-0.5" style="${bs('0.5')}">½–½<br><span style="font-size:10px;font-weight:400">תיקו</span></button>
+          <button onclick="selectFridayResult('${rowId}','0')" id="${rowId}-0" style="${bs('0')}">0–1<br><span style="font-size:10px;font-weight:400">שחור ניצח</span></button>
+          <button onclick="selectFridayResult('${rowId}','')" style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;color:#a0aec0;font-family:inherit" title="נקה">✕</button>
+        </div>
+      </div>`;
+  }
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:380px">
+        <div class="modal-header">
+          <span class="modal-title">♟️ ${p1?.name||'?'} vs ${p2?.name||'?'}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+          ${gameRow(pid1, pid2)}
+          ${gameRow(pid2, pid1)}
+          <button onclick="confirmFridayResults('${leagueId}','${pid1}','${pid2}')"
+            style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ אשר תוצאות</button>
+        </div>
+      </div>
+    </div>`);
+}
+
+function selectFridayResult(rowId, val) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  row.dataset.val = val;
+  const colors = { '1':['#c6f6d5','#276749'], '0.5':['#fefcbf','#744210'], '0':['#fed7d7','#c53030'] };
+  ['1','0.5','0'].forEach(v => {
+    const btn = document.getElementById(rowId + '-' + v);
+    if (!btn) return;
+    if (v === val) {
+      const [bg, fg] = colors[v];
+      btn.style.background = bg;
+      btn.style.color = fg;
+      btn.style.fontWeight = '700';
+      btn.style.border = `2px solid ${fg}`;
+    } else {
+      btn.style.background = '#f7fafc';
+      btn.style.color = '#718096';
+      btn.style.fontWeight = '700';
+      btn.style.border = '2px solid #e2e8f0';
+    }
+  });
+}
+
+async function confirmFridayResults(leagueId, pid1, pid2) {
+  const row1 = document.getElementById('gr-' + pid1 + '-' + pid2);
+  const row2 = document.getElementById('gr-' + pid2 + '-' + pid1);
+  const val1 = row1?.dataset.val;
+  const val2 = row2?.dataset.val;
+  try {
+    if (val1 !== undefined && val1 !== '') {
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid1}/${pid2}`).set(val1);
+      if (!_fridayData[leagueId].tournamentResults) _fridayData[leagueId].tournamentResults = {};
+      if (!_fridayData[leagueId].tournamentResults[pid1]) _fridayData[leagueId].tournamentResults[pid1] = {};
+      _fridayData[leagueId].tournamentResults[pid1][pid2] = val1;
+    } else if (val1 === '') {
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid1}/${pid2}`).remove();
+      if (_fridayData[leagueId]?.tournamentResults?.[pid1]) delete _fridayData[leagueId].tournamentResults[pid1][pid2];
+    }
+    if (val2 !== undefined && val2 !== '') {
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid2}/${pid1}`).set(val2);
+      if (!_fridayData[leagueId].tournamentResults) _fridayData[leagueId].tournamentResults = {};
+      if (!_fridayData[leagueId].tournamentResults[pid2]) _fridayData[leagueId].tournamentResults[pid2] = {};
+      _fridayData[leagueId].tournamentResults[pid2][pid1] = val2;
+    } else if (val2 === '') {
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid2}/${pid1}`).remove();
+      if (_fridayData[leagueId]?.tournamentResults?.[pid2]) delete _fridayData[leagueId].tournamentResults[pid2][pid1];
+    }
+    document.querySelector('.friday-modal')?.remove();
+    showToast('התוצאות נשמרו ✅');
+    renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+async function saveGameResult(leagueId, whitePid, blackPid, result) {
+  try {
+    if (result === null) {
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${whitePid}/${blackPid}`).remove();
+      if (_fridayData[leagueId]?.tournamentResults?.[whitePid]) delete _fridayData[leagueId].tournamentResults[whitePid][blackPid];
+    } else {
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${whitePid}/${blackPid}`).set(result);
+      if (!_fridayData[leagueId].tournamentResults) _fridayData[leagueId].tournamentResults = {};
+      if (!_fridayData[leagueId].tournamentResults[whitePid]) _fridayData[leagueId].tournamentResults[whitePid] = {};
+      _fridayData[leagueId].tournamentResults[whitePid][blackPid] = result;
+    }
+    document.querySelector('.friday-modal')?.remove();
+    showToast('התוצאה נשמרה ✅');
+    renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+// ---- TRANSFER ----
+function openFridayTransfer(leagueId, playerId) {
+  const p = _fridayData[leagueId]?.players?.[playerId];
+  if (!p) return;
+  const targets = FRIDAY_LEAGUES.filter(l => l.id !== leagueId);
+  const opts = targets.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:340px">
+        <div class="modal-header">
+          <span class="modal-title">🔀 העבר ליגה — ${p.name}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div class="modal-field">
+            <label>העבר אל</label>
+            <select id="ft-target" class="modal-input">${opts}</select>
+          </div>
+          <div style="font-size:13px;color:#718096;background:#f7fafc;border-radius:8px;padding:10px">
+            כל הנתונים של השחקן (נוכחות, תשלומים, הערות) יועברו לליגה החדשה.
+          </div>
+          <button onclick="transferFridayPlayer('${leagueId}','${playerId}')"
+            style="background:#276749;color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">העבר</button>
+        </div>
+      </div>
+    </div>`);
+}
+
+async function transferFridayPlayer(fromLeagueId, playerId) {
+  const targetId = document.getElementById('ft-target')?.value;
+  if (!targetId) return;
+  const p = _fridayData[fromLeagueId]?.players?.[playerId];
+  if (!p) return;
+  const fromLeague = FRIDAY_LEAGUES.find(l => l.id === fromLeagueId);
+  const toLeague   = FRIDAY_LEAGUES.find(l => l.id === targetId);
+  try {
+    // Copy all player data to target league
+    await db.ref('fridayLeagues/' + targetId + '/players').push(p);
+    // Remove from source league
+    await db.ref(`fridayLeagues/${fromLeagueId}/players/${playerId}`).remove();
+    // Close all friday modals
+    document.querySelectorAll('.friday-modal').forEach(m => m.remove());
+    showToast(`${p.name} הועבר מ${fromLeague.name} ל${toLeague.name} ✅`);
+    // Reload both leagues cache
+    delete _fridayData[fromLeagueId];
+    delete _fridayData[targetId];
+    loadFridayLeague(fromLeagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+// ---- NOTES ----
+function openFridayNotes(leagueId, playerId) {
+  const player = _fridayData[leagueId]?.players?.[playerId];
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:400px">
+        <div class="modal-header"><span class="modal-title">📝 הערות — ${player?.name||''}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <textarea id="fn-notes" rows="5" placeholder="הוסף הערות חופשיות על השחקן..."
+            style="padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical">${player?.notes||''}</textarea>
+          <button onclick="saveFridayNotes('${leagueId}','${playerId}')"
+            style="background:#744210;color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">שמור הערות</button>
+        </div>
+      </div>
+    </div>`);
+  setTimeout(() => document.getElementById('fn-notes')?.focus(), 50);
+}
+
+async function saveFridayNotes(leagueId, playerId) {
+  const notes = document.getElementById('fn-notes')?.value.trim();
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/players/${playerId}/notes`).set(notes || null);
+    if (_fridayData[leagueId]?.players?.[playerId]) _fridayData[leagueId].players[playerId].notes = notes || null;
+    document.querySelector('.friday-modal')?.remove();
+    showToast('ההערות נשמרו ✅');
+    renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+// ---- REPORTS ----
+let _fridayReportsData = {};
+
+async function loadFridayReports() {
+  const content = document.getElementById('friday-league-content');
+  if (!content) return;
+  content.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:24px">טוען נתונים...</div>';
+  try {
+    const snaps = await Promise.all(FRIDAY_LEAGUES.map(l => db.ref('fridayLeagues/' + l.id).get()));
+    FRIDAY_LEAGUES.forEach((l, i) => { _fridayReportsData[l.id] = snaps[i].val() || {}; });
+    renderFridayReports('summary');
+  } catch(e) { content.innerHTML = `<div style="color:#c53030;padding:16px">שגיאה: ${e.message}</div>`; }
+}
+
+function renderFridayReports(mode) {
+  const content = document.getElementById('friday-league-content');
+  if (!content) return;
+  const modeBar = `
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+      ${['summary','bydate','byplayer'].map((m,i) => {
+        const labels = ['👥 שנתי לפי ליגה','📅 לפי תאריך','🧑 לפי שחקן'];
+        return `<button onclick="renderFridayReports('${m}')"
+          style="padding:8px 16px;border-radius:8px;border:1px solid #e2e8f0;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;background:${mode===m?'#6b46c1':'white'};color:${mode===m?'white':'#4a5568'}">${labels[i]}</button>`;
+      }).join('')}
+    </div>`;
+
+  let reportHtml = '';
+  if (mode === 'summary') {
+    reportHtml = FRIDAY_LEAGUES.map(l => {
+      const data = _fridayReportsData[l.id] || {};
+      const players = data.players ? Object.entries(data.players).map(([id,p]) => ({id,...p})) : [];
+      const dates = data.dates ? Object.values(data.dates).sort() : [];
+      if (!players.length) return `<div style="color:#a0aec0;font-size:13px;margin-bottom:16px">${l.name}: אין שחקנים</div>`;
+      const rows = players.map((p,i) => {
+        const att = p.attendance || {};
+        const present = dates.filter(d => att[d]).length;
+        const pct = dates.length > 0 ? Math.round(present/dates.length*100) : 0;
+        const col = pct>=80?'#276749':pct>=60?'#d69e2e':'#e53e3e';
+        return `<tr style="border-bottom:1px solid #f0f4f8">
+          <td style="padding:8px 12px;font-size:13px">${i+1}</td>
+          <td style="padding:8px 12px;font-size:14px;font-weight:600">${p.name}</td>
+          <td style="padding:8px 12px;text-align:center;font-weight:700;color:#2b6cb0">${present}</td>
+          <td style="padding:8px 12px;text-align:center;color:#718096">${dates.length}</td>
+          <td style="padding:8px 12px;text-align:center;font-weight:700;color:${col}">${pct}%</td>
+          <td style="padding:8px 20px 8px 12px"><div style="background:#e2e8f0;border-radius:4px;height:8px;width:100%;min-width:80px"><div style="background:${col};height:8px;border-radius:4px;width:${pct}%"></div></div></td>
+        </tr>`;
+      }).join('');
+      const thS = 'padding:9px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+      return `<div style="margin-bottom:24px">
+        <div style="font-size:15px;font-weight:700;color:${l.color};margin-bottom:10px">${l.name} — ${players.length} שחקנים, ${dates.length} ימי שישי</div>
+        <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th style="${thS}">#</th><th style="${thS}">שם</th><th style="${thS};text-align:center">נוכח</th><th style="${thS};text-align:center">מתוך</th><th style="${thS};text-align:center">%</th><th style="${thS}">גרף</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div></div>`;
+    }).join('');
+
+  } else if (mode === 'bydate') {
+    const allDates = [...new Set(FRIDAY_LEAGUES.flatMap(l =>
+      Object.values(_fridayReportsData[l.id]?.dates || {})))].sort().reverse();
+    const selDate = allDates[0] || '';
+    const dateOpts = allDates.map(d => {
+      const dd = new Date(d);
+      return `<option value="${d}">${dd.toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</option>`;
+    }).join('');
+    const dateContent = selDate ? buildFridayByDateReport(selDate) : '<div style="color:#a0aec0;padding:20px">אין תאריכים</div>';
+    reportHtml = `
+      <div style="margin-bottom:16px">
+        <label style="font-size:13px;font-weight:600;color:#4a5568;margin-left:8px">תאריך:</label>
+        <select onchange="document.getElementById('fl-bydate-content').innerHTML=buildFridayByDateReport(this.value)"
+          style="padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">${dateOpts}</select>
+      </div>
+      <div id="fl-bydate-content">${dateContent}</div>`;
+
+  } else {
+    const allPlayers = FRIDAY_LEAGUES.flatMap(l => {
+      const data = _fridayReportsData[l.id] || {};
+      return data.players ? Object.entries(data.players).map(([id,p]) => ({id, leagueId:l.id, leagueName:l.name, leagueColor:l.color, ...p})) : [];
+    });
+    if (!allPlayers.length) {
+      reportHtml = '<div style="color:#a0aec0;padding:20px;text-align:center">אין שחקנים</div>';
+    } else {
+      const opts = allPlayers.map(p => `<option value="${p.leagueId}__${p.id}">${p.name} (${p.leagueName})</option>`).join('');
+      const firstKey = allPlayers[0].leagueId + '__' + allPlayers[0].id;
+      reportHtml = `
+        <div style="margin-bottom:16px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568;margin-left:8px">שחקן:</label>
+          <select onchange="document.getElementById('fl-byplayer-content').innerHTML=buildFridayByPlayerReport(this.value)"
+            style="padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">${opts}</select>
+        </div>
+        <div id="fl-byplayer-content">${buildFridayByPlayerReport(firstKey)}</div>`;
+    }
+  }
+
+  content.innerHTML = modeBar + reportHtml;
+}
+
+function buildFridayByDateReport(dateStr) {
+  const dd = new Date(dateStr);
+  const dateLabel = dd.toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return FRIDAY_LEAGUES.map(l => {
+    const data = _fridayReportsData[l.id] || {};
+    const players = data.players ? Object.entries(data.players).map(([id,p]) => ({id,...p})) : [];
+    const hasDates = data.dates && Object.values(data.dates).includes(dateStr);
+    if (!players.length || !hasDates) return '';
+    const present = players.filter(p => p.attendance?.[dateStr]);
+    const absent = players.filter(p => !p.attendance?.[dateStr]);
+    return `<div style="margin-bottom:20px">
+      <div style="font-size:14px;font-weight:700;color:${l.color};margin-bottom:8px">${l.name} — ${present.length}/${players.length} נכחו</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:12px;font-weight:700;color:#276749;margin-bottom:6px">✅ נכחו (${present.length})</div>
+          ${present.map(p=>`<div style="padding:4px 8px;font-size:13px">${p.name}</div>`).join('') || '<div style="color:#a0aec0;font-size:13px">אף אחד</div>'}
+        </div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:12px;font-weight:700;color:#c53030;margin-bottom:6px">❌ לא נכחו (${absent.length})</div>
+          ${absent.map(p=>`<div style="padding:4px 8px;font-size:13px">${p.name}</div>`).join('') || '<div style="color:#a0aec0;font-size:13px">אף אחד</div>'}
+        </div>
+      </div>
+    </div>`;
+  }).join('') || '<div style="color:#a0aec0;padding:12px">אין נתונים לתאריך זה</div>';
+}
+
+function buildFridayByPlayerReport(key) {
+  const [leagueId, playerId] = key.split('__');
+  const data = _fridayReportsData[leagueId] || {};
+  const player = data.players?.[playerId];
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  if (!player) return '<div style="color:#a0aec0;padding:12px">לא נמצא שחקן</div>';
+  const dates = data.dates ? Object.values(data.dates).sort() : [];
+  const att = player.attendance || {};
+  const present = dates.filter(d => att[d]).length;
+  const pct = dates.length > 0 ? Math.round(present/dates.length*100) : 0;
+  const col = pct>=80?'#276749':pct>=60?'#d69e2e':'#e53e3e';
+  const dots = dates.map(d => {
+    const dd = new Date(d);
+    return `<div title="${dd.toLocaleDateString('he-IL')}" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;font-size:11px;font-weight:700;margin:3px;background:${att[d]?'#c6f6d5':'#fed7d7'};color:${att[d]?'#276749':'#c53030'}">${dd.getDate()}/${dd.getMonth()+1}</div>`;
+  }).join('');
+  return `
+    <div style="background:#f7fafc;border-radius:10px;padding:16px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+      <div style="text-align:center"><div style="font-size:32px;font-weight:800;color:${col}">${pct}%</div><div style="font-size:12px;color:#718096">נוכחות</div></div>
+      <div style="text-align:center"><div style="font-size:28px;font-weight:800;color:#2b6cb0">${present}</div><div style="font-size:12px;color:#718096">מתוך ${dates.length}</div></div>
+      <div><div style="font-size:13px;font-weight:700;color:${league.color}">${league.name}</div>${player.notes?`<div style="font-size:12px;color:#718096;margin-top:4px">📝 ${player.notes}</div>`:''}</div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:#4a5568;margin-bottom:8px">נוכחות לפי תאריך:</div>
+    <div style="line-height:2">${dots || '<div style="color:#a0aec0">אין תאריכים</div>'}</div>`;
+}
+
+async function removeFridayDate(leagueId, dateStr) {
+  const datesObj = _fridayData[leagueId]?.dates || {};
+  const key = Object.entries(datesObj).find(([k,v]) => v === dateStr)?.[0];
+  if (!key) return;
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/dates/${key}`).remove();
+    showToast('התאריך הוסר');
+    loadFridayLeague(leagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+async function clearAllFridayDates(leagueId) {
+  if (!confirm('למחוק את כל התאריכים מהליגה?')) return;
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/dates`).remove();
+    showToast('כל התאריכים נמחקו');
+    loadFridayLeague(leagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+async function removeFridayPlayer(leagueId, playerId) {
+  const player = _fridayData[leagueId]?.players?.[playerId];
+  if (!confirm(`להסיר את ${player?.name||'השחקן'} מהליגה?`)) return;
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/players/${playerId}`).remove();
+    showToast('השחקן הוסר');
+    loadFridayLeague(leagueId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+// ===== HOURS LOGGING =====
+function renderHoursPanel() {
+  const today = new Date().toISOString().split('T')[0];
+  return `
+    <div class="att-card" style="max-width:720px">
+      <div class="att-card-header">⏱️ דיווח שעות</div>
+      <div style="padding:20px">
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:130px">
+              <label style="font-size:13px;font-weight:600;color:#4a5568">תאריך</label>
+              <input type="date" id="hours-date" value="${today}" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+              <label style="font-size:13px;font-weight:600;color:#4a5568">סוג פעילות</label>
+              <select id="hours-type" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+                <option value="friday">יום שישי</option>
+                <option value="tournament">תחרות</option>
+                <option value="league">ליגה</option>
+                <option value="other">אחר</option>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;min-width:90px">
+              <label style="font-size:13px;font-weight:600;color:#4a5568">שעות</label>
+              <input type="number" id="hours-count" min="0.5" max="24" step="0.5" placeholder="2.5" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;width:90px">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:13px;font-weight:600;color:#4a5568">תיאור</label>
+            <input type="text" id="hours-desc" placeholder="לדוגמא: ליגת הנוער רמת גן" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+          </div>
+          <button onclick="saveHoursEntry()" style="align-self:flex-start;background:#2b6cb0;color:white;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">💾 שמור דיווח</button>
+        </div>
+        <hr style="border:none;border-top:2px solid #e2e8f0;margin:0 0 20px">
+        <div id="hours-history"><div style="text-align:center;color:#a0aec0;padding:24px">טוען היסטוריה...</div></div>
+      </div>
+    </div>`;
+}
+
+async function saveHoursEntry() {
+  const date = document.getElementById('hours-date').value;
+  const type = document.getElementById('hours-type').value;
+  const hoursVal = document.getElementById('hours-count').value;
+  const desc = document.getElementById('hours-desc').value.trim();
+  if (!date || !hoursVal || parseFloat(hoursVal) <= 0) {
+    showToast('יש למלא תאריך ושעות', 'error'); return;
+  }
+  const typeLabels = { friday: 'יום שישי', tournament: 'תחרות', league: 'ליגה', other: 'אחר' };
+  const entry = {
+    instructorId: currentUser.uid,
+    instructorName: currentUser.name,
+    date,
+    activityType: type,
+    activityLabel: typeLabels[type],
+    description: desc,
+    hours: parseFloat(hoursVal),
+    ts: Date.now()
+  };
+  try {
+    await db.ref('hourLogs').push(entry);
+    showToast('הדיווח נשמר ✅');
+    document.getElementById('hours-count').value = '';
+    document.getElementById('hours-desc').value = '';
+    loadHoursHistory();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+
+async function loadHoursHistory() {
+  const container = document.getElementById('hours-history');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:20px">טוען...</div>';
+  try {
+    const snap = await db.ref('hourLogs').orderByChild('ts').get();
+    const entries = [];
+    snap.forEach(child => entries.push({ id: child.key, ...child.val() }));
+    entries.reverse();
+    const isAdmin = currentUser?.role === 'admin';
+    const filtered = isAdmin ? entries : entries.filter(e => e.instructorId === currentUser.uid);
+    if (!filtered.length) {
+      container.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:24px">אין דיווחים עדיין</div>';
+      return;
+    }
+    const totalHours = filtered.reduce((sum, e) => sum + (e.hours || 0), 0);
+    const rows = filtered.map(e => `
+      <tr style="border-bottom:1px solid #f0f4f8">
+        ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}</td>` : ''}
+        <td style="padding:10px 12px;font-size:13px">${e.date || '—'}</td>
+        <td style="padding:10px 12px"><span style="background:#ebf4ff;color:#2b6cb0;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;white-space:nowrap">${e.activityLabel || e.activityType}</span></td>
+        <td style="padding:10px 12px;font-size:13px;color:#4a5568">${e.description || '<span style="color:#cbd5e0">—</span>'}</td>
+        <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:15px;color:#2b6cb0">${e.hours}</td>
+        <td style="padding:10px 12px;font-size:12px;color:#a0aec0">${new Date(e.ts).toLocaleDateString('he-IL')}</td>
+        ${isAdmin ? `<td style="padding:10px 8px;text-align:center"><button onclick="deleteHoursEntry('${e.id}')" title="מחק" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1">🗑</button></td>` : ''}
+      </tr>`).join('');
+    const thStyle = 'padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+    container.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:14px;font-weight:700;color:#2d3748">היסטוריית דיווחים (${filtered.length})</span>
+        <span style="font-size:15px;font-weight:800;color:#2b6cb0">סה"כ: ${totalHours} שעות</span>
+      </div>
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            ${isAdmin ? `<th style="${thStyle}">מדריך</th>` : ''}
+            <th style="${thStyle}">תאריך</th>
+            <th style="${thStyle}">סוג</th>
+            <th style="${thStyle}">תיאור</th>
+            <th style="${thStyle};text-align:center">שעות</th>
+            <th style="${thStyle}">הוזן ב</th>
+            ${isAdmin ? `<th style="${thStyle}"></th>` : ''}
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch(e) { container.innerHTML = `<div style="color:#c53030;padding:16px">שגיאה: ${e.message}</div>`; }
+}
+
+async function deleteHoursEntry(id) {
+  if (!confirm('למחוק את הדיווח הזה?')) return;
+  try {
+    await db.ref('hourLogs/' + id).remove();
+    showToast('הדיווח נמחק');
+    loadHoursHistory();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
 
 async function loadSubmissions() {
   const panel = document.getElementById('panel-submissions');
