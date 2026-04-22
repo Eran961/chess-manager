@@ -190,6 +190,7 @@
 
     tbody tr:hover { background: #ebf4ff; }
     tbody tr:last-child { border-bottom: none; }
+    .gender-col { text-align: center !important; padding-left: 30px !important; padding-right: 30px !important; }
 
     td {
       padding: 11px 16px;
@@ -889,52 +890,104 @@
     }
     .print-header { display: none; font-size: 14px; color: #2d3748; margin-bottom: 8px; font-weight: 600; }
 
+    /* ===== TABLET (768px) ===== */
+    @media (max-width: 768px) {
+      .content { padding: 16px 18px; }
+      .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
+      .dash-stat-num { font-size: 26px; }
+      .profile-modal-box { width: calc(100vw - 32px); }
+    }
+
+    /* ===== MOBILE (600px) ===== */
     @media (max-width: 600px) {
-      /* Header */
-      header { padding: 12px 16px; gap: 10px; }
+      /* Header — stack vertically so user area doesn't overlap title */
+      header {
+        padding: 10px 16px;
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+      }
       header .logo { font-size: 26px; }
       header h1 { font-size: 17px; }
       header p { font-size: 11px; }
+      .header-user-area {
+        position: static !important;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .btn-header-sm { padding: 6px 12px; font-size: 12px; }
 
-      /* Tabs */
-      .tabs-bar { padding: 0 8px; }
-      .tab-btn { padding: 12px 12px; font-size: 13px; }
+      /* Tabs — smaller, horizontal scroll */
+      .tabs-bar { padding: 0 4px; gap: 0; }
+      .tab-btn { padding: 10px 10px; font-size: 12px; }
 
       /* Content */
-      .content { padding: 12px; }
+      .content { padding: 10px; }
 
-      /* Sub-group header — wrap buttons */
-      .sub-group-header { flex-wrap: wrap; gap: 8px; }
+      /* Group name header */
+      .group-name-header { font-size: 15px; padding: 10px 14px; }
+
+      /* Sub-group header */
+      .sub-group-header { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+      .sub-group-header h3 { font-size: 14px; }
       .btn-add-in-header { font-size: 12px; padding: 5px 10px; }
 
-      /* Table — scroll horizontally */
+      /* Table — horizontal scroll; hide less-critical columns */
       .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-
-      /* Hide less-critical columns on mobile:
-         col 4 = שנת לידה, col 5 = מספר שחקן, col 6 = הצטרפות */
+      /* visible: # שם משפחה שם פרטי שנת לידה תשלום — hide: מין(4) מספר שחקן(6) מד כושר(7) כרטיס(8) הצטרפות(9) */
       table th:nth-child(4), table td:nth-child(4),
-      table th:nth-child(5), table td:nth-child(5),
-      table th:nth-child(6), table td:nth-child(6) { display: none; }
+      table th:nth-child(6), table td:nth-child(6),
+      table th:nth-child(7), table td:nth-child(7),
+      table th:nth-child(8), table td:nth-child(8),
+      table th:nth-child(9), table td:nth-child(9) { display: none; }
+      td, thead th { padding: 8px 10px; font-size: 13px; }
+      td.idx { width: 24px; font-size: 11px; }
 
-      /* Tighter table padding */
-      td, thead th { padding: 9px 10px; }
-      td.idx { width: 26px; }
+      /* Modals — full screen */
+      .modal-box { width: calc(100vw - 12px); max-width: calc(100vw - 12px); max-height: 94vh; }
+      .profile-modal-box { width: calc(100vw - 12px); max-width: calc(100vw - 12px); max-height: 95vh; }
+      .modal-header { padding: 14px 16px; }
+      .modal-body { padding: 14px 16px; }
+      .profile-section { padding: 14px 16px; }
+      .modal-field label { font-size: 13px; }
 
-      /* Modals — full width */
-      .modal-box { width: calc(100vw - 16px); max-width: calc(100vw - 16px); }
-      .profile-modal-box { width: calc(100vw - 16px); max-width: calc(100vw - 16px); }
+      /* Dashboard */
+      .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
+      .dash-stat { padding: 12px 8px; }
+      .dash-stat-num { font-size: 22px; }
+      .dash-stat-label { font-size: 11px; }
+      .dash-grid { gap: 12px; }
+      .dash-shortcut-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 10px 14px; }
+      .dash-alert-row { font-size: 12px; padding: 8px 14px; flex-wrap: wrap; }
+      .dash-today-row { padding: 10px 14px; }
 
       /* Attendance */
       .att-card { max-width: 100%; }
+      .att-card-header { font-size: 15px; }
       .att-actions { flex-wrap: wrap; gap: 6px; }
-      .btn-att { flex: 1 1 auto; text-align: center; }
+      .btn-att { flex: 1 1 auto; text-align: center; min-width: 70px; font-size: 13px; }
       .btn-save { width: 100%; justify-content: center; }
 
-      /* Name edit inputs */
-      .name-edit-input { min-width: 120px; }
+      /* Reports */
+      .reports-mode-bar { flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
+      .mode-btn { font-size: 13px; padding: 8px 10px; }
 
-      /* Pay select buttons */
+      /* Search panel */
+      .search-filters { flex-wrap: wrap; gap: 8px; }
+
+      /* Calendar */
+      .cal-day { font-size: 11px; min-height: 36px; }
+      .cal-header { padding: 10px 14px; }
+
+      /* Name edit */
+      .name-edit-input { min-width: 100px; }
+
+      /* Pay select */
       .pay-select { flex-direction: column; }
+
+      /* Weekly modal */
+      .weekly-box { padding: 16px 12px; }
     }
 
 
@@ -2273,6 +2326,7 @@ function renderPlayer(player, displayNum, groupIdx, subGroupIdx, originalIdx) {
       <td class="idx">${displayNum}</td>
       <td class="last-name">${last || '<span style="color:#cbd5e0">—</span>'}</td>
       <td class="first-name">${first}</td>
+      <td class="gender-col">${player.gender === 'm' ? '👦 ז' : player.gender === 'f' ? '👧 נ' : '<span style="color:#cbd5e0">—</span>'}</td>
       <td class="birth">
         ${player.birthYear
           ? `<span class="year">${player.birthYear}</span><span class="age">גיל ${age}</span>`
@@ -2315,6 +2369,7 @@ function renderSubGroup(sg, showTime, groupIdx, subGroupIdx) {
               <th>#</th>
               <th>שם משפחה</th>
               <th>שם פרטי</th>
+              <th class="gender-col">מין</th>
               <th>שנת לידה / גיל</th>
               <th>מספר שחקן</th>
               <th style="text-align:center">מד כושר</th>
@@ -2919,6 +2974,14 @@ function enableProfileEdit() {
       <input type="number" id="pe-fed" value="${p.fedId || ''}" placeholder="לא חובה">
     </div>
     <div class="modal-field">
+      <label>מין</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="pe-gender-m" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" onclick="selectGender('m')">זכר</button>
+        <button type="button" id="pe-gender-f" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" onclick="selectGender('f')">נקבה</button>
+      </div>
+      <input type="hidden" id="pe-gender" value="${p.gender || ''}">
+    </div>
+    <div class="modal-field">
       <label>סטטוס תשלום</label>
       <div class="pay-select">
         <button type="button" class="pay-btn${(p.paymentStatus||'trial')==='trial'?' active-trial':''}" onclick="selectPayStatus(this,'trial')">ניסיון</button>
@@ -2940,6 +3003,12 @@ function enableProfileEdit() {
       <button class="btn-form-submit" onclick="savePlayerProfile()">💾 שמור</button>
     </div>`;
   document.getElementById('pe-last').focus();
+}
+
+function selectGender(g) {
+  document.getElementById('pe-gender-m').className = 'pay-btn' + (g==='m'?' active-paid':'');
+  document.getElementById('pe-gender-f').className = 'pay-btn' + (g==='f'?' active-pending':'');
+  document.getElementById('pe-gender').value = g;
 }
 
 function selectPayStatus(btn, status) {
@@ -2989,12 +3058,14 @@ async function savePlayerProfile() {
   const g = groups[groupIdx];
   const player = g.subGroups[subGroupIdx].players[playerIdx];
 
+  const genderVal = document.getElementById('pe-gender')?.value || null;
   player.name          = `${firstName} ${lastName}`;
   player.birthYear     = birthYear;
   player.fedId         = fedId;
   player.paymentStatus = paymentStatus;
   player.parentPhone   = parentPhone;
   player.parentEmail   = parentEmail;
+  player.gender        = genderVal || null;
 
   if (db) {
     await Promise.all([
@@ -4580,20 +4651,49 @@ function renderSearchPanel() {
   return `<div class="att-card" style="max-width:800px">
     <div class="att-card-header">🔍 חיפוש שחקן</div>
     <div style="padding:16px 20px">
-      <input class="search-input" id="searchInput" type="text" placeholder="הקלד שם שחקן לחיפוש..." oninput="onSearchInput(this.value)" autocomplete="off">
-      <div id="searchResults"><div style="text-align:center;color:#718096;padding:20px">הקלד לפחות 2 תווים לחיפוש</div></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input class="search-input" id="searchInput" type="text" placeholder="הקלד שם שחקן לחיפוש..." autocomplete="off" style="margin-bottom:0;flex:1">
+        <button onclick="runSearch()" style="padding:12px 20px;background:#2b6cb0;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">🔍 חפש</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <span style="font-size:14px;color:#4a5568;font-weight:600">טווח גיל:</span>
+        <input type="number" id="ageMin" placeholder="מגיל" min="4" max="99" style="width:80px;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+        <span style="color:#718096">—</span>
+        <input type="number" id="ageMax" placeholder="עד גיל" min="4" max="99" style="width:80px;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+        <select id="genderFilter" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+          <option value="">כל המינים</option>
+          <option value="m">זכר</option>
+          <option value="f">נקבה</option>
+        </select>
+        <button onclick="document.getElementById('ageMin').value='';document.getElementById('ageMax').value='';document.getElementById('searchInput').value='';document.getElementById('genderFilter').value='';runSearch()" style="padding:7px 14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit">נקה</button>
+      </div>
+      <div id="searchResults"><div style="text-align:center;color:#718096;padding:20px">הקלד שם או בחר טווח גיל לחיפוש</div></div>
     </div>
   </div>`;
 }
 
-function onSearchInput(query) {
+function runSearch() {
+  const query = (document.getElementById('searchInput')?.value || '').trim();
+  const ageMinVal = document.getElementById('ageMin')?.value;
+  const ageMaxVal = document.getElementById('ageMax')?.value;
+  const ageMin = ageMinVal ? parseInt(ageMinVal) : null;
+  const ageMax = ageMaxVal ? parseInt(ageMaxVal) : null;
+  const gender = document.getElementById('genderFilter')?.value || '';
+  onSearchInput(query, ageMin, ageMax, gender);
+}
+
+function onSearchInput(query, ageMin = null, ageMax = null, gender = '') {
   const div = document.getElementById('searchResults');
   if (!div) return;
   const q = query.trim();
-  if (q.length < 2) {
-    div.innerHTML = '<div style="text-align:center;color:#718096;padding:20px">הקלד לפחות 2 תווים לחיפוש</div>';
+  const hasName = q.length >= 2;
+  const hasAge = ageMin !== null || ageMax !== null;
+  const hasGender = gender !== '';
+  if (!hasName && !hasAge && !hasGender) {
+    div.innerHTML = '<div style="text-align:center;color:#718096;padding:20px">הקלד שם או בחר טווח גיל לחיפוש</div>';
     return;
   }
+  const currentYear = new Date().getFullYear();
   const results = [];
   groups.forEach((g, gi) => g.subGroups.forEach((sg, si) => {
     sg.players.forEach((p, pi) => {
@@ -4601,8 +4701,12 @@ function onSearchInput(query) {
       const { first, last } = splitName(p.name);
       const fullName = `${first} ${last}`.toLowerCase();
       const fullNameRev = `${last} ${first}`.toLowerCase();
-      if (fullName.includes(q.toLowerCase()) || fullNameRev.includes(q.toLowerCase())) {
-        results.push({ p, gi, si, pi, g, sg, groupLabel: sg.time ? `${g.name} · ${sg.time}` : g.name });
+      const nameMatch = !hasName || fullName.includes(q.toLowerCase()) || fullNameRev.includes(q.toLowerCase());
+      const age = p.birthYear ? currentYear - p.birthYear : null;
+      const ageMatch = !hasAge || (age !== null && (ageMin === null || age >= ageMin) && (ageMax === null || age <= ageMax));
+      const genderMatch = !hasGender || p.gender === gender;
+      if (nameMatch && ageMatch && genderMatch) {
+        results.push({ p, gi, si, pi, g, sg, groupLabel: sg.time ? `${g.name} · ${sg.time}` : g.name, age });
       }
     });
   }));
@@ -4618,12 +4722,13 @@ function onSearchInput(query) {
       <td class="idx">${i+1}</td>
       <td style="font-weight:600">${last}</td>
       <td>${first}</td>
+      <td style="color:#4a5568;font-size:13px">${r.age !== null ? r.age : '—'}</td>
       <td style="color:#4a5568;font-size:13px">${r.groupLabel}</td>
       <td>${badge}</td>
     </tr>`;
   }).join('');
   div.innerHTML = `<table class="pay-table">
-    <thead><tr><th>#</th><th>שם משפחה</th><th>שם פרטי</th><th>קבוצה</th><th>תשלום</th></tr></thead>
+    <thead><tr><th>#</th><th>שם משפחה</th><th>שם פרטי</th><th>גיל</th><th>קבוצה</th><th>תשלום</th></tr></thead>
     <tbody>${rows}</tbody>
   </table><div style="padding:8px 0;font-size:12px;color:#718096;text-align:center">${results.length} תוצאות</div>`;
 }
