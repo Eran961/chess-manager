@@ -4421,6 +4421,9 @@ async function loadFridayLeague(leagueId) {
   } catch(e) { content.innerHTML = `<div style="color:#c53030;padding:16px">שגיאה: ${e.message}</div>`; }
 }
 
+function getResult(v) { return v == null ? null : (typeof v === 'object' ? v.result : String(v)); }
+function getGameDate(v) { return v != null && typeof v === 'object' ? v.date : null; }
+
 function renderFridayLeagueContent(leagueId, data) {
   const content = document.getElementById('friday-league-content');
   if (!content) return;
@@ -4780,6 +4783,46 @@ function openFridayPlayerProfile(leagueId, playerId) {
             ${payments.length > 5 ? `<div style="font-size:12px;color:#718096;margin-top:6px">ועוד ${payments.length-5} תשלומים...</div>` : ''}
           </div>
 
+          <!-- משחקים לפי תאריך -->
+          ${(() => {
+            const allPlayers = _fridayData[leagueId]?.players || {};
+            const results = _fridayData[leagueId]?.tournamentResults || {};
+            const games = [];
+            Object.keys(allPlayers).forEach(opId => {
+              if (opId === playerId) return;
+              const opName = allPlayers[opId]?.name || '?';
+              const asW = results[playerId]?.[opId];
+              if (asW != null) {
+                const r = getResult(asW); const d = getGameDate(asW);
+                const score = parseFloat(r);
+                games.push({ date: d||'?', opName, color: 'לבן', result: score===1?'ניצחון':score===0.5?'תיקו':'הפסד', score });
+              }
+              const asB = results[opId]?.[playerId];
+              if (asB != null) {
+                const r = getResult(asB); const d = getGameDate(asB);
+                const score = 1 - parseFloat(r);
+                games.push({ date: d||'?', opName, color: 'שחור', result: score===1?'ניצחון':score===0.5?'תיקו':'הפסד', score });
+              }
+            });
+            if (!games.length) return `<div class="profile-section"><div class="profile-section-header">♟️ משחקים</div><div style="color:#a0aec0;font-size:13px">אין משחקים מתועדים</div></div>`;
+            const byDate = {};
+            games.forEach(g => { if (!byDate[g.date]) byDate[g.date] = []; byDate[g.date].push(g); });
+            const dateBlocks = Object.keys(byDate).sort().reverse().map(date => {
+              const dd = date !== '?' ? new Date(date + 'T12:00:00').toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric' }) : '—';
+              const rows = byDate[date].map(g => {
+                const rc = g.result==='ניצחון'?'#276749':g.result==='תיקו'?'#744210':'#c53030';
+                const bg = g.result==='ניצחון'?'#f0fff4':g.result==='תיקו'?'#fffff0':'#fff5f5';
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:${bg};margin-bottom:3px;font-size:12px">
+                  <span style="font-weight:600">${g.opName}</span>
+                  <span style="color:#718096">${g.color}</span>
+                  <span style="font-weight:700;color:${rc}">${g.result}</span>
+                </div>`;
+              }).join('');
+              return `<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:#4a5568;margin-bottom:4px">📅 ${dd}</div>${rows}</div>`;
+            }).join('');
+            return `<div class="profile-section"><div class="profile-section-header">♟️ משחקים (${games.length})</div>${dateBlocks}</div>`;
+          })()}
+
           <!-- הערות -->
           <div class="profile-section">
             <div class="profile-section-header">📝 הערות</div>
@@ -4847,7 +4890,7 @@ function switchFridaySubTab(leagueId, tab) {
   renderFridayLeagueContent(leagueId, _fridayData[leagueId] || {});
 }
 
-function renderFridayTournamentView(leagueId, data) {
+function renderFridayTournamentView(leagueId, data, archiveOpts = null) {
   const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
   // Players in insertion order
   const players = data.players
@@ -4866,9 +4909,9 @@ function renderFridayTournamentView(leagueId, data) {
     let score = 0;
     players.forEach(op => {
       if (op.id === pid) return;
-      const asW = results[pid]?.[op.id];
+      const asW = getResult(results[pid]?.[op.id]);
       if (asW != null) score += parseFloat(asW);
-      const asB = results[op.id]?.[pid];
+      const asB = getResult(results[op.id]?.[pid]);
       if (asB != null) score += 1 - parseFloat(asB);
     });
     return score;
@@ -4881,9 +4924,9 @@ function renderFridayTournamentView(leagueId, data) {
   // Helper: combined score between two players (row's perspective)
   function pairScore(rowId, colId) {
     let r = 0, c = 0, played = 0;
-    const asW = results[rowId]?.[colId];
+    const asW = getResult(results[rowId]?.[colId]);
     if (asW != null) { const v=parseFloat(asW); r+=v; c+=1-v; played++; }
-    const asB = results[colId]?.[rowId];
+    const asB = getResult(results[colId]?.[rowId]);
     if (asB != null) { const v=parseFloat(asB); r+=1-v; c+=v; played++; }
     return { r, c, played };
   }
@@ -4903,10 +4946,14 @@ function renderFridayTournamentView(leagueId, data) {
         else            { bg='#fefcbf'; color='#744210'; }
         label = `${fmtScore(c)}-${fmtScore(r)}`;
       }
+      const clickHandler = archiveOpts?.locked
+        ? ''
+        : archiveOpts
+          ? `onclick="openArchiveResultModal('${leagueId}','${archiveOpts.seasonKey}','${row.id}','${col.id}')"`
+          : `onclick="openResultModal('${leagueId}','${row.id}','${col.id}')"`;
       return `<td style="text-align:center;padding:4px;min-width:56px">
-        <button onclick="openResultModal('${leagueId}','${row.id}','${col.id}')"
-          title="${row.name} vs ${col.name}"
-          style="min-width:50px;height:28px;border-radius:6px;border:1px solid #e2e8f0;background:${bg};color:${color};font-weight:${fw};font-size:12px;cursor:pointer;font-family:inherit;padding:0 4px;white-space:nowrap">
+        <button ${clickHandler} title="${row.name} vs ${col.name}"
+          style="min-width:50px;height:28px;border-radius:6px;border:1px solid #e2e8f0;background:${bg};color:${color};font-weight:${fw};font-size:12px;${archiveOpts?.locked?'':'cursor:pointer;'}font-family:inherit;padding:0 4px;white-space:nowrap">
           ${label}
         </button>
       </td>`;
@@ -4924,13 +4971,13 @@ function renderFridayTournamentView(leagueId, data) {
     let wins = 0, draws = 0, losses = 0, score = 0;
     players.forEach(op => {
       if (op.id === p.id) return;
-      const asW = results[p.id]?.[op.id];
+      const asW = getResult(results[p.id]?.[op.id]);
       if (asW != null) {
         const v = parseFloat(asW);
         score += v;
         if (v === 1) wins++; else if (v === 0.5) draws++; else losses++;
       }
-      const asB = results[op.id]?.[p.id];
+      const asB = getResult(results[op.id]?.[p.id]);
       if (asB != null) {
         const v = 1 - parseFloat(asB);
         score += v;
@@ -4980,7 +5027,11 @@ function renderFridayTournamentView(leagueId, data) {
         </tr></thead>
         <tbody>${standingRows}</tbody>
       </table>
-    </div>`;
+    </div>
+    ${!archiveOpts ? `<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+      <button onclick="openFridayArchive('${leagueId}')" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#4a5568">📚 ארכיון</button>
+      <button onclick="closeFridayLeague('${leagueId}')" style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#c53030">🏁 סיום ליגה</button>
+    </div>` : ''}`;
 }
 
 function openResultModal(leagueId, pid1, pid2) {
@@ -4990,7 +5041,7 @@ function openResultModal(leagueId, pid1, pid2) {
 
   function gameRow(wPid, bPid) {
     const wp = data.players?.[wPid], bp = data.players?.[bPid];
-    const cur = data.tournamentResults?.[wPid]?.[bPid] ?? '';
+    const cur = getResult(data.tournamentResults?.[wPid]?.[bPid]) ?? '';
     const rowId = `gr-${wPid}-${bPid}`;
     const bs = (val) => {
       const c = { '1':['#c6f6d5','#276749'], '0.5':['#fefcbf','#744210'], '0':['#fed7d7','#c53030'] }[val];
@@ -5012,6 +5063,15 @@ function openResultModal(leagueId, pid1, pid2) {
       </div>`;
   }
 
+  const today = new Date().toISOString().split('T')[0];
+  const allFridays = getFridaysBetween(YEAR_START, today);
+  const existingDate = getGameDate(data.tournamentResults?.[pid1]?.[pid2]) || getGameDate(data.tournamentResults?.[pid2]?.[pid1]) || getLastFriday();
+  const fridayOpts = [...allFridays].reverse().map(d => {
+    const dd = new Date(d + 'T12:00:00');
+    const label = dd.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+    return `<option value="${d}" ${d === existingDate ? 'selected' : ''}>${label}</option>`;
+  }).join('');
+
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
       <div class="modal-box" style="max-width:380px">
@@ -5020,6 +5080,12 @@ function openResultModal(leagueId, pid1, pid2) {
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:8px;background:#f7fafc;border-radius:8px;padding:8px 12px">
+            <span style="font-size:13px;color:#4a5568;font-weight:600">📅 תאריך שישי:</span>
+            <select id="friday-game-date" style="flex:1;border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;font-size:13px;font-family:inherit;background:white">
+              ${fridayOpts}
+            </select>
+          </div>
           ${gameRow(pid1, pid2)}
           ${gameRow(pid2, pid1)}
           <button onclick="confirmFridayResults('${leagueId}','${pid1}','${pid2}')"
@@ -5057,21 +5123,23 @@ async function confirmFridayResults(leagueId, pid1, pid2) {
   const row2 = document.getElementById('gr-' + pid2 + '-' + pid1);
   const val1 = row1?.dataset.val;
   const val2 = row2?.dataset.val;
+  const gameDate = document.getElementById('friday-game-date')?.value || getLastFriday();
   try {
+    if (!_fridayData[leagueId].tournamentResults) _fridayData[leagueId].tournamentResults = {};
     if (val1 !== undefined && val1 !== '') {
-      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid1}/${pid2}`).set(val1);
-      if (!_fridayData[leagueId].tournamentResults) _fridayData[leagueId].tournamentResults = {};
+      const entry1 = { result: val1, date: gameDate };
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid1}/${pid2}`).set(entry1);
       if (!_fridayData[leagueId].tournamentResults[pid1]) _fridayData[leagueId].tournamentResults[pid1] = {};
-      _fridayData[leagueId].tournamentResults[pid1][pid2] = val1;
+      _fridayData[leagueId].tournamentResults[pid1][pid2] = entry1;
     } else if (val1 === '') {
       await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid1}/${pid2}`).remove();
       if (_fridayData[leagueId]?.tournamentResults?.[pid1]) delete _fridayData[leagueId].tournamentResults[pid1][pid2];
     }
     if (val2 !== undefined && val2 !== '') {
-      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid2}/${pid1}`).set(val2);
-      if (!_fridayData[leagueId].tournamentResults) _fridayData[leagueId].tournamentResults = {};
+      const entry2 = { result: val2, date: gameDate };
+      await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid2}/${pid1}`).set(entry2);
       if (!_fridayData[leagueId].tournamentResults[pid2]) _fridayData[leagueId].tournamentResults[pid2] = {};
-      _fridayData[leagueId].tournamentResults[pid2][pid1] = val2;
+      _fridayData[leagueId].tournamentResults[pid2][pid1] = entry2;
     } else if (val2 === '') {
       await db.ref(`fridayLeagues/${leagueId}/tournamentResults/${pid2}/${pid1}`).remove();
       if (_fridayData[leagueId]?.tournamentResults?.[pid2]) delete _fridayData[leagueId].tournamentResults[pid2][pid1];
@@ -5098,6 +5166,257 @@ async function saveGameResult(leagueId, whitePid, blackPid, result) {
     renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
+
+// ---- ARCHIVE / CLOSE LEAGUE ----
+
+function closeFridayLeague(leagueId) {
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  const data = _fridayData[leagueId] || {};
+  const players = data.players ? Object.entries(data.players).map(([id,p]) => ({id,...p})) : [];
+  const results = data.tournamentResults || {};
+  const standings = [...players].map(p => {
+    let score = 0;
+    players.forEach(op => {
+      if (op.id === p.id) return;
+      const asW = getResult(results[p.id]?.[op.id]);
+      if (asW != null) score += parseFloat(asW);
+      const asB = getResult(results[op.id]?.[p.id]);
+      if (asB != null) score += 1 - parseFloat(asB);
+    });
+    return { ...p, score };
+  }).sort((a,b) => b.score - a.score);
+  const medals = ['🥇','🥈','🥉'];
+  const preview = standings.slice(0,5).map((p,i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f4f8">
+      <span style="font-weight:600;color:#2d3748">${medals[i]||''} ${i+1}. ${p.name}</span>
+      <span style="font-weight:700;color:${league.color}">${p.score%1===0?p.score:p.score.toFixed(1)} נק׳</span>
+    </div>`).join('');
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-header">
+          <span class="modal-title">🏁 סיום ליגה — ${league.name}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:12px;font-size:13px;color:#c53030">
+            ⚠️ הליגה תסתיים ותועבר לארכיון, ותיפתח ליגה חדשה ריקה. ניתן להמשיך להזין תוצאות חסרות בארכיון לאחר הסיום.
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">שם העונה</label>
+            <input type="text" id="close-league-name" value="עונה ${new Date().getFullYear()}"
+              style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;font-family:inherit">
+          </div>
+          ${standings.length > 0 ? `<div>
+            <div style="font-size:13px;font-weight:700;color:#4a5568;margin-bottom:8px">📊 דירוג סופי (תצוגה מקדימה)</div>
+            ${preview}
+            ${standings.length > 5 ? `<div style="font-size:12px;color:#718096;margin-top:4px">ועוד ${standings.length-5} שחקנים...</div>` : ''}
+          </div>` : ''}
+          <button onclick="doCloseFridayLeague('${leagueId}')"
+            style="background:#c53030;color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
+            🏁 סיים ליגה ופתח עונה חדשה
+          </button>
+        </div>
+      </div>
+    </div>`);
+}
+window.closeFridayLeague = closeFridayLeague;
+
+async function doCloseFridayLeague(leagueId) {
+  const seasonName = document.getElementById('close-league-name')?.value?.trim() || `עונה ${new Date().getFullYear()}`;
+  const data = _fridayData[leagueId] || {};
+  const seasonKey = Date.now().toString();
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}`).set({
+      seasonName,
+      closedAt: new Date().toISOString(),
+      locked: false,
+      players: data.players || null,
+      tournamentResults: data.tournamentResults || null,
+      dates: data.dates || null,
+    });
+    await db.ref(`fridayLeagues/${leagueId}/players`).remove();
+    await db.ref(`fridayLeagues/${leagueId}/tournamentResults`).remove();
+    await db.ref(`fridayLeagues/${leagueId}/dates`).remove();
+    _fridayData[leagueId] = { archive: { ...(_fridayData[leagueId]?.archive || {}), [seasonKey]: { seasonName, closedAt: new Date().toISOString(), locked: false } } };
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`הליגה נסגרה ✅ · "${seasonName}" נשמרה בארכיון`);
+    renderFridayLeagueContent(leagueId, _fridayData[leagueId]);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.doCloseFridayLeague = doCloseFridayLeague;
+
+async function openFridayArchive(leagueId) {
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  try {
+    const snap = await db.ref(`fridayLeagues/${leagueId}/archive`).once('value');
+    const archive = snap.val() || {};
+    const seasons = Object.entries(archive).sort((a,b) => b[0] - a[0]);
+    if (seasons.length === 0) { showToast('אין עונות בארכיון עדיין'); return; }
+    const rows = seasons.map(([key, s]) => {
+      const date = new Date(s.closedAt).toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric' });
+      const playerCount = s.players ? Object.keys(s.players).length : 0;
+      let winner = '';
+      if (s.players && s.tournamentResults) {
+        const ps = Object.entries(s.players).map(([id,p]) => ({id,...p}));
+        const rs = s.tournamentResults || {};
+        const scored = ps.map(p => {
+          let sc = 0;
+          ps.forEach(op => {
+            if (op.id === p.id) return;
+            const asW = getResult(rs[p.id]?.[op.id]);
+            if (asW != null) sc += parseFloat(asW);
+            const asB = getResult(rs[op.id]?.[p.id]);
+            if (asB != null) sc += 1 - parseFloat(asB);
+          });
+          return { ...p, sc };
+        }).sort((a,b) => b.sc - a.sc);
+        if (scored.length > 0) winner = scored[0].name;
+      }
+      return `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#2d3748">${s.seasonName||'עונה'}
+            ${s.locked ? ' <span style="font-size:11px;background:#e2e8f0;color:#4a5568;border-radius:4px;padding:2px 6px">🔒 נעול</span>' : ''}
+          </div>
+          <div style="font-size:12px;color:#718096;margin-top:2px">${date} · ${playerCount} שחקנים${winner ? ` · 🏆 ${winner}` : ''}</div>
+        </div>
+        <button onclick="openArchiveSeason('${leagueId}','${key}')"
+          style="background:${league.color};color:white;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">פתח</button>
+      </div>`;
+    }).join('');
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+        <div class="modal-box" style="max-width:500px">
+          <div class="modal-header">
+            <span class="modal-title">📚 ארכיון — ${league.name}</span>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+          </div>
+          <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:10px">${rows}</div>
+        </div>
+      </div>`);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.openFridayArchive = openFridayArchive;
+
+async function openArchiveSeason(leagueId, seasonKey) {
+  const league = FRIDAY_LEAGUES.find(l => l.id === leagueId);
+  try {
+    const snap = await db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}`).once('value');
+    const s = snap.val();
+    if (!s) { showToast('לא נמצאה העונה', 'error'); return; }
+    const date = new Date(s.closedAt).toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric' });
+    const tournHtml = renderFridayTournamentView(leagueId, s, { seasonKey, locked: !!s.locked });
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+        <div class="profile-modal-box" style="width:720px;max-width:calc(100vw - 24px)">
+          <div style="background:linear-gradient(135deg,${league.color},${league.color}dd);color:white;padding:18px 22px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:18px;font-weight:800">${s.seasonName||'עונה'}</div>
+              <div style="font-size:12px;opacity:0.85;margin-top:2px">${league.name} · נסגרה ${date}</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              ${s.locked
+                ? '<span style="background:rgba(255,255,255,0.2);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700">🔒 נעול</span>'
+                : `<button onclick="lockArchiveSeason('${leagueId}','${seasonKey}')" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">🔒 נעל סופית</button>`}
+              <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
+            </div>
+          </div>
+          <div class="profile-modal-body" style="padding:20px">${tournHtml}</div>
+        </div>
+      </div>`);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.openArchiveSeason = openArchiveSeason;
+
+async function lockArchiveSeason(leagueId, seasonKey) {
+  if (!confirm('לנעול את העונה סופית? לא ניתן יהיה לערוך תוצאות לאחר מכן.')) return;
+  try {
+    await db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}/locked`).set(true);
+    showToast('העונה ננעלה 🔒');
+    document.querySelector('.friday-modal')?.remove();
+    openArchiveSeason(leagueId, seasonKey);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.lockArchiveSeason = lockArchiveSeason;
+
+function openArchiveResultModal(leagueId, seasonKey, pid1, pid2) {
+  db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}`).once('value').then(snap => {
+    const s = snap.val();
+    if (!s || s.locked) return;
+    const p1 = s.players?.[pid1], p2 = s.players?.[pid2];
+    function gameRow(wPid, bPid) {
+      const wp = s.players?.[wPid], bp = s.players?.[bPid];
+      const cur = getResult(s.tournamentResults?.[wPid]?.[bPid]) ?? '';
+      const rowId = `agr-${wPid}-${bPid}`;
+      const bs = (val) => {
+        const c = { '1':['#c6f6d5','#276749'], '0.5':['#fefcbf','#744210'], '0':['#fed7d7','#c53030'] }[val];
+        return `background:${cur===val?c[0]:'#f7fafc'};color:${cur===val?c[1]:'#718096'};border:2px solid ${cur===val?c[1]:'#e2e8f0'};border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit`;
+      };
+      return `<div id="${rowId}" data-val="${cur}" style="background:#f7fafc;border-radius:10px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px">
+          <span>⬜ <b>${wp?.name||'?'}</b></span><span style="color:#718096">vs</span><span>⬛ <b>${bp?.name||'?'}</b></span>
+        </div>
+        <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          <button onclick="selectFridayResult('${rowId}','1')" id="${rowId}-1" style="${bs('1')}">1–0<br><span style="font-size:10px;font-weight:400">לבן ניצח</span></button>
+          <button onclick="selectFridayResult('${rowId}','0.5')" id="${rowId}-0.5" style="${bs('0.5')}">½–½<br><span style="font-size:10px;font-weight:400">תיקו</span></button>
+          <button onclick="selectFridayResult('${rowId}','0')" id="${rowId}-0" style="${bs('0')}">0–1<br><span style="font-size:10px;font-weight:400">שחור ניצח</span></button>
+          <button onclick="selectFridayResult('${rowId}','')" style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;color:#a0aec0;font-family:inherit" title="נקה">✕</button>
+        </div>
+      </div>`;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const allFridays = getFridaysBetween(YEAR_START, today);
+    const existingDate = getGameDate(s.tournamentResults?.[pid1]?.[pid2]) || getGameDate(s.tournamentResults?.[pid2]?.[pid1]) || getLastFriday();
+    const fridayOpts = [...allFridays].reverse().map(d => {
+      const dd = new Date(d + 'T12:00:00');
+      return `<option value="${d}" ${d===existingDate?'selected':''}>${dd.toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'})}</option>`;
+    }).join('');
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+        <div class="modal-box" style="max-width:380px">
+          <div class="modal-header">
+            <span class="modal-title">♟️ ${p1?.name||'?'} vs ${p2?.name||'?'}</span>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+          </div>
+          <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px;background:#f7fafc;border-radius:8px;padding:8px 12px">
+              <span style="font-size:13px;color:#4a5568;font-weight:600">📅 תאריך שישי:</span>
+              <select id="friday-game-date" style="flex:1;border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;font-size:13px;font-family:inherit;background:white">${fridayOpts}</select>
+            </div>
+            ${gameRow(pid1, pid2)}
+            ${gameRow(pid2, pid1)}
+            <button onclick="confirmArchiveResults('${leagueId}','${seasonKey}','${pid1}','${pid2}')"
+              style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ אשר תוצאות</button>
+          </div>
+        </div>
+      </div>`);
+  }).catch(e => showToast('שגיאה: ' + e.message, 'error'));
+}
+window.openArchiveResultModal = openArchiveResultModal;
+
+async function confirmArchiveResults(leagueId, seasonKey, pid1, pid2) {
+  const row1 = document.getElementById('agr-' + pid1 + '-' + pid2);
+  const row2 = document.getElementById('agr-' + pid2 + '-' + pid1);
+  const val1 = row1?.dataset.val;
+  const val2 = row2?.dataset.val;
+  const gameDate = document.getElementById('friday-game-date')?.value || getLastFriday();
+  try {
+    if (val1 !== undefined && val1 !== '') {
+      await db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}/tournamentResults/${pid1}/${pid2}`).set({ result: val1, date: gameDate });
+    } else if (val1 === '') {
+      await db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}/tournamentResults/${pid1}/${pid2}`).remove();
+    }
+    if (val2 !== undefined && val2 !== '') {
+      await db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}/tournamentResults/${pid2}/${pid1}`).set({ result: val2, date: gameDate });
+    } else if (val2 === '') {
+      await db.ref(`fridayLeagues/${leagueId}/archive/${seasonKey}/tournamentResults/${pid2}/${pid1}`).remove();
+    }
+    document.querySelector('.friday-modal')?.remove();
+    showToast('התוצאות נשמרו ✅');
+    openArchiveSeason(leagueId, seasonKey);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.confirmArchiveResults = confirmArchiveResults;
 
 // ---- TRANSFER ----
 function openFridayTransfer(leagueId, playerId) {
