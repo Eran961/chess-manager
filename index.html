@@ -1968,7 +1968,10 @@ if(localStorage.getItem('ccm_loggedIn')){
         <h3>הוספת משתתפ/ת</h3>
         <div id="modalTitle" style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;font-weight:400"></div>
       </div>
-      <button class="modal-close" onclick="closeAddModal()">✕</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="openArchivePlayerPicker(_modalGroupIdx, _modalSubGroupIdx)" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit" title="מלא פרטים משחקן קודם">📂 מהארכיון</button>
+        <button class="modal-close" onclick="closeAddModal()">✕</button>
+      </div>
     </div>
     <div class="modal-body">
       <div class="modal-field">
@@ -2307,6 +2310,31 @@ const ALL_GROUPS = [
 ];
 
 let groups = [];
+let _useDbGroups = false; // true = groups come from Firebase, don't fallback to ALL_GROUPS
+
+async function loadDbGroups() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('dbGroups').get();
+    const data = snap.val();
+    if (!data) return;
+    _useDbGroups = true;
+    groups = Object.entries(data).map(([id, g]) => ({
+      id,
+      name: g.name,
+      instructor: g.instructor || '',
+      instructorWa: g.instructorWa || '',
+      day: g.day || '',
+      dayOfWeek: g.dayOfWeek ?? -1,
+      subGroups: (g.subGroups || [{ time: 'קבוצה א' }]).map(sg => ({ time: sg.time || '', players: [] }))
+    }));
+  } catch(e) { console.error('loadDbGroups error:', e); }
+}
+
+async function initializeApp() {
+  if (db) await loadDbGroups();
+  buildApp();
+}
 
 function sortedPlayers(players) {
   return players
@@ -4102,7 +4130,6 @@ function renderLandingSchedule() {
 
 function initAuth() {
   if (!initFirebase()) {
-    // No Firebase — just show app with all groups
     groups = ALL_GROUPS;
     buildApp();
     return;
@@ -4132,14 +4159,6 @@ function initAuth() {
     };
     // Filter groups by role
     console.log('role:', currentUser.role, 'groups:', JSON.stringify(currentUser.groups));
-    if (currentUser.role === 'admin') {
-      groups = ALL_GROUPS;
-    } else {
-      const allowedIds = Object.values(currentUser.groups || {});
-      console.log('allowedIds:', allowedIds);
-      groups = ALL_GROUPS.filter(g => allowedIds.includes(g.id));
-      console.log('filtered groups:', groups.map(g=>g.id));
-    }
     // Show app, hide landing
     document.getElementById('landing-page').classList.remove('visible');
     document.body.classList.remove('landing-active');
@@ -4153,7 +4172,7 @@ function initAuth() {
     // Build or rebuild app
     document.getElementById('tabsBar').innerHTML = '';
     document.getElementById('content').innerHTML = '';
-    buildApp();
+    await initializeApp();
   });
 }
 
@@ -4165,8 +4184,13 @@ function switchTab(id) {
 }
 
 function buildApp() {
-// Safety: ensure groups is never empty
-if (!groups || groups.length === 0) groups = ALL_GROUPS;
+if (!_useDbGroups && (!groups || groups.length === 0)) {
+  if (currentUser?.role === 'admin') groups = ALL_GROUPS;
+  else {
+    const allowedIds = Object.values(currentUser?.groups || {});
+    groups = ALL_GROUPS.filter(g => allowedIds.includes(g.id));
+  }
+}
 // Build tabs
 const tabsBar = document.getElementById('tabsBar');
 const content = document.getElementById('content');
@@ -4184,20 +4208,37 @@ homePanel.id = 'panel-home';
 homePanel.innerHTML = renderDashboard();
 content.appendChild(homePanel);
 
-groups.forEach((group, i) => {
-  const btn = document.createElement('button');
-  btn.className = 'tab-btn';
-  btn.dataset.tab = group.id;
-  btn.textContent = group.name;
-  btn.onclick = () => switchTab(group.id);
-  tabsBar.appendChild(btn);
+if (_useDbGroups && groups.length === 0) {
+  // New year — no groups yet
+  const noGroupsPanel = document.createElement('div');
+  noGroupsPanel.className = 'tab-panel active';
+  noGroupsPanel.id = 'panel-home';
+  noGroupsPanel.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#a0aec0">
+    <div style="font-size:48px;margin-bottom:16px">🏫</div>
+    <div style="font-size:18px;font-weight:700;color:#2d3748;margin-bottom:8px">שנה חדשה — אין חוגים עדיין</div>
+    <div style="font-size:14px;margin-bottom:24px">צור את החוגים לשנה החדשה בלשונית ⚙️ הגדרות</div>
+    <button onclick="switchTab('settings')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">⚙️ עבור להגדרות</button>
+  </div>`;
+  // Replace the regular home panel
+  const existingHome = content.querySelector('#panel-home');
+  if (existingHome) existingHome.remove();
+  content.appendChild(noGroupsPanel);
+} else {
+  groups.forEach((group, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn';
+    btn.dataset.tab = group.id;
+    btn.textContent = group.name;
+    btn.onclick = () => switchTab(group.id);
+    tabsBar.appendChild(btn);
 
-  const panel = document.createElement('div');
-  panel.className = 'tab-panel';
-  panel.id = 'panel-' + group.id;
-  panel.innerHTML = renderGroup(group, i);
-  content.appendChild(panel);
-});
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.id = 'panel-' + group.id;
+    panel.innerHTML = renderGroup(group, i);
+    content.appendChild(panel);
+  });
+}
 
 // Attendance tab
 const attBtn = document.createElement('button');
@@ -4311,6 +4352,48 @@ hoursPanel.className = 'tab-panel';
 hoursPanel.id = 'panel-hours';
 hoursPanel.innerHTML = renderHoursPanel();
 content.appendChild(hoursPanel);
+
+// Club Tournaments tab
+const tournBtn = document.createElement('button');
+tournBtn.className = 'tab-btn';
+tournBtn.dataset.tab = 'club-tournaments';
+tournBtn.textContent = '🏆 תחרויות';
+tournBtn.style.color = '#744210';
+tournBtn.onclick = () => { switchTab('club-tournaments'); loadTournaments(); };
+tabsBar.appendChild(tournBtn);
+const tournPanel = document.createElement('div');
+tournPanel.className = 'tab-panel';
+tournPanel.id = 'panel-club-tournaments';
+tournPanel.innerHTML = buildTournamentsHTML();
+content.appendChild(tournPanel);
+
+// Fed Players tab
+const fedPlayersBtn = document.createElement('button');
+fedPlayersBtn.className = 'tab-btn';
+fedPlayersBtn.dataset.tab = 'fed-players';
+fedPlayersBtn.textContent = '👥 שחקני מועדון';
+fedPlayersBtn.style.color = '#553c9a';
+fedPlayersBtn.onclick = () => { switchTab('fed-players'); loadFedPlayers(); };
+tabsBar.appendChild(fedPlayersBtn);
+const fedPlayersPanel = document.createElement('div');
+fedPlayersPanel.className = 'tab-panel';
+fedPlayersPanel.id = 'panel-fed-players';
+fedPlayersPanel.innerHTML = buildFedPlayersHTML();
+content.appendChild(fedPlayersPanel);
+
+// Morning Prospects tab
+const prospectsBtn = document.createElement('button');
+prospectsBtn.className = 'tab-btn';
+prospectsBtn.dataset.tab = 'prospects';
+prospectsBtn.textContent = '🌟 מצטייני גנים';
+prospectsBtn.style.color = '#c05621';
+prospectsBtn.onclick = () => { switchTab('prospects'); loadProspects(); };
+tabsBar.appendChild(prospectsBtn);
+const prospectsPanel = document.createElement('div');
+prospectsPanel.className = 'tab-panel';
+prospectsPanel.id = 'panel-prospects';
+prospectsPanel.innerHTML = buildProspectsHTML();
+content.appendChild(prospectsPanel);
 
 // Submissions tab (admin only)
 if (currentUser.role === 'admin') {
@@ -6236,19 +6319,42 @@ async function loadSettings() {
 }
 
 function renderSettingsPanel() {
-  return `<div class="att-card" style="max-width:480px">
-    <div class="att-card-header">⚙️ הגדרות מערכת</div>
-    <div style="padding:20px">
-      <div class="modal-field">
-        <label>תחילת שנה</label>
-        <input type="date" id="set-year-start" value="${YEAR_START}">
+  const groupRows = groups.map((g, i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:6px">
+      <div>
+        <span style="font-weight:600;font-size:14px">${g.name}</span>
+        ${g.instructor ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${g.instructor}</span>` : ''}
+        <span style="font-size:12px;color:#a0aec0"> · ${g.subGroups.length} קבוצות</span>
       </div>
-      <div class="modal-field">
-        <label>סוף שנה</label>
-        <input type="date" id="set-year-end" value="${YEAR_END}">
+      <button onclick="deleteDbGroup('${g.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק חוג">🗑</button>
+    </div>`).join('');
+  return `
+  <div style="display:flex;flex-direction:column;gap:20px;max-width:560px">
+    <div class="att-card">
+      <div class="att-card-header">⚙️ הגדרות שנה</div>
+      <div style="padding:20px">
+        <div class="modal-field"><label>תחילת שנה</label><input type="date" id="set-year-start" value="${YEAR_START}"></div>
+        <div class="modal-field"><label>סוף שנה</label><input type="date" id="set-year-end" value="${YEAR_END}"></div>
+        <div style="margin-top:16px"><button class="btn-form-submit" onclick="saveSettings()">💾 שמור הגדרות</button></div>
       </div>
-      <div style="margin-top:16px">
-        <button class="btn-form-submit" onclick="saveSettings()">💾 שמור הגדרות</button>
+    </div>
+
+    <div class="att-card">
+      <div class="att-card-header">🏫 ניהול חוגים</div>
+      <div style="padding:20px">
+        <div style="margin-bottom:14px">${groupRows || '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">אין חוגים — צור את הראשון</div>'}</div>
+        <button onclick="openCreateGroupModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור חוג חדש</button>
+      </div>
+    </div>
+
+    <div class="att-card" style="border:1px solid #fed7d7">
+      <div class="att-card-header" style="background:#fff5f5;color:#c53030">🏁 סיום שנה</div>
+      <div style="padding:20px">
+        <div style="font-size:13px;color:#4a5568;margin-bottom:16px">
+          כל נתוני השנה (חוגים, שחקנים, נוכחות, תשלומים) יועברו לארכיון.<br>
+          לאחר מכן תוכל לצור חוגים חדשים לשנה הבאה.
+        </div>
+        <button onclick="openEndYearModal()" style="background:#c53030;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🏁 סיים שנה ועבור לארכיון</button>
       </div>
     </div>
   </div>`;
@@ -6274,6 +6380,722 @@ async function saveSettings() {
   if (repPanel) { repPanel.innerHTML = renderReportsPanel(); }
   showToast('ההגדרות נשמרו ✓');
 }
+
+// ===== YEAR-END ARCHIVE =====
+
+function openEndYearModal() {
+  const yearLabel = `${YEAR_START.slice(0,4)}–${YEAR_END.slice(0,4)}`;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+          <span class="modal-title">🏁 סיום שנה ${yearLabel}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:12px;font-size:13px;color:#c53030">
+            ⚠️ כל נתוני השנה יועברו לארכיון ויימחקו מהנתונים הפעילים. פעולה זו אינה הפיכה.
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">שם הארכיון</label>
+            <input type="text" id="end-year-name" value="שנה ${yearLabel}"
+              style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;font-family:inherit">
+          </div>
+          <div style="font-size:13px;color:#4a5568">
+            <b>מה יועבר לארכיון:</b><br>
+            ✓ ${groups.length} חוגים עם כל השחקנים<br>
+            ✓ נוכחות, תשלומים, הערות<br>
+            ✓ היסטוריה ושעות
+          </div>
+          <button onclick="doEndYear()" style="background:#c53030;color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
+            🏁 אשר סיום שנה ופתח שנה חדשה
+          </button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openEndYearModal = openEndYearModal;
+
+async function doEndYear() {
+  const archiveName = document.getElementById('end-year-name')?.value?.trim() || `שנה ${YEAR_START.slice(0,4)}–${YEAR_END.slice(0,4)}`;
+  const yearKey = `${YEAR_START}_${YEAR_END}`;
+  const btn = document.querySelector('.friday-modal button[onclick="doEndYear()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ שומר...'; }
+  try {
+    const paths = ['extra_players','player_overrides','hidden_players','attendance','notes','payment','player_contacts','group_names','subgroup_names','history','vacations','dbGroups'];
+    const results = await Promise.all(paths.map(p => db.ref(p).get()));
+    const archiveData = { name: archiveName, archivedAt: new Date().toISOString(), yearStart: YEAR_START, yearEnd: YEAR_END };
+    paths.forEach((p, i) => { if (results[i].val()) archiveData[p] = results[i].val(); });
+    // Also archive the group definitions (from ALL_GROUPS or current groups)
+    archiveData.groupDefinitions = groups.map(g => ({
+      id: g.id, name: g.name, instructor: g.instructor, day: g.day,
+      subGroups: g.subGroups.map(sg => ({ time: sg.time, players: sg.players || [] }))
+    }));
+    await db.ref(`yearArchive/${yearKey}`).set(archiveData);
+    // Clear all active data
+    await Promise.all(paths.map(p => db.ref(p).remove()));
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`השנה הועברה לארכיון ✅ — ניתן לצור חוגים חדשים`);
+    // Rebuild app fresh
+    _useDbGroups = true;
+    groups = [];
+    document.getElementById('tabsBar').innerHTML = '';
+    document.getElementById('content').innerHTML = '';
+    buildApp();
+    setTimeout(() => switchTab('settings'), 100);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = '🏁 אשר סיום שנה ופתח שנה חדשה'; } }
+}
+window.doEndYear = doEndYear;
+
+// ===== CREATE GROUP =====
+
+function openCreateGroupModal() {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:460px">
+        <div class="modal-header">
+          <span class="modal-title">➕ יצירת חוג חדש</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div class="modal-field"><label>שם החוג <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="cg-name" placeholder="לדוגמה: ירון — יום שני" class="modal-input"></div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>מדריך</label>
+              <input type="text" id="cg-instructor" placeholder="שם המדריך" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>WhatsApp</label>
+              <input type="text" id="cg-wa" placeholder="972501234567" class="modal-input"></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>יום בשבוע</label>
+              <select id="cg-day" class="modal-input">
+                <option value="0">יום ראשון</option>
+                <option value="1">יום שני</option>
+                <option value="2">יום שלישי</option>
+                <option value="3">יום רביעי</option>
+                <option value="4">יום חמישי</option>
+                <option value="5">יום שישי</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">קבוצות / שעות <span style="color:#e53e3e">*</span></label>
+            <div id="cg-subgroups" style="display:flex;flex-direction:column;gap:6px">
+              <div class="cg-sg-row" style="display:flex;gap:6px">
+                <input type="text" placeholder="לדוגמה: 16:00–18:00 או קבוצה א" class="modal-input cg-sg-input" style="flex:1">
+                <button onclick="this.closest('.cg-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>
+              </div>
+            </div>
+            <button onclick="addCgSubgroup()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;color:#4a5568;margin-top:6px">+ הוסף קבוצה</button>
+          </div>
+          <button onclick="saveNewGroup()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 צור חוג</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openCreateGroupModal = openCreateGroupModal;
+
+function addCgSubgroup() {
+  const cont = document.getElementById('cg-subgroups');
+  if (!cont) return;
+  const row = document.createElement('div');
+  row.className = 'cg-sg-row';
+  row.style.cssText = 'display:flex;gap:6px';
+  row.innerHTML = `<input type="text" placeholder="לדוגמה: 16:00–18:00 או קבוצה ב" class="modal-input cg-sg-input" style="flex:1">
+    <button onclick="this.closest('.cg-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>`;
+  cont.appendChild(row);
+}
+window.addCgSubgroup = addCgSubgroup;
+
+async function saveNewGroup() {
+  const name = document.getElementById('cg-name')?.value?.trim();
+  if (!name) { showToast('יש להזין שם חוג', 'error'); return; }
+  const instructor = document.getElementById('cg-instructor')?.value?.trim() || '';
+  const wa = document.getElementById('cg-wa')?.value?.trim() || '';
+  const dayOfWeek = parseInt(document.getElementById('cg-day')?.value || '0');
+  const dayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
+  const sgInputs = document.querySelectorAll('.cg-sg-input');
+  const subGroups = [...sgInputs].map(el => ({ time: el.value.trim() })).filter(sg => sg.time);
+  if (subGroups.length === 0) { showToast('יש להוסיף לפחות קבוצה אחת', 'error'); return; }
+  const id = name.replace(/[^a-zA-Z0-9֐-׿]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
+  const groupDef = { name, instructor, instructorWa: wa, day: dayNames[dayOfWeek], dayOfWeek, subGroups };
+  try {
+    await db.ref(`dbGroups/${id}`).set(groupDef);
+    _useDbGroups = true;
+    groups.push({ id, ...groupDef, subGroups: subGroups.map(sg => ({ time: sg.time, players: [] })) });
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`החוג "${name}" נוצר ✅`);
+    // Add new tab dynamically
+    const tabsBar = document.getElementById('tabsBar');
+    const content = document.getElementById('content');
+    const gIdx = groups.length - 1;
+    const g = groups[gIdx];
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn';
+    btn.dataset.tab = g.id;
+    btn.textContent = g.name;
+    btn.onclick = () => switchTab(g.id);
+    // Insert before the non-group tabs (attendance, reports, etc.)
+    const attBtn = tabsBar.querySelector('[data-tab="attendance"]');
+    tabsBar.insertBefore(btn, attBtn || null);
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.id = 'panel-' + g.id;
+    panel.innerHTML = renderGroup(g, gIdx);
+    content.appendChild(panel);
+    // Refresh settings panel
+    const sp = document.getElementById('panel-settings');
+    if (sp) sp.innerHTML = renderSettingsPanel();
+    // Remove "no groups" empty state if present
+    const ng = content.querySelector('#panel-home:not(#panel-home)');
+    // Switch to new group
+    switchTab(g.id);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveNewGroup = saveNewGroup;
+
+async function deleteDbGroup(groupId) {
+  if (!confirm('למחוק את החוג לצמיתות? כל השחקנים והנתונים שלו יימחקו.')) return;
+  try {
+    await db.ref(`dbGroups/${groupId}`).remove();
+    await db.ref(`extra_players/${groupId}`).remove();
+    groups = groups.filter(g => g.id !== groupId);
+    const btn = document.querySelector(`[data-tab="${groupId}"]`);
+    if (btn) btn.remove();
+    const panel = document.getElementById('panel-' + groupId);
+    if (panel) panel.remove();
+    const sp = document.getElementById('panel-settings');
+    if (sp) sp.innerHTML = renderSettingsPanel();
+    showToast('החוג נמחק');
+    switchTab('home');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteDbGroup = deleteDbGroup;
+
+// ===== ARCHIVE PLAYER PICKER =====
+
+async function openArchivePlayerPicker(groupIdx, subGroupIdx) {
+  try {
+    const snap = await db.ref('yearArchive').get();
+    const archive = snap.val();
+    if (!archive) { showToast('אין ארכיון עדיין'); return; }
+    // Collect all players from all archived years
+    const allPlayers = [];
+    Object.entries(archive).forEach(([yearKey, yearData]) => {
+      const yearLabel = yearData.name || yearKey;
+      // From group definitions (base players)
+      if (yearData.groupDefinitions) {
+        yearData.groupDefinitions.forEach(gd => {
+          gd.subGroups?.forEach(sg => {
+            sg.players?.forEach(p => {
+              if (p.hidden) return;
+              allPlayers.push({ ...p, _year: yearLabel, _group: gd.name });
+            });
+          });
+        });
+      }
+      // From extra_players
+      if (yearData.extra_players) {
+        Object.entries(yearData.extra_players).forEach(([gid, subs]) => {
+          const gDef = yearData.groupDefinitions?.find(g => g.id === gid);
+          Object.values(subs).forEach(sub => {
+            Object.values(sub || {}).forEach(p => {
+              allPlayers.push({ name: `${p.firstName} ${p.lastName}`, birthYear: p.birthYear, fedId: p.fedId, _year: yearLabel, _group: gDef?.name || gid });
+            });
+          });
+        });
+      }
+    });
+    // Deduplicate by name
+    const seen = new Set();
+    const unique = allPlayers.filter(p => { const k = p.name?.trim(); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+    unique.sort((a,b) => (a.name||'').localeCompare(b.name||'', 'he'));
+    const rows = unique.map(p => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:7px;cursor:pointer;hover:background:#f7fafc"
+        onmouseenter="this.style.background='#f7fafc'" onmouseleave="this.style.background=''"
+        onclick="pickArchivePlayer(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+        <div>
+          <span style="font-weight:600;font-size:14px">${p.name||'?'}</span>
+          ${p.birthYear ? `<span style="font-size:12px;color:#718096"> · ${p.birthYear}</span>` : ''}
+          ${p.fedId ? `<span style="font-size:12px;color:#2b6cb0"> · ${p.fedId}</span>` : ''}
+        </div>
+        <span style="font-size:11px;color:#a0aec0">${p._group||''} · ${p._year||''}</span>
+      </div>`).join('');
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+        <div class="modal-box" style="max-width:500px">
+          <div class="modal-header">
+            <span class="modal-title">📂 בחר שחקן מהארכיון</span>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+          </div>
+          <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0">
+            <input type="text" id="archive-search" placeholder="חפש שם..." oninput="filterArchivePlayers(this.value)"
+              style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:14px;font-family:inherit">
+          </div>
+          <div id="archive-player-list" class="modal-body" style="padding:8px;max-height:360px;overflow-y:auto">${rows}</div>
+        </div>
+      </div>`);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.openArchivePlayerPicker = openArchivePlayerPicker;
+
+function filterArchivePlayers(q) {
+  const list = document.getElementById('archive-player-list');
+  if (!list) return;
+  const lq = q.trim().toLowerCase();
+  list.querySelectorAll('div[onclick]').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(lq) ? '' : 'none';
+  });
+}
+window.filterArchivePlayers = filterArchivePlayers;
+
+function pickArchivePlayer(p) {
+  document.querySelector('.friday-modal')?.remove();
+  const fill = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+  const [first, ...rest] = (p.name || '').split(' ');
+  fill('mf-first', first || '');
+  fill('mf-last', rest.join(' ') || '');
+  fill('mf-year', p.birthYear || '');
+  fill('mf-fed', p.fedId || '');
+  if (p.fedId) { document.getElementById('mf-fed')?.dispatchEvent(new Event('change')); }
+}
+window.pickArchivePlayer = pickArchivePlayer;
+
+// ===== CLUB TOURNAMENTS =====
+
+let _tournaments = {};
+let _tournamentSubTab = {};
+
+const TOURNAMENT_TYPES = ['אליפות', 'ליגה', 'ידידות', 'פתוח', 'נוער', 'אחר'];
+const EXPENSE_CATEGORIES = ['פרסים', 'שכירות/מיקום', 'כיבוד', 'שופט', 'הדפסות', 'ציוד', 'פרסום', 'אחר'];
+
+async function loadTournaments() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('clubTournaments').get();
+    _tournaments = snap.val() || {};
+    renderTournamentsPanel();
+  } catch(e) { console.error('loadTournaments:', e); }
+}
+
+function renderTournamentsPanel() {
+  const el = document.getElementById('panel-club-tournaments');
+  if (el) el.innerHTML = buildTournamentsHTML();
+}
+
+function calcTournamentIncome(t) {
+  let total = 0;
+  if (t.entryFee && t.players) total += Object.values(t.players).filter(p => p.paid).length * t.entryFee;
+  if (t.income) Object.values(t.income).forEach(e => total += e.amount || 0);
+  return total;
+}
+
+function calcTournamentExpenses(t) {
+  let total = 0;
+  if (t.expenses) Object.values(t.expenses).forEach(e => total += e.amount || 0);
+  return total;
+}
+
+function buildTournamentsHTML() {
+  const list = Object.entries(_tournaments).sort((a,b) => (b[1].date||'').localeCompare(a[1].date||''));
+  const cards = list.map(([id, t]) => {
+    const players = t.players ? Object.keys(t.players).length : 0;
+    const income = calcTournamentIncome(t);
+    const expenses = calcTournamentExpenses(t);
+    const balance = income - expenses;
+    const statusColor = { upcoming:'#2b6cb0', active:'#276749', finished:'#718096' }[t.status||'upcoming'];
+    const statusLabel = { upcoming:'עתידי', active:'פעיל', finished:'הסתיים' }[t.status||'upcoming'];
+    const date = t.date ? new Date(t.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'}) : '—';
+    return `
+      <div onclick="openTournamentDetail('${id}')" style="border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;cursor:pointer;background:white;transition:box-shadow 0.15s"
+        onmouseenter="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'" onmouseleave="this.style.boxShadow=''">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div>
+            <div style="font-size:16px;font-weight:700;color:#2d3748">${t.name}</div>
+            <div style="font-size:12px;color:#718096;margin-top:2px">${date}${t.location?' · '+t.location:''}${t.type?' · '+t.type:''}</div>
+          </div>
+          <span style="background:${statusColor}22;color:${statusColor};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap">${statusLabel}</span>
+        </div>
+        <div style="display:flex;gap:16px;font-size:13px;flex-wrap:wrap">
+          <span style="color:#4a5568">👥 ${players} שחקנים</span>
+          ${income>0||expenses>0 ? `
+            <span style="color:#276749">💰 ₪${income.toLocaleString()}</span>
+            <span style="color:#c53030">📤 ₪${expenses.toLocaleString()}</span>
+            <span style="font-weight:700;color:${balance>=0?'#276749':'#c53030'}">${balance>=0?'+':''}₪${balance.toLocaleString()}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+  return `
+    <div style="max-width:700px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div style="font-size:20px;font-weight:800;color:#2d3748">🏆 תחרויות המועדון</div>
+        <button onclick="openCreateTournamentModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ תחרות חדשה</button>
+      </div>
+      ${list.length===0 ? `<div style="text-align:center;color:#a0aec0;padding:60px 20px">
+        <div style="font-size:40px;margin-bottom:12px">🏆</div>
+        <div style="font-size:15px">אין תחרויות עדיין — לחץ "תחרות חדשה"</div>
+      </div>` : `<div style="display:flex;flex-direction:column;gap:10px">${cards}</div>`}
+    </div>`;
+}
+
+function openCreateTournamentModal() {
+  const today = new Date().toISOString().split('T')[0];
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:440px">
+        <div class="modal-header"><span class="modal-title">➕ תחרות חדשה</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div class="modal-field"><label>שם התחרות <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="ct-name" placeholder='לדוגמה: אליפות ראשל"צ 2026' class="modal-input" autofocus></div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>תאריך <span style="color:#e53e3e">*</span></label>
+              <input type="date" id="ct-date" value="${today}" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>סוג</label>
+              <select id="ct-type" class="modal-input">${TOURNAMENT_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>מיקום</label>
+              <input type="text" id="ct-location" placeholder='מועדון ראשל"צ' class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>דמי השתתפות (₪)</label>
+              <input type="number" id="ct-fee" placeholder="0" min="0" class="modal-input"></div>
+          </div>
+          <div class="modal-field"><label>הערות</label>
+            <textarea id="ct-notes" rows="2" class="modal-input" style="resize:vertical;font-family:inherit"></textarea></div>
+          <button onclick="saveNewTournament()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ צור תחרות</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openCreateTournamentModal = openCreateTournamentModal;
+
+async function saveNewTournament() {
+  const name = document.getElementById('ct-name')?.value?.trim();
+  const date = document.getElementById('ct-date')?.value;
+  if (!name) { showToast('יש להזין שם תחרות', 'error'); return; }
+  if (!date) { showToast('יש לבחור תאריך', 'error'); return; }
+  const data = { name, date, type: document.getElementById('ct-type')?.value||'אחר',
+    location: document.getElementById('ct-location')?.value?.trim()||'',
+    entryFee: parseFloat(document.getElementById('ct-fee')?.value)||0,
+    notes: document.getElementById('ct-notes')?.value?.trim()||'',
+    status: 'upcoming', createdAt: new Date().toISOString() };
+  try {
+    const ref = await db.ref('clubTournaments').push(data);
+    _tournaments[ref.key] = data;
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`"${name}" נוצרה ✅`);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveNewTournament = saveNewTournament;
+
+function openTournamentDetail(id) {
+  const t = _tournaments[id];
+  if (!t) return;
+  if (!_tournamentSubTab[id]) _tournamentSubTab[id] = 'details';
+  const sub = _tournamentSubTab[id];
+  const income = calcTournamentIncome(t), expenses = calcTournamentExpenses(t);
+  const tabs = [{key:'details',label:'📋 פרטים'},{key:'players',label:'👥 משתתפים'},{key:'finance',label:'💰 כספים'}];
+  const tabBar = tabs.map(tb => `
+    <button onclick="switchTournamentTab('${id}','${tb.key}')"
+      style="padding:10px 16px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${sub===tb.key?'#2b6cb0':'transparent'};color:${sub===tb.key?'#2b6cb0':'#718096'};margin-bottom:-2px">
+      ${tb.label}</button>`).join('');
+  const date = t.date ? new Date(t.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'}) : '';
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="profile-modal-box" style="width:640px;max-width:calc(100vw - 24px)">
+        <div style="background:linear-gradient(135deg,#2b6cb0,#2c5282);color:white;padding:18px 22px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:18px;font-weight:800">${t.name}</div>
+            <div style="font-size:12px;opacity:0.85;margin-top:2px">${date}${t.type?' · '+t.type:''}</div>
+          </div>
+          <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
+        </div>
+        <div style="border-bottom:2px solid #e2e8f0;padding:0 16px;display:flex">${tabBar}</div>
+        <div class="profile-modal-body" style="padding:20px" id="tournament-tab-content-${id}">
+          ${sub==='details'?renderTournamentDetails(id,t):sub==='players'?renderTournamentPlayers(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses)}
+        </div>
+      </div>
+    </div>`);
+}
+window.openTournamentDetail = openTournamentDetail;
+
+function switchTournamentTab(id, tab) {
+  _tournamentSubTab[id] = tab;
+  const t = _tournaments[id]; if (!t) return;
+  const income = calcTournamentIncome(t), expenses = calcTournamentExpenses(t);
+  const modal = document.querySelector('.friday-modal:last-of-type');
+  if (modal) {
+    modal.querySelectorAll('[onclick*="switchTournamentTab"]').forEach(btn => {
+      const active = btn.getAttribute('onclick').includes(`'${tab}'`);
+      btn.style.borderBottomColor = active ? '#2b6cb0' : 'transparent';
+      btn.style.color = active ? '#2b6cb0' : '#718096';
+    });
+  }
+  const el = document.getElementById(`tournament-tab-content-${id}`);
+  if (el) el.innerHTML = tab==='details'?renderTournamentDetails(id,t):tab==='players'?renderTournamentPlayers(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses);
+}
+window.switchTournamentTab = switchTournamentTab;
+
+function renderTournamentDetails(id, t) {
+  const statusOpts = ['upcoming','active','finished'].map(s =>
+    `<option value="${s}" ${(t.status||'upcoming')===s?'selected':''}>${{upcoming:'עתידי',active:'פעיל',finished:'הסתיים'}[s]}</option>`).join('');
+  return `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">שם</label>
+          <input type="text" id="te-name" value="${t.name||''}" class="modal-input"></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">תאריך</label>
+          <input type="date" id="te-date" value="${t.date||''}" class="modal-input"></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">סוג</label>
+          <select id="te-type" class="modal-input">${TOURNAMENT_TYPES.map(tp=>`<option ${t.type===tp?'selected':''}>${tp}</option>`).join('')}</select></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">סטטוס</label>
+          <select id="te-status" class="modal-input">${statusOpts}</select></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">מיקום</label>
+          <input type="text" id="te-location" value="${t.location||''}" class="modal-input"></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">דמי השתתפות (₪)</label>
+          <input type="number" id="te-fee" value="${t.entryFee||0}" min="0" class="modal-input"></div>
+      </div>
+      <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">הערות</label>
+        <textarea id="te-notes" rows="3" class="modal-input" style="resize:vertical;font-family:inherit">${t.notes||''}</textarea></div>
+      <div style="display:flex;gap:10px">
+        <button onclick="saveTournamentDetails('${id}')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">💾 שמור</button>
+        <button onclick="deleteTournament('${id}')" style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#c53030">🗑 מחק</button>
+      </div>
+    </div>`;
+}
+
+async function saveTournamentDetails(id) {
+  const updates = { name: document.getElementById('te-name')?.value?.trim()||_tournaments[id].name,
+    date: document.getElementById('te-date')?.value||_tournaments[id].date,
+    type: document.getElementById('te-type')?.value||_tournaments[id].type,
+    status: document.getElementById('te-status')?.value||_tournaments[id].status,
+    location: document.getElementById('te-location')?.value?.trim()||'',
+    entryFee: parseFloat(document.getElementById('te-fee')?.value)||0,
+    notes: document.getElementById('te-notes')?.value?.trim()||'' };
+  try {
+    await db.ref(`clubTournaments/${id}`).update(updates);
+    Object.assign(_tournaments[id], updates);
+    showToast('נשמר ✅');
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveTournamentDetails = saveTournamentDetails;
+
+async function deleteTournament(id) {
+  if (!confirm('למחוק את התחרות לצמיתות?')) return;
+  try {
+    await db.ref(`clubTournaments/${id}`).remove();
+    delete _tournaments[id];
+    document.querySelector('.friday-modal')?.remove();
+    showToast('התחרות נמחקה');
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteTournament = deleteTournament;
+
+function renderTournamentPlayers(id, t) {
+  const players = t.players ? Object.entries(t.players) : [];
+  const fee = t.entryFee || 0;
+  const paidCount = players.filter(([,p]) => p.paid).length;
+  const thS = 'padding:9px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+  const rows = players.map(([pid, p]) => `
+    <tr style="border-bottom:1px solid #f0f4f8">
+      <td style="padding:8px 12px;font-size:14px;font-weight:600">${p.name}</td>
+      <td style="padding:8px 12px;text-align:center;font-size:13px;color:#718096">${p.fedId||'—'}</td>
+      <td style="padding:8px;text-align:center" onclick="event.stopPropagation()">
+        <button onclick="toggleTournamentPlayerPaid('${id}','${pid}')"
+          style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;background:${p.paid?'#c6f6d5':'#fed7d7'};color:${p.paid?'#276749':'#c53030'}">
+          ${p.paid?'✓ שילם':'✗ טרם שילם'}</button></td>
+      <td style="padding:8px;text-align:center" onclick="event.stopPropagation()">
+        <button onclick="removeTournamentPlayer('${id}','${pid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button>
+      </td>
+    </tr>`).join('');
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:13px;color:#4a5568">${players.length} רשומים${fee>0?` · ${paidCount} שילמו · ₪${(paidCount*fee).toLocaleString()}`:''}</div>
+      <button onclick="openAddTournamentPlayer('${id}')" style="background:#2b6cb0;color:white;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף שחקן</button>
+    </div>
+    ${players.length > 0 ? `
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="${thS}">שם</th><th style="${thS};text-align:center">מס׳ שחקן</th><th style="${thS};text-align:center">תשלום</th><th style="${thS}"></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>` : '<div style="text-align:center;color:#a0aec0;padding:32px;font-size:13px">אין שחקנים רשומים</div>'}`;
+}
+
+function openAddTournamentPlayer(id) {
+  const existing = new Set(Object.values(_tournaments[id]?.players||{}).map(p=>p.name));
+  const clubPlayers = [];
+  groups.forEach(g => g.subGroups.forEach(sg => sg.players.filter(p=>!p.hidden&&!existing.has(p.name)).forEach(p => clubPlayers.push(p))));
+  const clubOpts = clubPlayers.slice(0,150).map(p => `<option value="${p.name}|${p.fedId||''}">${p.name}${p.fedId?' ('+p.fedId+')':''}</option>`).join('');
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:380px">
+        <div class="modal-header"><span class="modal-title">➕ הוסף לתחרות</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+        <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          ${clubOpts?`<div>
+            <label style="font-size:12px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">מרשימת המועדון</label>
+            <select id="tp-club-pick" class="modal-input" onchange="fillTournamentPlayerFromClub()">
+              <option value="">— בחר שחקן —</option>${clubOpts}
+            </select></div>
+          <div style="text-align:center;font-size:12px;color:#a0aec0">— או הוסף ידנית —</div>`:''}
+          <div style="display:flex;gap:8px">
+            <div class="modal-field" style="flex:2"><label style="font-size:12px">שם <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="tp-name" placeholder="שם מלא" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label style="font-size:12px">מס׳ שחקן</label>
+              <input type="number" id="tp-fedid" placeholder="—" class="modal-input"></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="tp-paid"> שילם דמי השתתפות</label>
+          <button onclick="saveTournamentPlayer('${id}')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ הוסף</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openAddTournamentPlayer = openAddTournamentPlayer;
+
+function fillTournamentPlayerFromClub() {
+  const val = document.getElementById('tp-club-pick')?.value;
+  if (!val) return;
+  const [name, fedId] = val.split('|');
+  const n = document.getElementById('tp-name'); if (n) n.value = name;
+  const f = document.getElementById('tp-fedid'); if (f) f.value = fedId||'';
+}
+window.fillTournamentPlayerFromClub = fillTournamentPlayerFromClub;
+
+async function saveTournamentPlayer(id) {
+  const name = document.getElementById('tp-name')?.value?.trim();
+  if (!name) { showToast('יש להזין שם', 'error'); return; }
+  const fedId = parseInt(document.getElementById('tp-fedid')?.value)||null;
+  const paid = document.getElementById('tp-paid')?.checked||false;
+  try {
+    const ref = await db.ref(`clubTournaments/${id}/players`).push({name,fedId,paid});
+    if (!_tournaments[id].players) _tournaments[id].players = {};
+    _tournaments[id].players[ref.key] = {name,fedId,paid};
+    document.querySelectorAll('.friday-modal').forEach((m,i,a) => { if(i===a.length-1) m.remove(); });
+    showToast(`${name} נוסף ✅`);
+    _tournamentSubTab[id] = 'players';
+    document.querySelector('.friday-modal')?.remove();
+    openTournamentDetail(id);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveTournamentPlayer = saveTournamentPlayer;
+
+async function toggleTournamentPlayerPaid(id, pid) {
+  const cur = _tournaments[id]?.players?.[pid]?.paid||false;
+  try {
+    await db.ref(`clubTournaments/${id}/players/${pid}/paid`).set(!cur);
+    _tournaments[id].players[pid].paid = !cur;
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentPlayers(id, _tournaments[id]);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.toggleTournamentPlayerPaid = toggleTournamentPlayerPaid;
+
+async function removeTournamentPlayer(id, pid) {
+  try {
+    await db.ref(`clubTournaments/${id}/players/${pid}`).remove();
+    delete _tournaments[id].players[pid];
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentPlayers(id, _tournaments[id]);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.removeTournamentPlayer = removeTournamentPlayer;
+
+function renderTournamentFinance(id, t, income, expenses, balance) {
+  const entryFeeIncome = t.entryFee&&t.players ? Object.values(t.players).filter(p=>p.paid).length*t.entryFee : 0;
+  const manualIncome = t.income ? Object.entries(t.income) : [];
+  const expensesList = t.expenses ? Object.entries(t.expenses) : [];
+  const balColor = balance>=0?'#276749':'#c53030';
+  const incomeRows = manualIncome.map(([eid,e]) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f4f8;font-size:13px">
+      <span>${e.description}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-weight:700;color:#276749">₪${(e.amount||0).toLocaleString()}</span>
+        <button onclick="deleteTournamentEntry('${id}','income','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px">✕</button>
+      </div>
+    </div>`).join('');
+  const expenseRows = expensesList.map(([eid,e]) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f4f8;font-size:13px">
+      <div><span>${e.description}</span>${e.category?`<span style="font-size:11px;color:#a0aec0;margin-right:6px"> · ${e.category}</span>`:''}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-weight:700;color:#c53030">₪${(e.amount||0).toLocaleString()}</span>
+        <button onclick="deleteTournamentEntry('${id}','expenses','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px">✕</button>
+      </div>
+    </div>`).join('');
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px">
+      <div style="background:#f0fff4;border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:11px;color:#276749;font-weight:600;margin-bottom:4px">הכנסות</div>
+        <div style="font-size:22px;font-weight:800;color:#276749">₪${income.toLocaleString()}</div>
+      </div>
+      <div style="background:#fff5f5;border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:11px;color:#c53030;font-weight:600;margin-bottom:4px">הוצאות</div>
+        <div style="font-size:22px;font-weight:800;color:#c53030">₪${expenses.toLocaleString()}</div>
+      </div>
+      <div style="background:${balance>=0?'#f0fff4':'#fff5f5'};border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:11px;color:${balColor};font-weight:600;margin-bottom:4px">יתרה</div>
+        <div style="font-size:22px;font-weight:800;color:${balColor}">${balance>=0?'+':''}₪${balance.toLocaleString()}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:14px;font-weight:700;color:#276749;margin-bottom:10px">💰 הכנסות</div>
+      ${entryFeeIncome>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f4f8;font-size:13px;color:#718096">
+        <span>דמי השתתפות (${Object.values(t.players||{}).filter(p=>p.paid).length} × ₪${t.entryFee})</span>
+        <span style="font-weight:700;color:#276749">₪${entryFeeIncome.toLocaleString()}</span></div>`:''}
+      ${incomeRows}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input type="text" id="new-income-desc" placeholder="תיאור" class="modal-input" style="flex:2">
+        <input type="number" id="new-income-amount" placeholder="₪" min="0" class="modal-input" style="flex:1">
+        <button onclick="addTournamentEntry('${id}','income')" style="background:#276749;color:white;border:none;border-radius:7px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:14px;font-weight:700;color:#c53030;margin-bottom:10px">📤 הוצאות</div>
+      ${expenseRows}
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <input type="text" id="new-expense-desc" placeholder="תיאור" class="modal-input" style="flex:2;min-width:120px">
+        <input type="number" id="new-expense-amount" placeholder="₪" min="0" class="modal-input" style="flex:1;min-width:70px">
+        <select id="new-expense-cat" class="modal-input" style="min-width:110px">
+          ${EXPENSE_CATEGORIES.map(c=>`<option>${c}</option>`).join('')}
+        </select>
+        <button onclick="addTournamentEntry('${id}','expenses')" style="background:#c53030;color:white;border:none;border-radius:7px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
+      </div>
+    </div>`;
+}
+
+async function addTournamentEntry(id, type) {
+  const isIncome = type==='income';
+  const desc = document.getElementById(`new-${isIncome?'income':'expense'}-desc`)?.value?.trim();
+  const amount = parseFloat(document.getElementById(`new-${isIncome?'income':'expense'}-amount`)?.value)||0;
+  if (!desc) { showToast('יש להזין תיאור', 'error'); return; }
+  if (!amount) { showToast('יש להזין סכום', 'error'); return; }
+  const entry = {description:desc, amount, date:new Date().toISOString().split('T')[0]};
+  if (!isIncome) entry.category = document.getElementById('new-expense-cat')?.value||'אחר';
+  try {
+    const ref = await db.ref(`clubTournaments/${id}/${type}`).push(entry);
+    if (!_tournaments[id][type]) _tournaments[id][type] = {};
+    _tournaments[id][type][ref.key] = entry;
+    const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.addTournamentEntry = addTournamentEntry;
+
+async function deleteTournamentEntry(id, type, eid) {
+  try {
+    await db.ref(`clubTournaments/${id}/${type}/${eid}`).remove();
+    delete _tournaments[id][type][eid];
+    const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteTournamentEntry = deleteTournamentEntry;
 
 async function toggleHistory(groupIdx) {
   const g = groups[groupIdx];
@@ -6331,6 +7153,502 @@ function printPlayerList(groupIdx, subGroupIdx) {
   setTimeout(() => win.print(), 400);
 }
 
+// ===== MORNING PROSPECTS (מצטייני גנים) =====
+let _prospects = {};
+
+const PROSPECT_STATUSES = [
+  { key: 'new',       label: 'חדש',          color: '#2b6cb0', bg: '#ebf8ff' },
+  { key: 'contacted', label: 'יצרנו קשר',    color: '#b7791f', bg: '#fffbeb' },
+  { key: 'invited',   label: 'הוזמן',         color: '#553c9a', bg: '#faf5ff' },
+  { key: 'joined',    label: '✅ הצטרף',      color: '#276749', bg: '#f0fff4' },
+  { key: 'no-answer', label: 'לא ענה',        color: '#718096', bg: '#f7fafc' },
+  { key: 'declined',  label: 'לא מעוניין',   color: '#c53030', bg: '#fff5f5' },
+];
+
+function prospectStatus(key) {
+  return PROSPECT_STATUSES.find(s => s.key === key) || PROSPECT_STATUSES[0];
+}
+
+async function loadProspects() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('morningProspects').get();
+    _prospects = snap.val() || {};
+    renderProspectsPanel();
+  } catch(e) { console.error('loadProspects:', e); }
+}
+
+function renderProspectsPanel() {
+  const el = document.getElementById('panel-prospects');
+  if (el) el.innerHTML = buildProspectsHTML();
+}
+
+function buildProspectsHTML() {
+  const filterSchool = window._prospectFilterSchool || '';
+  const filterStatus = window._prospectFilterStatus || '';
+
+  const list = Object.entries(_prospects)
+    .sort((a, b) => (b[1].addedAt || 0) - (a[1].addedAt || 0));
+
+  // Collect unique schools for filter
+  const schools = [...new Set(list.map(([,p]) => p.school).filter(Boolean))].sort();
+
+  const filtered = list.filter(([,p]) => {
+    if (filterSchool && p.school !== filterSchool) return false;
+    if (filterStatus && p.status !== filterStatus) return false;
+    return true;
+  });
+
+  // Summary counts per status
+  const counts = {};
+  PROSPECT_STATUSES.forEach(s => { counts[s.key] = 0; });
+  list.forEach(([,p]) => { const k = p.status || 'new'; if (counts[k] !== undefined) counts[k]++; });
+
+  const summaryBadges = PROSPECT_STATUSES.filter(s => counts[s.key] > 0).map(s =>
+    `<span style="background:${s.bg};color:${s.color};border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ${s.color}33"
+      onclick="window._prospectFilterStatus=window._prospectFilterStatus==='${s.key}'?'':'${s.key}';renderProspectsPanel()">
+      ${s.label} ${counts[s.key]}
+    </span>`
+  ).join('');
+
+  const rows = filtered.map(([id, p]) => {
+    const st = prospectStatus(p.status || 'new');
+    const date = p.addedAt ? new Date(p.addedAt).toLocaleDateString('he-IL',{day:'numeric',month:'short'}) : '';
+    return `<tr onclick="openProspectDetail('${id}')" style="cursor:pointer" onmouseenter="this.style.background='#fffbf0'" onmouseleave="this.style.background=''">
+      <td style="padding:10px 12px;font-weight:700">${p.lastName || ''} ${p.firstName || ''}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#4a5568">${p.age || '—'}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#4a5568">${p.school || '—'}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#4a5568">${p.instructor || '—'}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#4a5568">${p.parentName || '—'}${p.parentPhone?` · <a href="tel:${p.parentPhone}" onclick="event.stopPropagation()" style="color:#2b6cb0">${p.parentPhone}</a>`:''}</td>
+      <td style="padding:10px 12px">
+        <span style="background:${st.bg};color:${st.color};border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;white-space:nowrap">${st.label}</span>
+      </td>
+      <td style="padding:10px 12px;font-size:12px;color:#718096;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.notes || ''}</td>
+      <td style="padding:10px 12px;font-size:12px;color:#a0aec0">${date}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div style="max-width:1000px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div style="font-size:20px;font-weight:800;color:#2d3748">🌟 מצטייני גנים</div>
+      <button onclick="openAddProspectModal()" style="background:#c05621;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף ילד</button>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      ${summaryBadges}
+      ${filterSchool||filterStatus ? `<button onclick="window._prospectFilterSchool='';window._prospectFilterStatus='';renderProspectsPanel()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit">✕ נקה סינון</button>` : ''}
+    </div>
+
+    ${schools.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <span style="font-size:12px;color:#718096;padding:4px 0">בית ספר / גן:</span>
+      ${schools.map(s => `<span onclick="window._prospectFilterSchool=window._prospectFilterSchool==='${s.replace(/'/g,"\\'")}' ? '' : '${s.replace(/'/g,"\\'")}';renderProspectsPanel()"
+        style="background:${filterSchool===s?'#c05621':'#f7fafc'};color:${filterSchool===s?'white':'#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">${s}</span>`).join('')}
+    </div>` : ''}
+
+    ${filtered.length === 0
+      ? `<div style="text-align:center;color:#a0aec0;padding:50px 20px">
+          <div style="font-size:36px;margin-bottom:10px">🌟</div>
+          <div>${list.length === 0 ? 'לחץ "הוסף ילד" להתחלה' : 'אין תוצאות לסינון הנוכחי'}</div>
+        </div>`
+      : `<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+          <div style="padding:8px 16px;background:#fff8f0;border-bottom:1px solid #e2e8f0;font-size:13px;color:#718096">${filtered.length} ילדים</div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:14px;direction:rtl">
+              <thead><tr style="background:#edf2f7">
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">שם</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">גיל</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">מוסד</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">מדריך</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">הורה</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">סטטוס</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">הערות</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">נוסף</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`}
+  </div>`;
+}
+
+function openAddProspectModal(editId = null) {
+  const p = editId ? (_prospects[editId] || {}) : {};
+  const title = editId ? 'עריכת ילד' : '🌟 הוספת ילד מצטיין';
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:460px">
+        <div class="modal-header">
+          <span class="modal-title">${title}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:11px">
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>שם פרטי <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="pr-first" class="modal-input" value="${p.firstName||''}" autofocus></div>
+            <div class="modal-field" style="flex:1"><label>שם משפחה <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="pr-last" class="modal-input" value="${p.lastName||''}"></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>גיל <span style="color:#e53e3e">*</span></label>
+              <input type="number" id="pr-age" class="modal-input" min="3" max="18" value="${p.age||''}"></div>
+            <div class="modal-field" style="flex:2"><label>בית ספר / גן <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="pr-school" class="modal-input" value="${p.school||''}"></div>
+          </div>
+          <div class="modal-field"><label>שם מדריך <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="pr-instructor" class="modal-input" value="${p.instructor||''}"></div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>שם הורה <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="pr-parent" class="modal-input" value="${p.parentName||''}"></div>
+            <div class="modal-field" style="flex:1"><label>טלפון הורה <span style="color:#e53e3e">*</span></label>
+              <input type="tel" id="pr-phone" class="modal-input" value="${p.parentPhone||''}"></div>
+          </div>
+          <div class="modal-field"><label>הערות</label>
+            <textarea id="pr-notes" rows="2" class="modal-input" style="resize:vertical;font-family:inherit">${p.notes||''}</textarea></div>
+          <button onclick="saveProspect(${editId?`'${editId}'`:'null'})" style="background:#c05621;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ ${editId?'שמור שינויים':'הוסף ילד'}</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openAddProspectModal = openAddProspectModal;
+
+async function saveProspect(editId) {
+  const firstName   = document.getElementById('pr-first')?.value?.trim();
+  const lastName    = document.getElementById('pr-last')?.value?.trim();
+  const school      = document.getElementById('pr-school')?.value?.trim();
+  const ageVal      = document.getElementById('pr-age')?.value?.trim();
+  const instructor  = document.getElementById('pr-instructor')?.value?.trim();
+  const parentName  = document.getElementById('pr-parent')?.value?.trim();
+  const parentPhone = document.getElementById('pr-phone')?.value?.trim();
+  if (!firstName)   { showToast('יש להזין שם פרטי', 'error'); document.getElementById('pr-first')?.focus(); return; }
+  if (!lastName)    { showToast('יש להזין שם משפחה', 'error'); document.getElementById('pr-last')?.focus(); return; }
+  if (!ageVal || isNaN(parseInt(ageVal))) { showToast('יש להזין גיל', 'error'); document.getElementById('pr-age')?.focus(); return; }
+  if (!school)      { showToast('יש להזין בית ספר / גן', 'error'); document.getElementById('pr-school')?.focus(); return; }
+  if (!instructor)  { showToast('יש להזין שם מדריך', 'error'); document.getElementById('pr-instructor')?.focus(); return; }
+  if (!parentName)  { showToast('יש להזין שם הורה', 'error'); document.getElementById('pr-parent')?.focus(); return; }
+  if (!parentPhone) { showToast('יש להזין טלפון הורה', 'error'); document.getElementById('pr-phone')?.focus(); return; }
+  const data = {
+    firstName, lastName, school, instructor, parentName, parentPhone,
+    age:   parseInt(ageVal),
+    notes: document.getElementById('pr-notes')?.value?.trim() || '',
+  };
+  try {
+    if (editId) {
+      await db.ref(`morningProspects/${editId}`).update(data);
+      Object.assign(_prospects[editId], data);
+    } else {
+      data.status = 'new';
+      data.addedAt = Date.now();
+      const ref = await db.ref('morningProspects').push(data);
+      _prospects[ref.key] = data;
+    }
+    document.querySelector('.friday-modal')?.remove();
+    renderProspectsPanel();
+    showToast(editId ? 'עודכן ✅' : `${firstName} ${lastName} נוסף ✅`);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveProspect = saveProspect;
+
+function openProspectDetail(id) {
+  const p = _prospects[id];
+  if (!p) return;
+  const st = prospectStatus(p.status || 'new');
+  const statusBtns = PROSPECT_STATUSES.map(s =>
+    `<button onclick="setProspectStatus('${id}','${s.key}')"
+      style="background:${p.status===s.key?s.color:'#f7fafc'};color:${p.status===s.key?'white':s.color};border:1px solid ${s.color}55;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${s.label}</button>`
+  ).join('');
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:480px">
+        <div class="modal-header" style="background:linear-gradient(135deg,#c05621,#9c4221)">
+          <span class="modal-title">${p.firstName} ${p.lastName}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${p.age?`<div style="background:#fff8f0;border-radius:8px;padding:8px 16px;text-align:center"><div style="font-size:11px;color:#c05621;font-weight:700;margin-bottom:2px">גיל</div><div style="font-size:22px;font-weight:800;color:#c05621">${p.age}</div></div>`:''}
+            <div style="background:#fff8f0;border-radius:8px;padding:8px 16px;display:flex;flex-direction:column;justify-content:center"><div style="font-size:12px;color:#718096">מוסד</div><div style="font-weight:700">${p.school}</div>${p.instructor?`<div style="font-size:12px;color:#718096">מדריך: ${p.instructor}</div>`:''}</div>
+          </div>
+          ${p.parentName||p.parentPhone?`<div class="profile-detail-row"><span class="profile-label">הורה</span><span class="profile-value">${p.parentName||''}${p.parentPhone?` · <a href="tel:${p.parentPhone}" style="color:#2b6cb0">${p.parentPhone}</a>`:''}</span></div>`:''}
+          ${p.notes?`<div style="background:#f7fafc;border-radius:8px;padding:10px 14px;font-size:13px;color:#4a5568">${p.notes}</div>`:''}
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#4a5568;margin-bottom:8px">סטטוס מעקב:</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">${statusBtns}</div>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#4a5568;margin-bottom:6px">הערות פולואפ:</div>
+            <textarea id="prospect-followup-${id}" rows="2" class="modal-input" style="resize:vertical;font-family:inherit;font-size:13px" placeholder="מה קרה, מה סוכם...">${p.followupNotes||''}</textarea>
+            <button onclick="saveProspectFollowup('${id}')" style="margin-top:6px;background:#2b6cb0;color:white;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">💾 שמור הערה</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button onclick="this.closest('.modal-overlay').remove();openAddProspectModal('${id}')" style="flex:1;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">✏️ ערוך פרטים</button>
+            <button onclick="deleteProspect('${id}')" style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#c53030">🗑</button>
+          </div>
+        </div>
+      </div>
+    </div>`);
+}
+window.openProspectDetail = openProspectDetail;
+
+async function setProspectStatus(id, status) {
+  try {
+    await db.ref(`morningProspects/${id}/status`).set(status);
+    _prospects[id].status = status;
+    // Refresh the status buttons in open modal
+    const modal = document.querySelector('.friday-modal');
+    if (modal) { modal.remove(); openProspectDetail(id); }
+    renderProspectsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.setProspectStatus = setProspectStatus;
+
+async function saveProspectFollowup(id) {
+  const val = document.getElementById(`prospect-followup-${id}`)?.value?.trim() || '';
+  try {
+    await db.ref(`morningProspects/${id}/followupNotes`).set(val);
+    _prospects[id].followupNotes = val;
+    showToast('ההערה נשמרה ✅');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveProspectFollowup = saveProspectFollowup;
+
+async function deleteProspect(id) {
+  const p = _prospects[id];
+  if (!confirm(`למחוק את ${p?.firstName} ${p?.lastName}?`)) return;
+  try {
+    await db.ref(`morningProspects/${id}`).remove();
+    delete _prospects[id];
+    document.querySelector('.friday-modal')?.remove();
+    renderProspectsPanel();
+    showToast('נמחק');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteProspect = deleteProspect;
+
+// ===== FED PLAYERS REGISTRY =====
+let _fedPlayers = {};
+let _fedPlayersLastSync = localStorage.getItem('fedPlayersLastSync') || null;
+
+async function loadFedPlayers() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('fedPlayers').get();
+    _fedPlayers = snap.val() || {};
+    renderFedPlayersPanel();
+    // Auto-sync if empty or stale (> 24h)
+    if (Object.keys(_fedPlayers).length === 0 ||
+        !_fedPlayersLastSync || Date.now() - parseInt(_fedPlayersLastSync) > 86400000) {
+      syncFedPlayersFromSite(true);
+    }
+  } catch(e) { console.error('loadFedPlayers:', e); }
+}
+
+async function syncFedPlayersFromSite(silent = false) {
+  const btn = document.getElementById('btn-sync-fed-players');
+  const statusEl = document.getElementById('fed-sync-status');
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ מסנכרן...'; }
+  if (statusEl) { statusEl.style.color = '#718096'; statusEl.textContent = 'מסנכרן...'; }
+  try {
+    const url = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=Players';
+    let html = '';
+    const proxies = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+    ];
+    for (const proxy of proxies) {
+      try {
+        const res = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
+        if (res.ok) { html = await res.text(); if (html.length > 1000) break; }
+      } catch(e2) { console.warn('proxy failed:', proxy, e2.message); }
+    }
+    if (!html || html.length < 500) throw new Error('לא ניתן לטעון את דף שחקני המועדון');
+
+    const parsed = {};
+    // Parse table rows containing player links
+    const rowMatches = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+      .filter(m => /Player\.aspx\?Id=/i.test(m[1]));
+    for (const rowM of rowMatches) {
+      const rowHtml = rowM[1];
+      const playerMatch = rowHtml.match(/Player\.aspx\?Id=(\d+)[^>]*>([^<]+)<\/a>/i);
+      if (!playerMatch) continue;
+      const fedId = parseInt(playerMatch[1]);
+      const name = playerMatch[2].trim();
+      if (!fedId || !name || name.length < 2) continue;
+      // Try to extract rating — look for 3-4 digit number in td cells
+      const cells = [...rowHtml.matchAll(/<td[^>]*>\s*([^<\s][^<]*?)\s*<\/td>/gi)].map(m => m[1].trim());
+      const ratingCandidate = cells.find(c => /^\d{3,4}$/.test(c));
+      // Try birth year (4-digit starting with 19xx or 20xx)
+      const birthCandidate = cells.find(c => /^(19|20)\d{2}$/.test(c));
+      parsed[fedId] = {
+        name, fedId,
+        rating: ratingCandidate ? parseInt(ratingCandidate) : null,
+        birthYear: birthCandidate ? parseInt(birthCandidate) : null,
+        lastSync: Date.now()
+      };
+    }
+    const count = Object.keys(parsed).length;
+    if (count === 0) throw new Error('לא נמצאו שחקנים — ייתכן שמבנה הדף השתנה');
+    if (db) {
+      // Merge: keep existing cardExpiry/details, update name/rating/birthYear
+      for (const [fid, np] of Object.entries(parsed)) {
+        if (_fedPlayers[fid]) {
+          np.cardExpiry = _fedPlayers[fid].cardExpiry || np.cardExpiry;
+        }
+      }
+      await db.ref('fedPlayers').set(parsed);
+      _fedPlayers = parsed;
+    }
+    localStorage.setItem('fedPlayersLastSync', String(Date.now()));
+    _fedPlayersLastSync = String(Date.now());
+    if (statusEl) { statusEl.style.color = '#276749'; statusEl.textContent = `✅ ${count} שחקנים`; }
+    if (!silent) showToast(`✅ סונכרנו ${count} שחקני מועדון`);
+    renderFedPlayersPanel();
+  } catch(e) {
+    if (statusEl) { statusEl.style.color = '#e53e3e'; statusEl.textContent = `❌ ${e.message}`; }
+    if (!silent) showToast(`❌ ${e.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 סנכרן מהאיגוד'; }
+  }
+}
+window.syncFedPlayersFromSite = syncFedPlayersFromSite;
+
+function getFedPlayerGroupInfo(fedId) {
+  const numId = parseInt(fedId);
+  for (const g of groups) {
+    for (const sg of g.subGroups) {
+      const found = sg.players.find(p => p.fedId === numId && !p.hidden);
+      if (found) return { groupName: g.name, subGroupName: sg.time || '' };
+    }
+  }
+  return null;
+}
+
+function renderFedPlayersPanel() {
+  const el = document.getElementById('panel-fed-players');
+  if (el) el.innerHTML = buildFedPlayersHTML();
+}
+
+function buildFedPlayersHTML() {
+  const currentYear = new Date().getFullYear();
+  const list = Object.entries(_fedPlayers).sort((a,b) => (b[1].rating||0) - (a[1].rating||0));
+  const syncDate = _fedPlayersLastSync
+    ? new Date(parseInt(_fedPlayersLastSync)).toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'})
+    : 'טרם סונכרן';
+
+  const cardStatus = (expiry) => {
+    if (!expiry) return { dot: '⚪', label: '—', color: '#a0aec0' };
+    const daysLeft = Math.floor((new Date(expiry) - new Date()) / 86400000);
+    if (daysLeft < 0) return { dot: '🔴', label: 'פג תוקף', color: '#e53e3e' };
+    if (daysLeft < 60) return { dot: '🟡', label: `${daysLeft} ימים`, color: '#b7791f' };
+    return { dot: '🟢', label: formatDate(expiry), color: '#276749' };
+  };
+
+  const rows = list.map(([fedId, p]) => {
+    const groupInfo = getFedPlayerGroupInfo(fedId);
+    const age = p.birthYear ? currentYear - p.birthYear : null;
+    const card = cardStatus(p.cardExpiry);
+    return `<tr onclick="openFedPlayerDetail('${fedId}')" style="cursor:pointer" onmouseenter="this.style.background='#f7fafc'" onmouseleave="this.style.background=''">
+      <td style="padding:9px 12px;font-weight:600">${p.name}</td>
+      <td style="padding:9px 12px;font-size:13px"><a href="https://www.chess.org.il/Players/Player.aspx?Id=${fedId}" target="_blank" onclick="event.stopPropagation()" style="color:#2b6cb0">${fedId}</a></td>
+      <td style="padding:9px 12px;font-size:14px;font-weight:700;color:#2d3748">${p.rating || '—'}</td>
+      <td style="padding:9px 12px;font-size:13px;color:#4a5568">${age !== null ? age : '—'}</td>
+      <td style="padding:9px 12px;font-size:13px;color:${card.color}">${card.dot} ${card.label}</td>
+      <td style="padding:9px 12px;font-size:13px;color:${groupInfo?'#276749':'#a0aec0'}">${groupInfo ? `${groupInfo.groupName}${groupInfo.subGroupName?' · '+groupInfo.subGroupName:''}` : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const inGroup = list.filter(([fid]) => getFedPlayerGroupInfo(fid)).length;
+
+  return `<div style="max-width:900px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div style="font-size:20px;font-weight:800;color:#2d3748">👥 שחקני מועדון</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="fed-sync-status" style="font-size:12px;color:#718096">עדכון: ${syncDate}</span>
+        <button id="btn-sync-fed-players" onclick="syncFedPlayersFromSite()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 סנכרן מהאיגוד</button>
+      </div>
+    </div>
+    ${list.length === 0
+      ? `<div style="text-align:center;color:#a0aec0;padding:60px 20px">
+          <div style="font-size:40px;margin-bottom:12px">👥</div>
+          <div style="font-size:15px">לחץ "סנכרן מהאיגוד" לטעינת רשימת שחקני המועדון</div>
+        </div>`
+      : `<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+          <div style="padding:10px 16px;background:#f3f0ff;border-bottom:1px solid #e2e8f0;display:flex;gap:20px;font-size:13px">
+            <span style="font-weight:700;color:#553c9a">${list.length} שחקנים</span>
+            <span style="color:#276749">✅ ${inGroup} בחוגים</span>
+            <span style="color:#718096">— ${list.length - inGroup} ללא חוג</span>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:14px;direction:rtl">
+              <thead><tr style="background:#edf2f7">
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">שם</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">מספר</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">מד כושר</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">גיל</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">כרטיס</th>
+                <th style="padding:9px 12px;text-align:right;font-weight:700;color:#4a5568;font-size:12px">חוג</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`}
+  </div>`;
+}
+
+function openFedPlayerDetail(fedId) {
+  const p = _fedPlayers[fedId];
+  if (!p) return;
+  const groupInfo = getFedPlayerGroupInfo(fedId);
+  const currentYear = new Date().getFullYear();
+  const age = p.birthYear ? currentYear - p.birthYear : null;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+          <span class="modal-title">👤 ${p.name}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${p.rating?`<div style="background:#f3f0ff;border-radius:8px;padding:10px 18px;text-align:center"><div style="font-size:11px;color:#553c9a;font-weight:700;margin-bottom:2px">מד כושר</div><div style="font-size:22px;font-weight:800;color:#553c9a">${p.rating}</div></div>`:''}
+            ${age!==null?`<div style="background:#f0fff4;border-radius:8px;padding:10px 18px;text-align:center"><div style="font-size:11px;color:#276749;font-weight:700;margin-bottom:2px">גיל</div><div style="font-size:22px;font-weight:800;color:#276749">${age}</div></div>`:''}
+          </div>
+          <div class="profile-detail-row"><span class="profile-label">מספר איגוד</span><span class="profile-value"><a href="https://www.chess.org.il/Players/Player.aspx?Id=${fedId}" target="_blank" style="color:#2b6cb0">${fedId}</a></span></div>
+          ${p.birthYear?`<div class="profile-detail-row"><span class="profile-label">שנת לידה</span><span class="profile-value">${p.birthYear}</span></div>`:''}
+          ${p.cardExpiry?`<div class="profile-detail-row"><span class="profile-label">תוקף כרטיס</span><span class="profile-value">${formatDate(p.cardExpiry)}</span></div>`:''}
+          ${groupInfo?`<div class="profile-detail-row"><span class="profile-label">חוג</span><span class="profile-value" style="color:#276749">${groupInfo.groupName}${groupInfo.subGroupName?' · '+groupInfo.subGroupName:''}</span></div>`:''}
+          <button onclick="syncOneFedPlayer('${fedId}');this.disabled=true;this.textContent='⏳ מעדכן...'" style="margin-top:6px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 עדכן פרטים מהאיגוד</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openFedPlayerDetail = openFedPlayerDetail;
+
+async function syncOneFedPlayer(fedId) {
+  try {
+    const url = `https://www.chess.org.il/Players/Player.aspx?Id=${fedId}`;
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    if (html.includes('Runtime Error') || html.includes('Object reference not set')) throw new Error('שחקן לא נמצא');
+    const ratingMatch = html.match(/מד כושר ישראלי<span>:\s*(\d+)<\/span>/);
+    const expiryMatch = html.match(/תוקף כרטיס שחמטאי<span>\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*<\/span>/);
+    const birthMatch  = html.match(/שנת לידה[\s\S]{0,300}<span[^>]*>\s*(\d{4})\s*<\/span>/);
+    const updates = { lastSync: Date.now() };
+    if (ratingMatch) updates.rating = parseInt(ratingMatch[1]);
+    if (expiryMatch) updates.cardExpiry = `${expiryMatch[3]}-${expiryMatch[2].padStart(2,'0')}-${expiryMatch[1].padStart(2,'0')}`;
+    if (birthMatch)  updates.birthYear = parseInt(birthMatch[1]);
+    Object.assign(_fedPlayers[fedId], updates);
+    if (db) await db.ref(`fedPlayers/${fedId}`).update(updates);
+    document.querySelector('.friday-modal')?.remove();
+    renderFedPlayersPanel();
+    showToast(`✅ ${_fedPlayers[fedId].name} עודכן`);
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+window.syncOneFedPlayer = syncOneFedPlayer;
+
 function showToast(msg) {
   let t = document.getElementById('toast-msg');
   if (!t) {
@@ -6356,6 +7674,9 @@ async function initData() {
   await loadVacations();
   renderPlayerList({});
   loadAttendanceFromFirebase();
+  loadTournaments();
+  loadFedPlayers();
+  loadProspects();
   // refresh dashboard after data loaded
   const hp = document.getElementById('panel-home');
   if (hp) hp.innerHTML = renderDashboard();
