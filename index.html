@@ -2691,6 +2691,7 @@ async function submitAddPlayer() {
     ]);
   }
 
+  logAudit('add_player', groups[groupIdx].id, groups[groupIdx].name, `הוסף: ${lastName} ${firstName}`);
   document.getElementById('addPlayerModal').classList.remove('open');
   const g = groups[groupIdx];
   document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);
@@ -2900,6 +2901,9 @@ async function saveAttendance() {
     if (db) {
       await db.ref(attPath()).set(Object.keys(presentMap).length > 0 ? presentMap : null);
       markCurrentDateInDropdown(Object.keys(presentMap).length > 0);
+      const attG = groups[attState.groupIdx];
+      logAudit('update_attendance', attG?.id, attG?.name,
+        `${attState.date} · ${Object.keys(presentMap).length} נוכחים`);
     }
     status.textContent = '✅ נשמר!';
     status.classList.add('visible');
@@ -3219,6 +3223,7 @@ async function savePlayerProfile() {
       db.ref(`player_contacts/${g.id}/${subGroupIdx}/${playerIdx}`)
         .set({ parentPhone: parentPhone || null, parentEmail: parentEmail || null }),
     ]);
+    logAudit('update_player', g.id, g.name, `עודכן: ${lastName} ${firstName}`);
   }
 
   document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);
@@ -3283,6 +3288,7 @@ async function transferPlayer() {
     const dstPanel = document.getElementById('panel-' + dstG.id);
     if (dstPanel) dstPanel.innerHTML = renderGroup(dstG, tgi);
 
+    logAudit('transfer_player', srcG.id, srcG.name, `${last} ${first} → ${dstG.name}`);
     document.getElementById('playerProfileModal').classList.remove('open');
     showToast(`${first} ${last} הועבר/ה ל"${dstG.name}" ✅`);
   } catch(e) {
@@ -4634,6 +4640,15 @@ if (currentUser.role === 'admin') {
   subPanel.className = 'tab-panel'; subPanel.id = 'panel-submissions';
   subPanel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">טוען פניות...</div>';
   content.appendChild(subPanel);
+
+  const auditBtn = document.createElement('button');
+  auditBtn.className = 'tab-btn'; auditBtn.dataset.tab = 'audit'; auditBtn.textContent = '📊 פעילות מדריכים';
+  auditBtn.onclick = () => { switchTab('audit'); loadAuditLog(); };
+  tabsBar.appendChild(auditBtn);
+  const auditPanel = document.createElement('div');
+  auditPanel.className = 'tab-panel'; auditPanel.id = 'panel-audit';
+  auditPanel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">לחץ על הלשונית לטעינת הנתונים</div>';
+  content.appendChild(auditPanel);
 
   const settingsBtn = document.createElement('button');
   settingsBtn.className = 'tab-btn'; settingsBtn.dataset.tab = 'settings'; settingsBtn.textContent = '⚙️ הגדרות';
@@ -6226,6 +6241,7 @@ async function executeRemovePlayer() {
         playerIdx, subGroupIdx
       });
       await db.ref(`hidden_players/${g.id}/${subGroupIdx}/${playerIdx}`).set(true);
+      logAudit('remove_player', g.id, g.name, `הוסר: ${last} ${first}`);
       showToast(`${first} ${last} הוסר/ה ✅`);
     } catch(e) {
       // Rollback UI if Firebase failed
@@ -7470,6 +7486,7 @@ async function restorePlayer(groupIdx, subGroupIdx, playerIdx, histKey) {
         type: 'joined', playerName: `${last} ${first}`, timestamp: Date.now(),
         playerIdx, subGroupIdx, note: 'שוחזר'
       });
+      logAudit('restore_player', g.id, g.name, `שוחזר: ${last} ${first}`);
     }
     const panelEl = document.getElementById('panel-' + g.id);
     if (panelEl) panelEl.innerHTML = renderGroup(g, groupIdx);
@@ -7731,6 +7748,112 @@ async function saveMatchEdit(dateKey, matchIdx) {
   if (el) { el.innerHTML = buildSatLeaguesHTML(); renderClubTeamsList(); }
 }
 window.saveMatchEdit = saveMatchEdit;
+
+// ===== AUDIT LOG =====
+const AUDIT_LABELS = {
+  add_player:        { label: 'הוספת שחקן',    color: '#276749', bg: '#f0fff4', icon: '➕' },
+  remove_player:     { label: 'הסרת שחקן',     color: '#c53030', bg: '#fff5f5', icon: '➖' },
+  restore_player:    { label: 'שחזור שחקן',    color: '#2b6cb0', bg: '#ebf8ff', icon: '↩' },
+  transfer_player:   { label: 'העברת שחקן',    color: '#744210', bg: '#fffaf0', icon: '↔' },
+  update_player:     { label: 'עדכון נתונים',  color: '#553c9a', bg: '#faf5ff', icon: '✏️' },
+  update_attendance: { label: 'עדכון נוכחות',  color: '#086f83', bg: '#e3fafc', icon: '📋' },
+};
+
+async function logAudit(action, groupId, groupName, details) {
+  if (!db || !currentUser) return;
+  try {
+    await db.ref('auditLog').push({
+      ts: Date.now(),
+      uid:       currentUser.uid,
+      name:      currentUser.name  || currentUser.email || 'לא ידוע',
+      action,
+      groupId:   groupId   || '',
+      groupName: groupName || '',
+      details:   details   || '',
+    });
+  } catch(e) { console.warn('logAudit failed:', e.message); }
+}
+
+async function loadAuditLog() {
+  const el = document.getElementById('panel-audit');
+  if (!el) return;
+  el.innerHTML = buildAuditPanelHTML([], true);
+  try {
+    const snap = await db.ref('auditLog').orderByChild('ts').limitToLast(300).get();
+    const raw = snap.val() || {};
+    const entries = Object.values(raw).sort((a, b) => b.ts - a.ts);
+    el.innerHTML = buildAuditPanelHTML(entries, false);
+  } catch(e) { el.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה: ${e.message}</div>`; }
+}
+window.loadAuditLog = loadAuditLog;
+
+function buildAuditPanelHTML(entries, loading) {
+  const instructors = [...new Set(entries.map(e => e.name))].sort();
+  const instrOpts = instructors.map(n => `<option value="${n}">${n}</option>`).join('');
+  const actionOpts = Object.entries(AUDIT_LABELS).map(([k,v]) =>
+    `<option value="${k}">${v.icon} ${v.label}</option>`).join('');
+
+  const rows = loading
+    ? `<tr><td colspan="5" style="text-align:center;padding:32px;color:#a0aec0">⏳ טוען...</td></tr>`
+    : entries.length === 0
+    ? `<tr><td colspan="5" style="text-align:center;padding:32px;color:#a0aec0">אין רשומות עדיין</td></tr>`
+    : entries.map(e => {
+        const meta = AUDIT_LABELS[e.action] || { label: e.action, color: '#718096', bg: '#f7fafc', icon: '•' };
+        const d = new Date(e.ts);
+        const dateStr = d.toLocaleDateString('he-IL');
+        const timeStr = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+        return `
+          <tr class="audit-row" data-instructor="${e.name||''}" data-action="${e.action||''}">
+            <td style="padding:9px 12px;white-space:nowrap;font-size:12px;color:#718096">${dateStr}<br><span style="font-size:11px">${timeStr}</span></td>
+            <td style="padding:9px 12px;font-size:13px;font-weight:600;color:#2d3748">${e.name||'—'}</td>
+            <td style="padding:9px 8px">
+              <span style="background:${meta.bg};color:${meta.color};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap">${meta.icon} ${meta.label}</span>
+            </td>
+            <td style="padding:9px 12px;font-size:13px;color:#4a5568">${e.groupName||'—'}</td>
+            <td style="padding:9px 12px;font-size:13px;color:#4a5568">${e.details||''}</td>
+          </tr>`;
+      }).join('');
+
+  return `
+    <div style="max-width:960px">
+      <div style="font-size:20px;font-weight:800;color:#2d3748;margin-bottom:16px">📊 פעילות מדריכים</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <select id="audit-filter-inst" onchange="filterAudit()" class="modal-input" style="min-width:160px">
+          <option value="">כל המדריכים</option>${instrOpts}
+        </select>
+        <select id="audit-filter-action" onchange="filterAudit()" class="modal-input" style="min-width:160px">
+          <option value="">כל הפעולות</option>${actionOpts}
+        </select>
+        <button onclick="loadAuditLog()" style="background:#e2e8f0;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
+        <span style="font-size:12px;color:#a0aec0;margin-right:auto">${entries.length} רשומות אחרונות</span>
+      </div>
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:white">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
+          <thead>
+            <tr style="background:#f7fafc;border-bottom:2px solid #e2e8f0">
+              <th style="padding:10px 12px;text-align:right;font-size:12px;color:#718096;font-weight:700">תאריך ושעה</th>
+              <th style="padding:10px 12px;text-align:right;font-size:12px;color:#718096;font-weight:700">מדריך</th>
+              <th style="padding:10px 8px;text-align:right;font-size:12px;color:#718096;font-weight:700">פעולה</th>
+              <th style="padding:10px 12px;text-align:right;font-size:12px;color:#718096;font-weight:700">חוג</th>
+              <th style="padding:10px 12px;text-align:right;font-size:12px;color:#718096;font-weight:700">פרטים</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody">${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function filterAudit() {
+  const inst   = document.getElementById('audit-filter-inst')?.value   || '';
+  const action = document.getElementById('audit-filter-action')?.value || '';
+  document.querySelectorAll('.audit-row').forEach(row => {
+    const show = (!inst   || row.dataset.instructor === inst)
+              && (!action || row.dataset.action     === action);
+    row.style.display = show ? '' : 'none';
+  });
+}
+window.filterAudit = filterAudit;
 
 function openFullscreenSlot(dateKey, slotTime) {
   const group = _satDates[dateKey];
