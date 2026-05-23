@@ -4370,7 +4370,8 @@ function buildApp() {
 if (!_useDbGroups && (!groups || groups.length === 0)) {
   if (currentUser?.role === 'admin') groups = ALL_GROUPS;
   else {
-    const allowedIds = Object.values(currentUser?.groups || {});
+    // groups stored as { groupId: true } map — use Object.keys()
+    const allowedIds = Object.keys(currentUser?.groups || {});
     groups = ALL_GROUPS.filter(g => allowedIds.includes(g.id));
   }
 }
