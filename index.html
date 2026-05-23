@@ -2469,7 +2469,7 @@ function renderPlayer(player, displayNum, groupIdx, subGroupIdx, originalIdx) {
 }
 
 function renderSubGroup(sg, showTime, groupIdx, subGroupIdx) {
-  const totalPlayers = sg.players.length;
+  const totalPlayers = sg.players.filter(p => !p.hidden).length;
   const fid = `${groupIdx}-${subGroupIdx}`;
   const sorted = sortedPlayers(sg.players);
   return `
@@ -3128,6 +3128,23 @@ function enableProfileEdit() {
     <div class="modal-actions" style="padding:0;margin-top:4px">
       <button class="btn-form-cancel" onclick="cancelProfileEdit()">ביטול</button>
       <button class="btn-form-submit" onclick="savePlayerProfile()">💾 שמור</button>
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
+      <label style="font-size:12px;color:#718096;font-weight:600;display:block;margin-bottom:6px">↔ העבר לחוג אחר</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="pe-transfer-target" class="modal-input" style="flex:1;min-width:180px">
+          <option value="">— בחר חוג יעד —</option>
+          ${groups.flatMap((tg, tgi) =>
+            tg.subGroups.map((sg, sgi) => {
+              const isCurrent = tgi === groupIdx && sgi === subGroupIdx;
+              if (isCurrent) return '';
+              const label = tg.subGroups.length > 1 ? `${tg.name} · ${sg.time||sgi+1}` : tg.name;
+              return `<option value="${tgi}|${sgi}">${label}</option>`;
+            })
+          ).join('')}
+        </select>
+        <button onclick="transferPlayer()" style="background:#744210;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">↔ העבר</button>
+      </div>
     </div>`;
   document.getElementById('pe-last').focus();
 }
@@ -3209,6 +3226,72 @@ async function savePlayerProfile() {
   document.getElementById('profileTitle').textContent = `${lastName} ${firstName}`;
   renderProfileDetails();
 }
+
+async function transferPlayer() {
+  const val = document.getElementById('pe-transfer-target')?.value;
+  if (!val) { showToast('בחר חוג יעד', 'error'); return; }
+  const [tgi, sgi] = val.split('|').map(Number);
+  const { groupIdx, subGroupIdx, playerIdx } = _profileState;
+  const srcG  = groups[groupIdx];
+  const dstG  = groups[tgi];
+  const player = srcG.subGroups[subGroupIdx]?.players[playerIdx];
+  if (!player) return;
+  const { first, last } = splitName(player.name);
+  if (!confirm(`להעביר את ${first} ${last} מ"${srcG.name}" ל"${dstG.name}"?`)) return;
+
+  // Build the player object to add to destination
+  const newPlayer = {
+    firstName: first, lastName: last,
+    birthYear: player.birthYear || null,
+    fedId: player.fedId || null,
+    joinDate: new Date().toISOString().split('T')[0],
+    ...(player.rating   != null && { rating: player.rating }),
+    ...(player.cardExpiry     && { cardExpiry: player.cardExpiry }),
+  };
+
+  try {
+    // 1. Hide in source group
+    player.hidden = true;
+    // 2. Add to destination group
+    const addedPlayer = {
+      name: `${first} ${last}`, birthYear: player.birthYear || null,
+      fedId: player.fedId || null, joinDate: newPlayer.joinDate, added: true,
+      paymentStatus: player.paymentStatus || 'trial',
+      gender: player.gender || null, rating: player.rating || null,
+      cardExpiry: player.cardExpiry || null,
+    };
+    dstG.subGroups[sgi].players.push(addedPlayer);
+
+    if (db) {
+      await Promise.all([
+        db.ref(`hidden_players/${srcG.id}/${subGroupIdx}/${playerIdx}`).set(true),
+        db.ref(`extra_players/${dstG.id}/${sgi}`).push(newPlayer),
+        db.ref(`history/${srcG.id}/${subGroupIdx}`).push({
+          type: 'left', playerName: `${last} ${first}`, timestamp: Date.now(),
+          playerIdx, subGroupIdx, note: `הועבר ל"${dstG.name}"`
+        }),
+        db.ref(`history/${dstG.id}/${sgi}`).push({
+          type: 'joined', playerName: `${last} ${first}`, timestamp: Date.now(),
+          note: `הועבר מ"${srcG.name}"`
+        }),
+      ]);
+    }
+
+    // Refresh both panels
+    const srcPanel = document.getElementById('panel-' + srcG.id);
+    if (srcPanel) srcPanel.innerHTML = renderGroup(srcG, groupIdx);
+    const dstPanel = document.getElementById('panel-' + dstG.id);
+    if (dstPanel) dstPanel.innerHTML = renderGroup(dstG, tgi);
+
+    document.getElementById('playerProfileModal').classList.remove('open');
+    showToast(`${first} ${last} הועבר/ה ל"${dstG.name}" ✅`);
+  } catch(e) {
+    player.hidden = false;
+    dstG.subGroups[sgi].players.pop();
+    showToast('שגיאה בהעברה: ' + e.message, 'error');
+  }
+}
+window.transferPlayer = transferPlayer;
 
 async function loadProfileAttendance() {
   const div = document.getElementById('profileAttendance');
@@ -6139,7 +6222,8 @@ async function executeRemovePlayer() {
   if (db) {
     try {
       await db.ref(`history/${g.id}/${subGroupIdx}`).push({
-        type: 'left', playerName: `${last} ${first}`, timestamp: Date.now()
+        type: 'left', playerName: `${last} ${first}`, timestamp: Date.now(),
+        playerIdx, subGroupIdx
       });
       await db.ref(`hidden_players/${g.id}/${subGroupIdx}/${playerIdx}`).set(true);
       showToast(`${first} ${last} הוסר/ה ✅`);
@@ -7336,24 +7420,69 @@ async function toggleHistory(groupIdx) {
     const entries = [];
     for (let si = 0; si < g.subGroups.length; si++) {
       const snap = await db.ref(`history/${g.id}/${si}`).get();
-      if (snap.val()) Object.values(snap.val()).forEach(e => entries.push({...e, subName: g.subGroups[si].time || ''}));
+      if (snap.val()) Object.entries(snap.val()).forEach(([histKey, e]) =>
+        entries.push({ ...e, histKey, si, subName: g.subGroups[si]?.time || '' })
+      );
     }
     entries.sort((a,b) => b.timestamp - a.timestamp);
-    if (entries.length === 0) { contentDiv.innerHTML = '<div style="padding:12px;color:#718096;font-size:13px;text-align:center">אין היסטוריה עדיין</div>'; return; }
-    const rows = entries.slice(0,50).map(e => {
-      const icon = e.type === 'joined' ? '➕' : '➖';
-      const color = e.type === 'joined' ? '#276749' : '#e53e3e';
-      const label = e.type === 'joined' ? 'הצטרף/ה' : 'עזב/ה';
-      const date = new Date(e.timestamp).toLocaleDateString('he-IL');
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #f0f4f8;font-size:13px">
-        <span>${icon}</span><span style="font-weight:600;color:${color}">${label}</span>
-        <span style="flex:1">${e.playerName}${e.subName ? ' · '+e.subName : ''}</span>
-        <span style="color:#718096;font-size:12px">${date}</span>
-      </div>`;
+    if (entries.length === 0) {
+      contentDiv.innerHTML = '<div style="padding:12px;color:#718096;font-size:13px;text-align:center">אין היסטוריה עדיין</div>';
+      return;
+    }
+    const rows = entries.slice(0, 50).map(e => {
+      const isLeft  = e.type === 'left' || e.type === 'removed';
+      const icon    = isLeft ? '➖' : '➕';
+      const color   = isLeft ? '#e53e3e' : '#276749';
+      const label   = isLeft ? 'עזב/ה' : 'הצטרף/ה';
+      const date    = new Date(e.timestamp).toLocaleDateString('he-IL');
+      // Show restore button only for removed entries that have playerIdx
+      const canRestore = isLeft && e.playerIdx != null;
+      const restoreBtn = canRestore
+        ? `<button onclick="restorePlayer(${groupIdx},${e.si ?? e.subGroupIdx ?? 0},${e.playerIdx},'${e.histKey}')"
+             style="background:#ebf8ff;border:1px solid #bee3f8;color:#2b6cb0;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">
+             ↩ שחזר</button>`
+        : '';
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #f0f4f8;font-size:13px">
+          <span>${icon}</span>
+          <span style="font-weight:600;color:${color}">${label}</span>
+          <span style="flex:1">${e.playerName}${e.subName ? ' · '+e.subName : ''}</span>
+          <span style="color:#718096;font-size:12px">${date}</span>
+          ${restoreBtn}
+        </div>`;
     }).join('');
     contentDiv.innerHTML = `<div style="background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px">${rows}</div>`;
-  } catch(err) { contentDiv.innerHTML = ''; }
+  } catch(err) { console.error('toggleHistory:', err); contentDiv.innerHTML = ''; }
 }
+window.toggleHistory = toggleHistory;
+
+async function restorePlayer(groupIdx, subGroupIdx, playerIdx, histKey) {
+  const g = groups[groupIdx];
+  if (!g) return;
+  const player = g.subGroups[subGroupIdx]?.players[playerIdx];
+  if (!player) { showToast('לא ניתן לשחזר — שחקן לא נמצא', 'error'); return; }
+  const { first, last } = splitName(player.name);
+  try {
+    player.hidden = false;
+    if (db) {
+      await db.ref(`hidden_players/${g.id}/${subGroupIdx}/${playerIdx}`).remove();
+      await db.ref(`history/${g.id}/${subGroupIdx}`).push({
+        type: 'joined', playerName: `${last} ${first}`, timestamp: Date.now(),
+        playerIdx, subGroupIdx, note: 'שוחזר'
+      });
+    }
+    const panelEl = document.getElementById('panel-' + g.id);
+    if (panelEl) panelEl.innerHTML = renderGroup(g, groupIdx);
+    showToast(`${first} ${last} שוחזר/ה ✅`);
+    // Refresh history view
+    const histDiv = document.getElementById(`historyContent-${groupIdx}`);
+    if (histDiv) { histDiv.style.display = 'none'; toggleHistory(groupIdx); }
+  } catch(e) {
+    player.hidden = true;
+    showToast('שגיאה בשחזור: ' + e.message, 'error');
+  }
+}
+window.restorePlayer = restorePlayer;
 
 function printPlayerList(groupIdx, subGroupIdx) {
   const g = groups[groupIdx];
