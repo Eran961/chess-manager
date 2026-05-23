@@ -3024,6 +3024,7 @@ function openPlayerProfile(groupIdx, subGroupIdx, playerIdx) {
   document.getElementById('profileSubtitle').textContent =
     sg.time ? `${g.name} · ${sg.time}` : g.name;
   document.getElementById('btnProfileEdit').style.display = '';
+  resetProfileFooter();
   renderProfileDetails();
   document.getElementById('profileAttendance').innerHTML =
     '<div style="color:#718096;font-size:13px">טוען...</div>';
