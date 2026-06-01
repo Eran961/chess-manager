@@ -2404,6 +2404,11 @@ const ALL_GROUPS = [
 let groups = [];
 let _useDbGroups = false; // true = groups come from Firebase, don't fallback to ALL_GROUPS
 
+let teams = [];
+let _useDbTeams = false;
+let _addPlayerIsTeam = false;
+let _teamProfileState = { teamIdx: 0, subTeamIdx: 0, playerIdx: 0 };
+
 async function loadDbGroups() {
   if (!db) return;
   try {
@@ -2423,8 +2428,106 @@ async function loadDbGroups() {
   } catch(e) { console.error('loadDbGroups error:', e); }
 }
 
+const ALL_TEAMS = [
+  // ── מערב ──
+  { name: 'נגבה',       coach: 'אריק',            region: 'מערב' },
+  { name: 'כרמים',      coach: 'אריק',            region: 'מערב' },
+  { name: 'נוה עוז',    coach: 'אדוארד',          region: 'מערב' },
+  { name: 'מרחבים',     coach: 'אדוארד',          region: 'מערב' },
+  { name: 'שקמה',       coach: 'אדוארד',          region: 'מערב' },
+  { name: 'נווה חוף',   coach: 'אדוארד',          region: 'מערב' },
+  { name: 'חופית',      coach: 'אדוארד',          region: 'מערב' },
+  { name: 'מיתרים',     coach: 'ליבי',            region: 'מערב' },
+  { name: 'נווה דקלים', coach: 'יבגני',           region: 'מערב' },
+  { name: 'ידלין',      coach: 'גלב',             region: 'מערב' },
+  { name: 'ניצנים',     coach: 'יבגני',           region: 'מערב' },
+  { name: 'עין הקורא',  coach: 'גלב',             region: 'מערב' },
+  { name: 'בארי',       coach: 'יבגני',           region: 'מערב' },
+  // ── מזרח ──
+  { name: 'יפה נוף',    coach: 'גלב',             region: 'מזרח' },
+  { name: 'יסוד המעלה', coach: 'יבגני',           region: 'מזרח' },
+  { name: 'אריאל שרון', coach: 'ליבי',            region: 'מזרח' },
+  { name: 'הדרים',      coach: 'ליבי',            region: 'מזרח' },
+  { name: 'מישור הנוף', coach: 'ליבי',            region: 'מזרח' },
+  { name: 'עדיני',      coach: 'ליבי',            region: 'מזרח' },
+  { name: 'אשכולות',    coach: 'גלב',             region: 'מזרח' },
+  { name: 'אלונים',     coach: 'שמוליק',          region: 'מזרח' },
+  { name: 'אליאב',      coach: 'זאב',             region: 'מזרח' },
+  { name: 'רקפות',      coach: 'יבגני לבנזוב',   region: 'מזרח' },
+  { name: 'תמיר',       coach: 'זאב',             region: 'מזרח' },
+];
+
+async function loadDbTeams() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('dbTeams').get();
+    const data = snap.val();
+    if (data) {
+      _useDbTeams = true;
+      teams = Object.entries(data).map(([id, t]) => ({
+        id,
+        name:     t.name     || '',
+        coach:    t.coach    || '',
+        coachWa:  t.coachWa  || '',
+        region:   t.region   || '',
+        subGroups: (t.subGroups || [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }])
+                    .map(sg => ({ time: sg.time || '', players: [] }))
+      }));
+    } else if (db) {
+      // Seed default teams on first load
+      await seedDefaultTeams();
+    }
+  } catch(e) { console.error('loadDbTeams error:', e); }
+}
+
+async function seedDefaultTeams() {
+  _useDbTeams = true;
+  const subGroups = [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }];
+  for (const t of ALL_TEAMS) {
+    const id = 'team-' + t.name.replace(/[^א-תa-zA-Z0-9]/g, '-').replace(/-+/g,'-') + '-' + Date.now() % 100000;
+    const def = { name: t.name, coach: t.coach, coachWa: '', region: t.region, subGroups };
+    try {
+      await db.ref(`dbTeams/${id}`).set(def);
+      teams.push({ id, ...def, subGroups: subGroups.map(sg => ({ time: sg.time, players: [] })) });
+    } catch(e) { console.error('seedDefaultTeams error for ' + t.name, e); }
+  }
+  showToast(`${teams.length} נבחרות נטענו ✅`);
+}
+
+async function loadTeamPlayers() {
+  if (!db || teams.length === 0) return;
+  try {
+    const snap = await db.ref('team_players').get();
+    const playersData = snap.val() || {};
+    teams.forEach((team, teamIdx) => {
+      const tPlayers = playersData[team.id] || {};
+      team.subGroups.forEach((sg, si) => {
+        const sgPlayers = tPlayers[si] || {};
+        sg.players = Object.entries(sgPlayers).map(([key, p], idx) => ({
+          name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+          firstName:     p.firstName     || '',
+          lastName:      p.lastName      || '',
+          birthYear:     p.birthYear     || null,
+          fedId:         p.fedId         || null,
+          rating:        p.rating        || null,
+          cardExpiry:    p.cardExpiry    || null,
+          gender:        p.gender        || null,
+          joinDate:      p.joinDate      || null,
+          paymentStatus: p.paymentStatus || 'trial',
+          parentPhone:   p.parentPhone   || null,
+          parentEmail:   p.parentEmail   || null,
+          hidden:        !!p.hidden,
+          _key: key
+        }));
+      });
+      const panel = document.getElementById('panel-team-' + team.id);
+      if (panel) panel.innerHTML = renderTeamGroup(team, teamIdx);
+    });
+  } catch(e) { console.error('loadTeamPlayers error:', e); }
+}
+
 async function initializeApp() {
-  if (db) await loadDbGroups();
+  if (db) { await loadDbGroups(); await loadDbTeams(); }
   buildApp();
 }
 
@@ -2530,6 +2633,381 @@ function renderGroup(group, groupIdx) {
   return header + group.subGroups.map((sg, si) => renderSubGroup(sg, showTime, groupIdx, si)).join('') + historySection;
 }
 
+// ===== TEAMS RENDERING =====
+
+function renderTeamPlayer(player, displayNum, teamIdx, subTeamIdx, originalIdx) {
+  const { first, last } = splitName(player.name);
+  const age = calcAge(player.birthYear);
+  return `
+    <tr class="player-row" onclick="openTeamPlayerProfile(${teamIdx},${subTeamIdx},${originalIdx})">
+      <td class="idx">${displayNum}</td>
+      <td class="last-name">${last || '<span style="color:#cbd5e0">—</span>'}</td>
+      <td class="first-name">${first}</td>
+      <td class="gender-col">${player.gender === 'm' ? '👦 ז' : player.gender === 'f' ? '👧 נ' : '<span style="color:#cbd5e0">—</span>'}</td>
+      <td class="birth">
+        ${player.birthYear
+          ? `<span class="year">${player.birthYear}</span><span class="age">גיל ${age}</span>`
+          : '<span style="color:#cbd5e0">לא ידוע</span>'}
+      </td>
+      <td class="${player.fedId ? 'fed-id' : 'fed-id empty'}">${player.fedId ? player.fedId : 'חסר'}</td>
+      <td style="text-align:center">${player.rating ? `<span style="font-weight:600;color:#2b6cb0">${player.rating}</span>` : '<span style="color:#cbd5e0">—</span>'}</td>
+      <td style="text-align:center">${player.cardExpiry ? cardExpiryBadge(player.cardExpiry) : '<span style="color:#cbd5e0">—</span>'}</td>
+    </tr>`;
+}
+
+function renderTeamSubGroup(sg, showTime, teamIdx, subTeamIdx) {
+  const totalPlayers = sg.players.filter(p => !p.hidden).length;
+  const sorted = sortedPlayers(sg.players);
+  return `
+    <div class="sub-group">
+      <div class="sub-group-header">
+        <div>
+          <h3>${showTime && sg.time ? sg.time : 'שחקנים'}</h3>
+          <div class="count">${totalPlayers} שחקנים</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-add-in-header" onclick="toggleAddTeamPlayerForm(${teamIdx},${subTeamIdx})">➕ הוסף שחקן</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>שם משפחה</th><th>שם פרטי</th>
+              <th class="gender-col">מין</th><th>שנת לידה / גיל</th>
+              <th>מספר שחקן</th>
+              <th style="text-align:center">מד כושר</th>
+              <th style="text-align:center">כרטיס שחמטאי</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map(({ p, i }, dn) => renderTeamPlayer(p, dn + 1, teamIdx, subTeamIdx, i)).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="stats-bar">
+        ${sg.players.filter(p => p.fedId && !p.hidden).length} מתוך ${totalPlayers} עם מספר שחקן
+      </div>
+    </div>`;
+}
+
+function renderTeamGroup(team, teamIdx) {
+  const showTime = team.subGroups.length > 1;
+  const coachBadge = team.coach ? `<span style="font-size:13px;color:rgba(255,255,255,0.75);font-weight:400"> · ${team.coach}</span>` : '';
+  const header = `<div class="group-name-header">
+    <span class="group-name-text">🏅 ${team.name}</span>${coachBadge}
+  </div>`;
+  return header + team.subGroups.map((sg, si) => renderTeamSubGroup(sg, showTime, teamIdx, si)).join('');
+}
+
+// --- Add team player (reuses addPlayerModal) ---
+
+function toggleAddTeamPlayerForm(teamIdx, subTeamIdx) {
+  _addPlayerIsTeam = true;
+  _modalGroupIdx   = teamIdx;
+  _modalSubGroupIdx = subTeamIdx;
+  const t  = teams[teamIdx];
+  const sg = t.subGroups[subTeamIdx];
+  const title = (t.subGroups.length > 1 && sg.time) ? `${t.name} — ${sg.time}` : t.name;
+  document.getElementById('modalTitle').textContent = title;
+  ['mf-first','mf-last','mf-year','mf-fed','mf-rating','mf-card-expiry','mf-phone','mf-email'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('input-error'); }
+  });
+  const ageEl = document.getElementById('mf-age');
+  if (ageEl) ageEl.textContent = '';
+  const statusEl = document.getElementById('fed-lookup-status');
+  if (statusEl) statusEl.textContent = '';
+  document.getElementById('addPlayerModal').classList.add('open');
+  setTimeout(() => document.getElementById('mf-first')?.focus(), 50);
+}
+window.toggleAddTeamPlayerForm = toggleAddTeamPlayerForm;
+
+// --- Team player profile ---
+
+function openTeamPlayerProfile(teamIdx, subTeamIdx, playerIdx) {
+  _teamProfileState = { teamIdx, subTeamIdx, playerIdx };
+  _profileVersion++; // cancel any pending loadProfileAttendance from a group player
+  const t = teams[teamIdx];
+  const p = t?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!p) return;
+  const modal = document.getElementById('playerProfileModal');
+  if (!modal) return;
+  modal.dataset.isTeam = 'true';
+  const { first, last } = splitName(p.name);
+  document.getElementById('profileTitle').textContent    = `${last} ${first}`;
+  document.getElementById('profileSubtitle').textContent = '🏅 ' + t.name;
+  // Show edit button but wire it to the team edit function
+  const editBtn = document.getElementById('btnProfileEdit');
+  editBtn.style.display = '';
+  editBtn.onclick = enableTeamProfileEdit;
+  // Change attendance section title to "נוכחות בנבחרת"
+  const attHeader = modal.querySelector('.profile-section:last-of-type .profile-section-header span');
+  if (attHeader) attHeader.textContent = 'נוכחות בנבחרת';
+  document.getElementById('profileAttendance').innerHTML =
+    '<div style="color:#718096;font-size:13px">טוען...</div>';
+  renderTeamProfileDetails();
+  modal.classList.add('open');
+  loadTeamProfileAttendance();
+}
+window.openTeamPlayerProfile = openTeamPlayerProfile;
+
+function renderTeamProfileDetails() {
+  const { teamIdx, subTeamIdx, playerIdx } = _teamProfileState;
+  const t = teams[teamIdx];
+  const p = t?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!p) return;
+  const { first, last } = splitName(p.name);
+  const age = calcAge(p.birthYear);
+  const det = document.getElementById('profileDetails');
+  if (!det) return;
+  det.innerHTML = `
+    <div class="profile-detail-row">
+      <span class="profile-label">שם משפחה</span>
+      <span class="profile-value">${last || '—'}</span>
+    </div>
+    <div class="profile-detail-row">
+      <span class="profile-label">שם פרטי</span>
+      <span class="profile-value">${first || '—'}</span>
+    </div>
+    <div class="profile-detail-row">
+      <span class="profile-label">שנת לידה</span>
+      <span class="profile-value">${p.birthYear ? `${p.birthYear}${age ? ` (גיל ${age})` : ''}` : '—'}</span>
+    </div>
+    <div class="profile-detail-row">
+      <span class="profile-label">מספר שחקן</span>
+      <span class="profile-value">${p.fedId ? `<a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#2b6cb0">${p.fedId}</a>` : '—'}</span>
+    </div>
+    ${p.rating ? `<div class="profile-detail-row">
+      <span class="profile-label">מד כושר</span>
+      <span class="profile-value" style="color:#2b6cb0;font-weight:700">${p.rating}</span>
+    </div>` : ''}
+    ${p.cardExpiry ? `<div class="profile-detail-row">
+      <span class="profile-label">כרטיס שחמטאי</span>
+      <span class="profile-value">${cardExpiryBadge(p.cardExpiry)}</span>
+    </div>` : ''}
+    <div class="profile-detail-row">
+      <span class="profile-label">תשלום</span>
+      <span class="profile-value">
+        ${(s => `<span class="pay-badge pay-${s}">${{trial:'ניסיון',pending:'ממתין לתשלום',paid:'שילם ✓'}[s]}</span>`)(p.paymentStatus || 'trial')}
+      </span>
+    </div>
+    ${p.parentPhone ? `<div class="profile-detail-row">
+      <span class="profile-label">📞 הורה</span>
+      <span class="profile-value" dir="ltr"><a href="tel:${p.parentPhone}" style="color:#2b6cb0;text-decoration:none">${p.parentPhone}</a></span>
+    </div>` : ''}
+    ${p.parentEmail ? `<div class="profile-detail-row">
+      <span class="profile-label">✉ מייל</span>
+      <span class="profile-value" dir="ltr"><a href="mailto:${p.parentEmail}" style="color:#2b6cb0;text-decoration:none;font-size:13px">${p.parentEmail}</a></span>
+    </div>` : ''}`;
+  const footer = document.getElementById('profileFooter');
+  if (footer) footer.innerHTML =
+    '<button class="btn-remove-player" onclick="confirmRemoveTeamPlayer()">🗑 הסר מנבחרת</button>';
+}
+window.renderTeamProfileDetails = renderTeamProfileDetails;
+
+function enableTeamProfileEdit() {
+  const { teamIdx, subTeamIdx, playerIdx } = _teamProfileState;
+  const t = teams[teamIdx];
+  const p = t?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!p) return;
+  const { first, last } = splitName(p.name);
+  const age = p.birthYear ? `גיל ${CURRENT_YEAR - p.birthYear}` : '';
+  const det = document.getElementById('profileDetails');
+  if (!det) return;
+  det.innerHTML = `
+    <div class="modal-field">
+      <label>שם משפחה <span class="required">*</span></label>
+      <input type="text" id="pe-last" value="${last}">
+    </div>
+    <div class="modal-field">
+      <label>שם פרטי <span class="required">*</span></label>
+      <input type="text" id="pe-first" value="${first}">
+    </div>
+    <div class="modal-field">
+      <label>שנת לידה</label>
+      <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1990" max="${CURRENT_YEAR - 2}"
+        placeholder="לדוגמה: 2015" oninput="updatePeAge(this.value)">
+      <div class="age-hint" id="pe-age">${age}</div>
+    </div>
+    <div class="modal-field">
+      <label>מספר שחקן</label>
+      <input type="number" id="pe-fed" value="${p.fedId || ''}" placeholder="לא חובה">
+    </div>
+    <div class="modal-field">
+      <label>מין</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="pe-gender-m" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" onclick="selectGender('m')">זכר</button>
+        <button type="button" id="pe-gender-f" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" onclick="selectGender('f')">נקבה</button>
+      </div>
+      <input type="hidden" id="pe-gender" value="${p.gender || ''}">
+    </div>
+    <div class="modal-field">
+      <label>מד כושר</label>
+      <input type="number" id="pe-rating" value="${p.rating || ''}" placeholder="לא חובה">
+    </div>
+    <div class="modal-field">
+      <label>תוקף כרטיס שחמטאי</label>
+      <input type="date" id="pe-card" value="${p.cardExpiry || ''}">
+    </div>
+    <div class="modal-field">
+      <label>סטטוס תשלום</label>
+      <div class="pay-select">
+        <button type="button" class="pay-btn${(p.paymentStatus||'trial')==='trial'?' active-trial':''}" onclick="selectPayStatus(this,'trial')">ניסיון</button>
+        <button type="button" class="pay-btn${p.paymentStatus==='pending'?' active-pending':''}" onclick="selectPayStatus(this,'pending')">ממתין לתשלום</button>
+        <button type="button" class="pay-btn${p.paymentStatus==='paid'?' active-paid':''}" onclick="selectPayStatus(this,'paid')">שילם ✓</button>
+      </div>
+      <input type="hidden" id="pe-pay" value="${p.paymentStatus || 'trial'}">
+    </div>
+    <div class="modal-field">
+      <label>📞 טלפון הורה</label>
+      <input type="tel" id="pe-phone" value="${p.parentPhone || ''}" placeholder="לא חובה" dir="ltr">
+    </div>
+    <div class="modal-field">
+      <label>✉ מייל הורה</label>
+      <input type="email" id="pe-email" value="${p.parentEmail || ''}" placeholder="לא חובה" dir="ltr">
+    </div>
+    <div class="modal-actions" style="padding:0;margin-top:4px">
+      <button class="btn-form-cancel" onclick="renderTeamProfileDetails()">ביטול</button>
+      <button class="btn-form-submit" onclick="saveTeamPlayerProfile()">💾 שמור</button>
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
+      <label style="font-size:12px;color:#718096;font-weight:600;display:block;margin-bottom:6px">↔ העבר לנבחרת אחרת</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="pe-team-transfer-target" class="modal-input" style="flex:1;min-width:180px">
+          <option value="">— בחר נבחרת יעד —</option>
+          ${teams.flatMap((tm, tmi) =>
+            tm.subGroups.map((sg, sgi) => {
+              if (tmi === teamIdx && sgi === subTeamIdx) return '';
+              const label = tm.subGroups.length > 1 ? `${tm.name} · ${sg.time||sgi+1}` : tm.name;
+              return `<option value="${tmi}|${sgi}">${label}</option>`;
+            })
+          ).join('')}
+        </select>
+        <button onclick="transferTeamPlayer()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">↔ העבר</button>
+      </div>
+    </div>`;
+  det.querySelector('#pe-last')?.focus();
+  // Hide the header edit button while in edit mode (actions are in the form itself)
+  document.getElementById('btnProfileEdit').style.display = 'none';
+  const footer = document.getElementById('profileFooter');
+  if (footer) footer.innerHTML = '';
+}
+window.enableTeamProfileEdit = enableTeamProfileEdit;
+
+async function saveTeamPlayerProfile() {
+  const { teamIdx, subTeamIdx, playerIdx } = _teamProfileState;
+  const t = teams[teamIdx];
+  const p = t?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!p) return;
+  const firstName  = document.getElementById('pe-first')?.value?.trim() || '';
+  const lastName   = document.getElementById('pe-last')?.value?.trim()  || '';
+  const birthYear  = parseInt(document.getElementById('pe-year')?.value)   || null;
+  const gender     = document.getElementById('pe-gender')?.value         || null;
+  const fedId      = document.getElementById('pe-fed')?.value?.trim()   || null;
+  const rating     = parseInt(document.getElementById('pe-rating')?.value) || null;
+  const cardExpiry = document.getElementById('pe-card')?.value           || null;
+  const paymentStatus = document.getElementById('pe-pay')?.value   || 'trial';
+  const parentPhone   = document.getElementById('pe-phone')?.value?.trim() || null;
+  const parentEmail   = document.getElementById('pe-email')?.value?.trim() || null;
+  p.name = `${firstName} ${lastName}`.trim();
+  p.firstName = firstName; p.lastName = lastName;
+  p.birthYear = birthYear; p.gender = gender;
+  p.fedId = fedId; p.rating = rating; p.cardExpiry = cardExpiry;
+  p.paymentStatus = paymentStatus; p.parentPhone = parentPhone; p.parentEmail = parentEmail;
+  if (db && p._key) {
+    try {
+      await db.ref(`team_players/${t.id}/${subTeamIdx}/${p._key}`).update(
+        { firstName, lastName, birthYear, gender, fedId, rating, cardExpiry, paymentStatus, parentPhone: parentPhone||null, parentEmail: parentEmail||null }
+      );
+      showToast('הנתונים נשמרו ✅');
+    } catch(e) { showToast('שגיאה: ' + e.message, 'error'); return; }
+  }
+  const panel = document.getElementById('panel-team-' + t.id);
+  if (panel) panel.innerHTML = renderTeamGroup(t, teamIdx);
+  // Restore edit button
+  const editBtn = document.getElementById('btnProfileEdit');
+  if (editBtn) { editBtn.style.display = ''; editBtn.onclick = enableTeamProfileEdit; }
+  renderTeamProfileDetails();
+}
+window.saveTeamPlayerProfile = saveTeamPlayerProfile;
+
+function confirmRemoveTeamPlayer() {
+  const { teamIdx, subTeamIdx, playerIdx } = _teamProfileState;
+  const t = teams[teamIdx];
+  const p = t?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!p) return;
+  const { first, last } = splitName(p.name);
+  const footer = document.getElementById('profileFooter');
+  if (footer) footer.innerHTML = `
+    <span style="font-size:13px;color:#c53030">האם להסיר את ${first} ${last} מהנבחרת?</span>
+    <button class="btn-remove-player" onclick="executeRemoveTeamPlayer()">✅ כן, הסר</button>
+    <button class="btn-form-cancel" onclick="renderTeamProfileDetails()">ביטול</button>`;
+}
+window.confirmRemoveTeamPlayer = confirmRemoveTeamPlayer;
+
+async function executeRemoveTeamPlayer() {
+  const { teamIdx, subTeamIdx, playerIdx } = _teamProfileState;
+  const t = teams[teamIdx];
+  const p = t?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!p) { showToast('שגיאה: שחקן לא נמצא', 'error'); return; }
+  const { first, last } = splitName(p.name);
+  p.hidden = true;
+  document.getElementById('playerProfileModal')?.classList.remove('open');
+  const panel = document.getElementById('panel-team-' + t.id);
+  if (panel) panel.innerHTML = renderTeamGroup(t, teamIdx);
+  if (db && p._key) {
+    try {
+      await db.ref(`team_players/${t.id}/${subTeamIdx}/${p._key}/hidden`).set(true);
+      showToast(`${first} ${last} הוסר/ה מהנבחרת ✅`);
+    } catch(e) {
+      p.hidden = false;
+      if (panel) panel.innerHTML = renderTeamGroup(t, teamIdx);
+      showToast('שגיאה: ' + e.message, 'error');
+    }
+  }
+}
+window.executeRemoveTeamPlayer = executeRemoveTeamPlayer;
+
+async function transferTeamPlayer() {
+  const val = document.getElementById('pe-team-transfer-target')?.value;
+  if (!val) { showToast('בחר נבחרת יעד', 'error'); return; }
+  const [dstTmi, dstSgi] = val.split('|').map(Number);
+  const { teamIdx, subTeamIdx, playerIdx } = _teamProfileState;
+  const srcT = teams[teamIdx];
+  const dstT = teams[dstTmi];
+  const p    = srcT?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!srcT || !dstT || !p) { showToast('שגיאה', 'error'); return; }
+  const { first, last } = splitName(p.name);
+  p.hidden = true;
+  document.getElementById('playerProfileModal')?.classList.remove('open');
+  const srcPanel = document.getElementById('panel-team-' + srcT.id);
+  if (srcPanel) srcPanel.innerHTML = renderTeamGroup(srcT, teamIdx);
+  if (db && p._key) {
+    try {
+      const newRef = await db.ref(`team_players/${dstT.id}/${dstSgi}`).push({
+        firstName: p.firstName, lastName: p.lastName, birthYear: p.birthYear,
+        gender: p.gender, fedId: p.fedId, rating: p.rating, cardExpiry: p.cardExpiry,
+        paymentStatus: p.paymentStatus, parentPhone: p.parentPhone||null,
+        parentEmail: p.parentEmail||null, joinDate: new Date().toISOString().split('T')[0]
+      });
+      await db.ref(`team_players/${srcT.id}/${subTeamIdx}/${p._key}/hidden`).set(true);
+      // Add to destination in memory
+      const newP = { ...p, hidden: false, _key: newRef.key };
+      dstT.subGroups[dstSgi].players.push(newP);
+      const dstPanel = document.getElementById('panel-team-' + dstT.id);
+      if (dstPanel) dstPanel.innerHTML = renderTeamGroup(dstT, dstTmi);
+      logAudit('transfer_player', srcT.id, srcT.name, `${last} ${first} → ${dstT.name}`);
+      showToast(`${first} ${last} הועבר/ה ל"${dstT.name}" ✅`);
+    } catch(e) {
+      p.hidden = false;
+      if (srcPanel) srcPanel.innerHTML = renderTeamGroup(srcT, teamIdx);
+      showToast('שגיאה: ' + e.message, 'error');
+    }
+  }
+}
+window.transferTeamPlayer = transferTeamPlayer;
+
 // ===== ADD PLAYER FUNCTIONS =====
 
 let _modalGroupIdx = 0;
@@ -2556,6 +3034,7 @@ function toggleAddPlayerForm(groupIdx, subGroupIdx) {
 function closeAddModal(e) {
   if (e && e.target !== document.getElementById('addPlayerModal')) return;
   document.getElementById('addPlayerModal').classList.remove('open');
+  _addPlayerIsTeam = false;
 }
 
 function updateModalAge(val) {
@@ -2671,6 +3150,31 @@ async function submitAddPlayer() {
   const ratingRaw = document.getElementById('mf-rating').value.trim();
   const rating = ratingRaw ? (parseInt(ratingRaw) || null) : null;
   const cardExpiry = document.getElementById('mf-card-expiry').value || null;
+
+  // ── Route to team if adding to a נבחרת ──────────────────
+  if (_addPlayerIsTeam) {
+    _addPlayerIsTeam = false;
+    const teamIdx    = _modalGroupIdx;
+    const subTeamIdx = _modalSubGroupIdx;
+    const t  = teams[teamIdx];
+    const sg = t.subGroups[subTeamIdx];
+    const newPlayer = { name: `${firstName} ${lastName}`, firstName, lastName, birthYear, fedId, joinDate, rating, cardExpiry, gender: null, paymentStatus: 'trial', parentPhone, parentEmail, hidden: false };
+    sg.players.push(newPlayer);
+    document.getElementById('addPlayerModal').classList.remove('open');
+    if (db) {
+      try {
+        const ref = await db.ref(`team_players/${t.id}/${subTeamIdx}`).push(
+          { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null, parentPhone: parentPhone || null, parentEmail: parentEmail || null, paymentStatus: 'trial' }
+        );
+        newPlayer._key = ref.key;
+      } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); }
+    }
+    const panel = document.getElementById('panel-team-' + t.id);
+    if (panel) panel.innerHTML = renderTeamGroup(t, teamIdx);
+    showToast(`${firstName} ${lastName} נוסף/ה לנבחרת ✅`);
+    return;
+  }
+
   const player = { name: `${firstName} ${lastName}`, birthYear, fedId, joinDate, added: true, parentPhone, parentEmail, rating, cardExpiry };
   const groupIdx = _modalGroupIdx;
   const subGroupIdx = _modalSubGroupIdx;
@@ -2768,6 +3272,12 @@ const attState = {
   groupIdx: 0,
   subGroupIdx: 0,
   date: defaultDateForGroup(ALL_GROUPS[0].dayOfWeek),
+};
+
+const teamAttState = {
+  teamIdx: 0,
+  subTeamIdx: 0,
+  date: new Date().toISOString().split('T')[0],
 };
 
 function attPath() {
@@ -2919,6 +3429,139 @@ async function saveAttendance() {
   btn.textContent = '💾 שמור נוכחות';
 }
 
+// ===== TEAM ATTENDANCE =====
+
+function onTeamAttChange(val) {
+  teamAttState.teamIdx = parseInt(val);
+  teamAttState.subTeamIdx = 0;
+  const t = teams[teamAttState.teamIdx];
+  const subSel = document.getElementById('teamAttSubSel');
+  if (subSel) {
+    subSel.innerHTML = t.subGroups.map((sg, i) => `<option value="${i}">${sg.time || 'שחקנים'}</option>`).join('');
+    subSel.disabled = t.subGroups.length === 1;
+  }
+  loadTeamAttendance();
+}
+window.onTeamAttChange = onTeamAttChange;
+
+function onTeamAttSubChange(val) {
+  teamAttState.subTeamIdx = parseInt(val);
+  loadTeamAttendance();
+}
+window.onTeamAttSubChange = onTeamAttSubChange;
+
+function onTeamAttDateChange(val) {
+  teamAttState.date = val;
+  loadTeamAttendance();
+}
+window.onTeamAttDateChange = onTeamAttDateChange;
+
+async function loadTeamAttendance() {
+  const list = document.getElementById('teamAttPlayerList');
+  if (!list) return;
+  const t  = teams[teamAttState.teamIdx];
+  const sg = t?.subGroups[teamAttState.subTeamIdx];
+  if (!t || !sg) { list.innerHTML = '<div style="padding:20px;color:#a0aec0;text-align:center">אין שחקנים</div>'; return; }
+  list.innerHTML = '<div style="padding:20px;color:#718096;text-align:center">טוען...</div>';
+  let presentMap = {};
+  if (db && teamAttState.date) {
+    try {
+      const snap = await db.ref(`team_attendance/${t.id}/${teamAttState.subTeamIdx}/${teamAttState.date}`).get();
+      presentMap = snap.val() || {};
+    } catch(e) { console.error('loadTeamAttendance error:', e); }
+  }
+  renderTeamPlayerList(presentMap);
+}
+window.loadTeamAttendance = loadTeamAttendance;
+
+function renderTeamPlayerList(presentMap) {
+  const list = document.getElementById('teamAttPlayerList');
+  if (!list) return;
+  const t  = teams[teamAttState.teamIdx];
+  const sg = t?.subGroups[teamAttState.subTeamIdx];
+  if (!sg || sg.players.length === 0) {
+    list.innerHTML = '<div style="padding:20px;color:#a0aec0;text-align:center">אין שחקנים בנבחרת זו</div>';
+    return;
+  }
+  list.innerHTML = sortedPlayers(sg.players).map(({ p, i }) => {
+    const { first, last } = splitName(p.name);
+    const key = p._key || String(i);
+    const isPresent = !!(presentMap[key] || presentMap[i]);
+    return `
+      <label class="att-player-row${isPresent ? ' present' : ''}" data-playerkey="${key}" onclick="toggleTeamPlayer(this)">
+        <input type="checkbox" ${isPresent ? 'checked' : ''} onclick="event.stopPropagation(); toggleTeamPlayerByCheckbox(this)">
+        <span class="att-player-name">${last} ${first}</span>
+        <span class="att-present-badge">נוכח ✓</span>
+      </label>`;
+  }).join('');
+  updateTeamSummary();
+}
+
+function toggleTeamPlayer(row) {
+  const cb = row.querySelector('input[type=checkbox]');
+  cb.checked = !cb.checked;
+  row.classList.toggle('present', cb.checked);
+  updateTeamSummary();
+}
+window.toggleTeamPlayer = toggleTeamPlayer;
+
+function toggleTeamPlayerByCheckbox(cb) {
+  cb.closest('.att-player-row').classList.toggle('present', cb.checked);
+  updateTeamSummary();
+}
+window.toggleTeamPlayerByCheckbox = toggleTeamPlayerByCheckbox;
+
+function updateTeamSummary() {
+  const total   = document.querySelectorAll('#teamAttPlayerList .att-player-row').length;
+  const present = document.querySelectorAll('#teamAttPlayerList .att-player-row.present').length;
+  const summary = document.getElementById('teamAttSummary');
+  if (summary) summary.textContent = `נוכחים: ${present} מתוך ${total}`;
+}
+
+function teamAttCheckAll() {
+  document.querySelectorAll('#teamAttPlayerList .att-player-row').forEach(row => {
+    row.querySelector('input').checked = true; row.classList.add('present');
+  });
+  updateTeamSummary();
+}
+window.teamAttCheckAll = teamAttCheckAll;
+
+function teamAttClearAll() {
+  document.querySelectorAll('#teamAttPlayerList .att-player-row').forEach(row => {
+    row.querySelector('input').checked = false; row.classList.remove('present');
+  });
+  updateTeamSummary();
+}
+window.teamAttClearAll = teamAttClearAll;
+
+async function saveTeamAttendance() {
+  const btn    = document.getElementById('btnTeamSave');
+  const status = document.getElementById('teamSaveStatus');
+  if (!teamAttState.date) { showToast('בחר תאריך', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'שומר...';
+  const presentMap = {};
+  document.querySelectorAll('#teamAttPlayerList .att-player-row').forEach(row => {
+    if (row.querySelector('input[type=checkbox]').checked)
+      presentMap[row.dataset.playerkey] = true;
+  });
+  try {
+    const t = teams[teamAttState.teamIdx];
+    if (db) {
+      await db.ref(`team_attendance/${t.id}/${teamAttState.subTeamIdx}/${teamAttState.date}`)
+        .set(Object.keys(presentMap).length > 0 ? presentMap : null);
+      logAudit('update_attendance', t.id, t.name,
+        `נבחרת · ${teamAttState.date} · ${Object.keys(presentMap).length} נוכחים`);
+    }
+    status.textContent = '✅ נשמר!'; status.classList.add('visible');
+    setTimeout(() => status.classList.remove('visible'), 2500);
+  } catch(e) {
+    status.textContent = '❌ שגיאה'; status.classList.add('visible');
+    setTimeout(() => status.classList.remove('visible'), 3000);
+  }
+  btn.disabled = false; btn.textContent = '💾 שמור נוכחות';
+}
+window.saveTeamAttendance = saveTeamAttendance;
+
 function onAttGroupChange(val) {
   attState.groupIdx = parseInt(val);
   attState.subGroupIdx = 0;
@@ -2962,43 +3605,56 @@ function rebuildSubGroupSelect() {
 }
 
 function renderAttendancePanel() {
+  return `
+    <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
+      <button id="att-tab-btn-groups" onclick="switchAttTab('groups')"
+        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid #2b6cb0;color:#2b6cb0;margin-bottom:-2px">
+        🗓 חוגים
+      </button>
+      <button id="att-tab-btn-teams" onclick="switchAttTab('teams')"
+        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid transparent;color:#718096;margin-bottom:-2px">
+        🏅 נבחרות
+      </button>
+    </div>
+    <div id="att-content-groups">${renderGroupAttendanceContent()}</div>
+    <div id="att-content-teams" style="display:none">${renderTeamAttendanceContent()}</div>`;
+}
+
+function switchAttTab(tab) {
+  const isGroups = tab === 'groups';
+  document.getElementById('att-content-groups').style.display = isGroups ? '' : 'none';
+  document.getElementById('att-content-teams').style.display  = isGroups ? 'none' : '';
+  const gBtn = document.getElementById('att-tab-btn-groups');
+  const tBtn = document.getElementById('att-tab-btn-teams');
+  if (gBtn) { gBtn.style.borderBottom = isGroups ? '3px solid #2b6cb0' : '3px solid transparent'; gBtn.style.color = isGroups ? '#2b6cb0' : '#718096'; }
+  if (tBtn) { tBtn.style.borderBottom = isGroups ? '3px solid transparent' : '3px solid #553c9a'; tBtn.style.color = isGroups ? '#718096' : '#553c9a'; }
+  if (!isGroups) loadTeamAttendance();
+}
+window.switchAttTab = switchAttTab;
+
+function renderGroupAttendanceContent() {
   const firebaseWarning = (FIREBASE_CONFIG.apiKey === 'YOUR_API_KEY_HERE')
-    ? `<div class="firebase-warning">⚠️ Firebase לא מוגדר — הנוכחות לא תישמר בענן.<br>הוסף את ה-API Key ב-<code>FIREBASE_CONFIG.apiKey</code> בקוד.</div>`
-    : '';
-
-  const groupOptions = groups.map((g, i) =>
-    `<option value="${i}">${g.name}</option>`
-  ).join('');
-
+    ? `<div class="firebase-warning">⚠️ Firebase לא מוגדר — הנוכחות לא תישמר בענן.</div>` : '';
+  const groupOptions = groups.map((g, i) => `<option value="${i}">${g.name}</option>`).join('');
   const g = groups[attState.groupIdx];
   if (!g) return '<div style="padding:24px;text-align:center;color:#888;">אין חוגים זמינים</div>';
-  const subGroupOptions = g.subGroups.map((sg, i) =>
-    `<option value="${i}">${sg.time || 'קבוצה'}</option>`
-  ).join('');
-
+  const subGroupOptions = g.subGroups.map((sg, i) => `<option value="${i}">${sg.time || 'קבוצה'}</option>`).join('');
   const subGroupDisabled = g.subGroups.length === 1 ? 'disabled' : '';
-
   return `
     ${firebaseWarning}
     <div class="att-card">
-      <div class="att-card-header">🗓 ניהול נוכחות</div>
+      <div class="att-card-header">🗓 נוכחות חוגים</div>
       <div class="att-controls">
-        <div class="att-control-row">
-          <label>חוג</label>
-          <select id="attGroupSel" onchange="onAttGroupChange(this.value)">${groupOptions}</select>
-        </div>
-        <div class="att-control-row">
-          <label>קבוצה</label>
-          <select id="attSubGroupSel" onchange="onAttSubGroupChange(this.value)" ${subGroupDisabled}>${subGroupOptions}</select>
-        </div>
-        <div class="att-control-row">
-          <label>תאריך</label>
+        <div class="att-control-row"><label>חוג</label>
+          <select id="attGroupSel" onchange="onAttGroupChange(this.value)">${groupOptions}</select></div>
+        <div class="att-control-row"><label>קבוצה</label>
+          <select id="attSubGroupSel" onchange="onAttSubGroupChange(this.value)" ${subGroupDisabled}>${subGroupOptions}</select></div>
+        <div class="att-control-row"><label>תאריך</label>
           <select id="attDateSel" onchange="onAttDateChange(this.value)">
             ${getGroupDates(groups[attState.groupIdx].dayOfWeek).map(d =>
               `<option value="${d}"${d === attState.date ? ' selected' : ''}>${formatDate(d)}</option>`
             ).join('')}
-          </select>
-        </div>
+          </select></div>
       </div>
       <div class="att-actions">
         <button class="btn-att btn-check-all" onclick="attCheckAll()">✓ סמן הכל</button>
@@ -3014,12 +3670,50 @@ function renderAttendancePanel() {
     </div>`;
 }
 
+function renderTeamAttendanceContent() {
+  if (teams.length === 0) return `
+    <div class="att-card" style="text-align:center;padding:32px;color:#a0aec0">
+      <div style="font-size:32px;margin-bottom:8px">🏅</div>
+      אין נבחרות עדיין — צור נבחרת ב<a href="#" onclick="switchTab('settings');return false" style="color:#553c9a">הגדרות</a>
+    </div>`;
+  const t = teams[teamAttState.teamIdx] || teams[0];
+  const teamOptions  = teams.map((tm, i) => `<option value="${i}" ${i===teamAttState.teamIdx?'selected':''}>${tm.name}</option>`).join('');
+  const subOptions   = t.subGroups.map((sg, i) => `<option value="${i}" ${i===teamAttState.subTeamIdx?'selected':''}>${sg.time || 'שחקנים'}</option>`).join('');
+  const subDisabled  = t.subGroups.length === 1 ? 'disabled' : '';
+  return `
+    <div class="att-card">
+      <div class="att-card-header">🏅 נוכחות נבחרות</div>
+      <div class="att-controls">
+        <div class="att-control-row"><label>נבחרת</label>
+          <select id="teamAttSel" onchange="onTeamAttChange(this.value)">${teamOptions}</select></div>
+        <div class="att-control-row"><label>קטגוריה</label>
+          <select id="teamAttSubSel" onchange="onTeamAttSubChange(this.value)" ${subDisabled}>${subOptions}</select></div>
+        <div class="att-control-row"><label>תאריך</label>
+          <input type="date" id="teamAttDate" value="${teamAttState.date}"
+            onchange="onTeamAttDateChange(this.value)"
+            style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit"></div>
+      </div>
+      <div class="att-actions">
+        <button class="btn-att btn-check-all" onclick="teamAttCheckAll()">✓ סמן הכל</button>
+        <button class="btn-att btn-clear-all" onclick="teamAttClearAll()">✗ נקה הכל</button>
+        <button class="btn-att btn-save" id="btnTeamSave" onclick="saveTeamAttendance()">💾 שמור נוכחות</button>
+        <span class="save-status" id="teamSaveStatus"></span>
+      </div>
+      <div class="att-player-list" id="teamAttPlayerList">
+        <div style="padding:20px;color:#718096;text-align:center">בחר נבחרת ותאריך</div>
+      </div>
+      <div class="att-summary" id="teamAttSummary"></div>
+    </div>`;
+}
+
 // ===== PLAYER PROFILE FUNCTIONS =====
 
 let _profileState = { groupIdx: 0, subGroupIdx: 0, playerIdx: 0 };
+let _profileVersion = 0; // incremented on every profile open to cancel stale async
 
 function openPlayerProfile(groupIdx, subGroupIdx, playerIdx) {
   _profileState = { groupIdx, subGroupIdx, playerIdx };
+  _profileVersion++;
   const g = groups[groupIdx];
   const sg = g.subGroups[subGroupIdx];
   const p = sg.players[playerIdx];
@@ -3027,7 +3721,14 @@ function openPlayerProfile(groupIdx, subGroupIdx, playerIdx) {
   document.getElementById('profileTitle').textContent = `${last} ${first}`;
   document.getElementById('profileSubtitle').textContent =
     sg.time ? `${g.name} · ${sg.time}` : g.name;
-  document.getElementById('btnProfileEdit').style.display = '';
+  const editBtnGrp = document.getElementById('btnProfileEdit');
+  editBtnGrp.style.display = '';
+  editBtnGrp.onclick = enableProfileEdit; // restore group edit function
+  document.getElementById('playerProfileModal').dataset.isTeam = 'false';
+  // Restore group attendance title
+  const modal = document.getElementById('playerProfileModal');
+  const attHeader = modal?.querySelector('.profile-section:last-of-type .profile-section-header span');
+  if (attHeader) attHeader.textContent = 'נוכחות בחוג';
   resetProfileFooter();
   renderProfileDetails();
   document.getElementById('profileAttendance').innerHTML =
@@ -3302,6 +4003,7 @@ window.transferPlayer = transferPlayer;
 async function loadProfileAttendance() {
   const div = document.getElementById('profileAttendance');
   if (!div || !db) { if (div) div.innerHTML = ''; return; }
+  const myVersion = _profileVersion; // snapshot — if it changes we're stale
 
   const { groupIdx, subGroupIdx, playerIdx } = _profileState;
   const g = groups[groupIdx];
@@ -3311,6 +4013,7 @@ async function loadProfileAttendance() {
     const allDates = Object.keys(allAtt).sort();
     const total    = allDates.length;
 
+    if (_profileVersion !== myVersion) return; // stale — a newer profile was opened
     if (total === 0) {
       div.innerHTML = '<div style="color:#718096;font-size:13px">אין נתוני נוכחות עדיין.</div>';
       return;
@@ -3325,6 +4028,7 @@ async function loadProfileAttendance() {
       return `<span class="att-dot ${was ? 'present' : 'absent'}" title="${formatDate(d)}">${was ? '✓' : '✗'}</span>`;
     }).join('');
 
+    if (_profileVersion !== myVersion) return; // stale check before writing
     div.innerHTML = `
       <div class="profile-att-numbers">
         <span class="profile-att-big" style="color:${color}">${presentCount}</span>
@@ -3339,6 +4043,51 @@ async function loadProfileAttendance() {
   } catch(e) {
     div.innerHTML = '';
     console.error('Profile attendance error:', e);
+  }
+}
+
+async function loadTeamProfileAttendance() {
+  const div = document.getElementById('profileAttendance');
+  if (!div || !db) { if (div) div.innerHTML = ''; return; }
+  const myVersion = _profileVersion;
+  const { teamIdx, subTeamIdx, playerIdx } = _teamProfileState;
+  const t = teams[teamIdx];
+  const p = t?.subGroups[subTeamIdx]?.players[playerIdx];
+  if (!t || !p) { div.innerHTML = ''; return; }
+  try {
+    const snap = await db.ref(`team_attendance/${t.id}/${subTeamIdx}`).get();
+    if (_profileVersion !== myVersion) return;
+    const allAtt   = snap.val() || {};
+    const allDates = Object.keys(allAtt).sort();
+    const total    = allDates.length;
+    if (total === 0) {
+      div.innerHTML = '<div style="color:#718096;font-size:13px">אין נתוני נוכחות עדיין לנבחרת.</div>';
+      return;
+    }
+    // Match by player key or by index
+    const pKey = p._key;
+    const presentCount = allDates.filter(d => pKey ? allAtt[d]?.[pKey] : allAtt[d]?.[playerIdx]).length;
+    const pct   = Math.round((presentCount / total) * 100);
+    const color = pct >= 80 ? '#276749' : pct >= 60 ? '#d69e2e' : '#e53e3e';
+    const recentDots = allDates.slice(-10).reverse().map(d => {
+      const was = pKey ? allAtt[d]?.[pKey] : allAtt[d]?.[playerIdx];
+      return `<span class="att-dot ${was ? 'present' : 'absent'}" title="${formatDate(d)}">${was ? '✓' : '✗'}</span>`;
+    }).join('');
+    if (_profileVersion !== myVersion) return;
+    div.innerHTML = `
+      <div class="profile-att-numbers">
+        <span class="profile-att-big" style="color:${color}">${presentCount}</span>
+        <span class="profile-att-small">מתוך ${total} אימונים</span>
+        <span class="profile-att-pct" style="color:${color}">${pct}%</span>
+      </div>
+      <div class="progress-bar-wrap" style="margin:8px 0 10px">
+        <div class="progress-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <div class="att-dots-row">${recentDots}</div>
+      <div style="font-size:11px;color:#a0aec0;margin-top:6px">10 אימונים אחרונים</div>`;
+  } catch(e) {
+    div.innerHTML = '';
+    console.error('Team profile attendance error:', e);
   }
 }
 
@@ -4194,6 +4943,19 @@ function renderDashboard(missingAtt = []) {
         <button class="btn-shortcut" style="background:#fffdf0;color:#b7791f"   onclick="switchTab('club-tournaments')"><span>🏆</span>תחרויות</button>
       </div>
     </div>
+
+    ${currentUser?.role === 'admin' ? `
+    <!-- Audit widget — admin only -->
+    <div class="dash-card" style="margin-top:20px">
+      <div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>📊 פעילות מדריכים אחרונה</span>
+        <a href="#" onclick="switchTab('audit');loadAuditLog();return false"
+           style="font-size:12px;font-weight:600;color:#2b6cb0;text-decoration:none">לכל הפעילות ←</a>
+      </div>
+      <div id="dash-audit-rows" style="padding:4px 18px 8px">
+        <div style="color:#a0aec0;font-size:13px;padding:10px 0">טוען...</div>
+      </div>
+    </div>` : ''}
   </div>`;
 }
 
@@ -4465,6 +5227,16 @@ if (!_useDbGroups && (!groups || groups.length === 0)) {
     groups = ALL_GROUPS.filter(g => allowedIds.includes(g.id));
   }
 }
+if (!_useDbTeams && teams.length === 0) {
+  teams = ALL_TEAMS.map((t, i) => ({
+    id: 'default-team-' + i,
+    name: t.name,
+    coach: t.coach,
+    coachWa: '',
+    region: t.region,
+    subGroups: [{ time: 'נבחרת א', players: [] }, { time: 'נבחרת ב', players: [] }]
+  }));
+}
 // Build tabs
 const tabsBar = document.getElementById('tabsBar');
 const content = document.getElementById('content');
@@ -4488,13 +5260,14 @@ const homeBtn = document.createElement('button');
 homeBtn.className = 'tab-btn active';
 homeBtn.dataset.tab = 'home';
 homeBtn.textContent = '🏠 בית';
-homeBtn.onclick = () => { switchTab('home'); document.getElementById('panel-home').innerHTML = renderDashboard(); loadWeeklyAttendanceAlerts().then(m => { const hp = document.getElementById('panel-home'); if(hp) hp.innerHTML = renderDashboard(m); }); };
+homeBtn.onclick = () => { switchTab('home'); document.getElementById('panel-home').innerHTML = renderDashboard(); loadAuditWidget(); loadWeeklyAttendanceAlerts().then(m => { const hp = document.getElementById('panel-home'); if(hp) { hp.innerHTML = renderDashboard(m); loadAuditWidget(); } }); };
 tabsBar.appendChild(homeBtn);
 const homePanel = document.createElement('div');
 homePanel.className = 'tab-panel active';
 homePanel.id = 'panel-home';
 homePanel.innerHTML = renderDashboard();
 content.appendChild(homePanel);
+setTimeout(() => loadAuditWidget(), 500);
 
 addSidebarLabel('חוגים');
 if (_useDbGroups && groups.length === 0) {
@@ -4529,12 +5302,51 @@ if (_useDbGroups && groups.length === 0) {
   });
 }
 
+// ── נבחרות ──────────────────────────────────────
+if (teams.length > 0 || currentUser.role === 'admin') {
+  addSidebarLabel('נבחרות');
+  if (teams.length === 0) {
+    const emptyBtn = document.createElement('button');
+    emptyBtn.className = 'tab-btn'; emptyBtn.dataset.tab = 'teams-empty';
+    emptyBtn.style.cssText = 'color:#a0aec0;font-size:12px;cursor:default;font-style:italic';
+    emptyBtn.textContent = 'אין נבחרות עדיין';
+    tabsBar.appendChild(emptyBtn);
+  } else {
+    // Group by region
+    const regions = [...new Set(teams.map(t => t.region || ''))].filter(Boolean);
+    const noRegion = teams.filter(t => !t.region);
+    const addTeamTabs = (teamList) => {
+      teamList.forEach((team, _) => {
+        const i = teams.indexOf(team);
+        const btn = document.createElement('button');
+        btn.className = 'tab-btn'; btn.dataset.tab = 'team-' + team.id;
+        btn.textContent = '🏅 ' + team.name;
+        btn.onclick = () => switchTab('team-' + team.id);
+        tabsBar.appendChild(btn);
+        const panel = document.createElement('div');
+        panel.className = 'tab-panel'; panel.id = 'panel-team-' + team.id;
+        panel.innerHTML = renderTeamGroup(team, i);
+        content.appendChild(panel);
+      });
+    };
+    regions.forEach(region => {
+      // Sub-label for each region
+      const regionLabel = document.createElement('div');
+      regionLabel.style.cssText = 'padding:10px 16px 3px;font-size:10px;font-weight:700;letter-spacing:0.8px;color:rgba(255,255,255,0.45);text-transform:uppercase';
+      regionLabel.textContent = '― ' + region + ' ―';
+      tabsBar.appendChild(regionLabel);
+      addTeamTabs(teams.filter(t => t.region === region));
+    });
+    if (noRegion.length > 0) addTeamTabs(noRegion);
+  }
+}
+
 // ── ניהול ──────────────────────────────────────
 addSidebarLabel('ניהול');
 
 const attBtn = document.createElement('button');
 attBtn.className = 'tab-btn'; attBtn.dataset.tab = 'attendance'; attBtn.textContent = '🗓 נוכחות';
-attBtn.onclick = () => { switchTab('attendance'); loadAttendanceDates(); loadAttendanceFromFirebase(); };
+attBtn.onclick = () => { switchTab('attendance'); loadAttendanceDates(); loadAttendanceFromFirebase(); document.getElementById('att-content-groups').style.display=''; document.getElementById('att-content-teams').style.display='none'; };
 tabsBar.appendChild(attBtn);
 const attPanel = document.createElement('div');
 attPanel.className = 'tab-panel'; attPanel.id = 'panel-attendance'; attPanel.innerHTML = renderAttendancePanel();
@@ -6601,6 +7413,29 @@ function renderSettingsPanel() {
       </div>
     </div>
 
+    <div class="att-card">
+      <div class="att-card-header">🏅 ניהול נבחרות</div>
+      <div style="padding:20px">
+        <div style="margin-bottom:14px">${(() => {
+          if (teams.length === 0) return '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">אין נבחרות — צור את הראשונה</div>';
+          const regions = [...new Set(teams.map(t => t.region || ''))];
+          return regions.map(region => {
+            const regionTeams = teams.filter(t => (t.region || '') === region);
+            const regionHeader = region ? `<div style="font-size:11px;font-weight:700;color:#718096;letter-spacing:0.8px;text-transform:uppercase;padding:8px 4px 4px">― ${region} ―</div>` : '';
+            return regionHeader + regionTeams.map(t => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:4px">
+                <div>
+                  <span style="font-weight:600;font-size:14px">🏅 ${t.name}</span>
+                  ${t.coach ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${t.coach}</span>` : ''}
+                </div>
+                <button onclick="deleteDbTeam('${t.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק נבחרת">🗑</button>
+              </div>`).join('');
+          }).join('');
+        })()}</div>
+        <button onclick="openCreateTeamModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור נבחרת חדשה</button>
+      </div>
+    </div>
+
     <div class="att-card" style="border:1px solid #fed7d7">
       <div class="att-card-header" style="background:#fff5f5;color:#c53030">🏁 סיום שנה</div>
       <div style="padding:20px">
@@ -6825,6 +7660,117 @@ async function deleteDbGroup(groupId) {
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.deleteDbGroup = deleteDbGroup;
+
+// ===== CREATE / DELETE TEAM =====
+
+function openCreateTeamModal() {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:460px">
+        <div class="modal-header">
+          <span class="modal-title">➕ יצירת נבחרת חדשה</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div class="modal-field"><label>שם הנבחרת <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="ct-name" placeholder='לדוגמה: נבחרת עירונית נוער' class="modal-input"></div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>מאמן</label>
+              <input type="text" id="ct-coach" placeholder="שם המאמן" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>אזור</label>
+              <select id="ct-region" class="modal-input">
+                <option value="">― ללא אזור ―</option>
+                <option value="מערב">מערב</option>
+                <option value="מזרח">מזרח</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">קטגוריות <span style="font-size:12px;color:#a0aec0">(אם יש יותר מאחת)</span></label>
+            <div id="ct-subgroups" style="display:flex;flex-direction:column;gap:6px">
+              <div class="ct-sg-row" style="display:flex;gap:6px">
+                <input type="text" placeholder='לדוגמה: בנים / בנות / מעורב' class="modal-input ct-sg-input" style="flex:1">
+                <button onclick="this.closest('.ct-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>
+              </div>
+            </div>
+            <button onclick="addCtSubgroup()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;color:#4a5568;margin-top:6px">+ הוסף קטגוריה</button>
+          </div>
+          <button onclick="saveNewTeam()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 צור נבחרת</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openCreateTeamModal = openCreateTeamModal;
+
+function addCtSubgroup() {
+  const cont = document.getElementById('ct-subgroups');
+  if (!cont) return;
+  const row = document.createElement('div');
+  row.className = 'ct-sg-row'; row.style.cssText = 'display:flex;gap:6px';
+  row.innerHTML = `<input type="text" placeholder="קטגוריה נוספת" class="modal-input ct-sg-input" style="flex:1">
+    <button onclick="this.closest('.ct-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>`;
+  cont.appendChild(row);
+}
+window.addCtSubgroup = addCtSubgroup;
+
+async function saveNewTeam() {
+  const name  = document.getElementById('ct-name')?.value?.trim();
+  if (!name) { showToast('יש להזין שם נבחרת', 'error'); return; }
+  const coach  = document.getElementById('ct-coach')?.value?.trim()  || '';
+  const wa     = document.getElementById('ct-wa')?.value?.trim()     || '';
+  const region = document.getElementById('ct-region')?.value         || '';
+  const sgInputs = document.querySelectorAll('.ct-sg-input');
+  const subGroups = [...sgInputs].map(el => ({ time: el.value.trim() })).filter(sg => sg.time);
+  if (subGroups.length === 0) subGroups.push({ time: 'שחקנים' });
+  const id = 'team-' + name.replace(/[^a-zA-Z0-9א-ת]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
+  const teamDef = { name, coach, coachWa: wa, region, subGroups };
+  try {
+    await db.ref(`dbTeams/${id}`).set(teamDef);
+    _useDbTeams = true;
+    const newTeam = { id, ...teamDef, region, subGroups: subGroups.map(sg => ({ time: sg.time, players: [] })) };
+    teams.push(newTeam);
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`הנבחרת "${name}" נוצרה ✅`);
+    // Add tab dynamically
+    const tabsBar = document.getElementById('tabsBar');
+    const content = document.getElementById('content');
+    const tIdx = teams.length - 1;
+    // Remove "אין נבחרות" placeholder if present
+    document.querySelector('[data-tab="teams-empty"]')?.remove();
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn'; btn.dataset.tab = 'team-' + id;
+    btn.textContent = '🏅 ' + name;
+    btn.onclick = () => switchTab('team-' + id);
+    // Insert before the "ניהול" section label (end of נבחרות section)
+    const mgmtLabel = [...tabsBar.querySelectorAll('.sidebar-section-label')]
+      .find(el => el.textContent.trim() === 'ניהול');
+    tabsBar.insertBefore(btn, mgmtLabel || null);
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel'; panel.id = 'panel-team-' + id;
+    panel.innerHTML = renderTeamGroup(newTeam, tIdx);
+    content.appendChild(panel);
+    const sp = document.getElementById('panel-settings');
+    if (sp) sp.innerHTML = renderSettingsPanel();
+    switchTab('team-' + id);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveNewTeam = saveNewTeam;
+
+async function deleteDbTeam(teamId) {
+  if (!confirm('למחוק את הנבחרת לצמיתות? כל השחקנים שלה יימחקו.')) return;
+  try {
+    await db.ref(`dbTeams/${teamId}`).remove();
+    await db.ref(`team_players/${teamId}`).remove();
+    teams = teams.filter(t => t.id !== teamId);
+    document.querySelector(`[data-tab="team-${teamId}"]`)?.remove();
+    document.getElementById('panel-team-' + teamId)?.remove();
+    const sp = document.getElementById('panel-settings');
+    if (sp) sp.innerHTML = renderSettingsPanel();
+    showToast('הנבחרת נמחקה');
+    switchTab('home');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteDbTeam = deleteDbTeam;
 
 // ===== ARCHIVE PLAYER PICKER =====
 
@@ -7786,6 +8732,46 @@ async function loadAuditLog() {
   } catch(e) { el.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה: ${e.message}</div>`; }
 }
 window.loadAuditLog = loadAuditLog;
+
+async function loadAuditWidget() {
+  if (currentUser?.role !== 'admin') return;
+  const el = document.getElementById('dash-audit-rows');
+  if (!el) return;
+  try {
+    const snap = await db.ref('auditLog').orderByChild('ts').limitToLast(6).get();
+    const raw = snap.val() || {};
+    const entries = Object.values(raw).sort((a, b) => b.ts - a.ts).slice(0, 6);
+    if (!entries.length) {
+      el.innerHTML = '<div style="color:#a0aec0;font-size:13px;padding:10px 0">אין פעילות עדיין</div>';
+      return;
+    }
+    const now = Date.now();
+    el.innerHTML = entries.map(e => {
+      const meta = AUDIT_LABELS[e.action] || { label: e.action, color: '#718096', bg: '#f7fafc', icon: '•' };
+      const diff = now - e.ts;
+      const mins = Math.floor(diff / 60000);
+      const hrs  = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      const ago  = days > 0 ? `לפני ${days} יום${days > 1 ? 'ות' : ''}`
+                 : hrs  > 0 ? `לפני ${hrs} שעה${hrs > 1 ? 'ות' : ''}`
+                 : mins > 0 ? `לפני ${mins} דק'`
+                 : 'כרגע';
+      const detail = e.details ? ` · ${e.details}` : '';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f0f4f8">
+        <div style="width:30px;height:30px;border-radius:50%;background:${meta.bg};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${meta.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:#2d3748">${e.name}</div>
+          <div style="font-size:12px;color:#718096;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${meta.label}${detail}</div>
+        </div>
+        <div style="font-size:11px;color:#a0aec0;flex-shrink:0;white-space:nowrap">${ago}</div>
+      </div>`;
+    }).join('');
+  } catch(err) {
+    const el2 = document.getElementById('dash-audit-rows');
+    if (el2) el2.innerHTML = '<div style="color:#c53030;font-size:12px;padding:10px 0">שגיאה בטעינה</div>';
+  }
+}
+window.loadAuditWidget = loadAuditWidget;
 
 function buildAuditPanelHTML(entries, loading) {
   const instructors = [...new Set(entries.map(e => e.name))].sort();
@@ -8758,6 +9744,7 @@ function showToast(msg) {
 async function initData() {
   await loadSettings();
   await loadExtraPlayers();
+  await loadTeamPlayers();
   await loadPlayerOverrides();
   await loadHiddenPlayers();
   await loadPayments();
