@@ -291,6 +291,11 @@
     .pay-pending { background: #fefcbf; color: #744210; }
     .pay-paid    { background: #c6f6d5; color: #276749; }
 
+    .level-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .level-beginner    { background: #bee3f8; color: #2c5282; }
+    .level-intermediate{ background: #fef3c7; color: #92400e; }
+    .level-advanced    { background: #d1fae5; color: #065f46; }
+
     .group-name-header {
       display: flex;
       align-items: center;
@@ -534,6 +539,9 @@
       border-radius: 14px;
       width: 360px;
       max-width: calc(100vw - 32px);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
       box-shadow: 0 20px 60px rgba(0,0,0,0.25);
       overflow: hidden;
       animation: modalIn 0.18s ease;
@@ -568,7 +576,7 @@
     }
     .modal-close:hover { background: rgba(255,255,255,0.35); }
 
-    .modal-body { padding: 20px; }
+    .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
 
     .modal-field {
       margin-bottom: 14px;
@@ -597,7 +605,6 @@
       color: #276749;
       font-weight: 600;
       margin-top: 4px;
-      min-height: 16px;
     }
 
     .modal-actions {
@@ -909,8 +916,9 @@
     .pay-filter-bar { display:flex; gap:8px; padding:12px 20px; border-bottom:1px solid #e2e8f0; }
     .pay-filter-btn { padding:6px 16px; border-radius:20px; border:1px solid #e2e8f0; background:white; cursor:pointer; font-size:13px; font-family:inherit; font-weight:500; color:#4a5568; }
     .pay-filter-btn.active { background:#2b6cb0; color:white; border-color:#2b6cb0; }
+    .pay-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .pay-table { width:100%; border-collapse:collapse; font-size:13px; }
-    .pay-table thead th { background:#edf2f7; color:#4a5568; padding:10px 14px; text-align:right; font-weight:600; }
+    .pay-table thead th { background:#edf2f7; color:#4a5568; padding:10px 14px; text-align:right; font-weight:600; white-space:nowrap; }
     .pay-table tbody td { padding:10px 14px; border-bottom:1px solid #f0f4f8; }
     .pay-table tbody tr:hover td { background:#f7fafc; }
     .pay-quick-btn { padding:4px 12px; border-radius:8px; border:1px solid #bee3f8; background:#ebf8ff; color:#2b6cb0; cursor:pointer; font-size:12px; font-family:inherit; font-weight:600; }
@@ -979,9 +987,9 @@
     @media (max-width: 768px) {
       .tabs-bar {
         position: fixed;
-        top: 0; right: -220px;
+        top: 0; right: -240px;
         height: 100vh;
-        width: 220px;
+        width: 240px;
         transition: right 0.25s ease;
         box-shadow: -4px 0 20px rgba(0,0,0,0.4);
         z-index: 200;
@@ -995,11 +1003,13 @@
       .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
       .dash-stat-num { font-size: 26px; }
       .profile-modal-box { width: calc(100vw - 32px); }
+      /* all modals responsive */
+      .modal-overlay > div[style*="width"] { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important; }
     }
 
     /* ===== MOBILE (600px) ===== */
     @media (max-width: 600px) {
-      /* Header — stack vertically so user area doesn't overlap title */
+      /* Header */
       header {
         padding: 10px 16px;
         flex-direction: column;
@@ -1020,32 +1030,33 @@
       /* Content */
       .content { padding: 10px; }
 
-      /* Group name header */
+      /* Group/team name header */
       .group-name-header { font-size: 15px; padding: 10px 14px; }
-
-      /* Sub-group header */
       .sub-group-header { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
       .sub-group-header h3 { font-size: 14px; }
       .btn-add-in-header { font-size: 12px; padding: 5px 10px; }
 
-      /* Table — horizontal scroll; hide less-critical columns */
+      /* Tables — horizontal scroll + hide less-critical columns */
       .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      /* visible: # שם משפחה שם פרטי שנת לידה תשלום — hide: מין(4) מספר שחקן(6) מד כושר(7) כרטיס(8) הצטרפות(9) */
+      /* Groups (10 cols): hide מין(4) מספר שחקן(6) מד כושר(7) כרטיס(8) הצטרפות(9) */
+      /* Teams (11 cols): same + רמה(11) hidden too, show: # שם שנת לידה תשלום */
       table th:nth-child(4), table td:nth-child(4),
       table th:nth-child(6), table td:nth-child(6),
       table th:nth-child(7), table td:nth-child(7),
       table th:nth-child(8), table td:nth-child(8),
-      table th:nth-child(9), table td:nth-child(9) { display: none; }
+      table th:nth-child(9), table td:nth-child(9),
+      table th:nth-child(11), table td:nth-child(11) { display: none; }
       td, thead th { padding: 8px 10px; font-size: 13px; }
       td.idx { width: 24px; font-size: 11px; }
 
       /* Modals — full screen */
-      .modal-box { width: calc(100vw - 12px); max-width: calc(100vw - 12px); max-height: 94vh; }
-      .profile-modal-box { width: calc(100vw - 12px); max-width: calc(100vw - 12px); max-height: 95vh; }
+      .modal-box { width: calc(100vw - 12px) !important; max-width: calc(100vw - 12px) !important; max-height: 94vh; }
+      .profile-modal-box { width: calc(100vw - 12px) !important; max-width: calc(100vw - 12px) !important; max-height: 95vh; }
       .modal-header { padding: 14px 16px; }
       .modal-body { padding: 14px 16px; }
       .profile-section { padding: 14px 16px; }
       .modal-field label { font-size: 13px; }
+      .modal-actions { padding: 12px 16px; gap: 8px; }
 
       /* Dashboard */
       .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -1068,6 +1079,12 @@
       .reports-mode-bar { flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
       .mode-btn { font-size: 13px; padding: 8px 10px; }
 
+      /* Payments */
+      .pay-filter-bar { flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
+      .pay-filter-btn { font-size: 12px; padding: 5px 12px; }
+      .pay-summary-bar { gap: 8px; padding: 10px 14px; }
+      .pay-table thead th, .pay-table tbody td { padding: 7px 10px; font-size: 12px; }
+
       /* Search panel */
       .search-filters { flex-wrap: wrap; gap: 8px; }
 
@@ -1078,11 +1095,33 @@
       /* Name edit */
       .name-edit-input { min-width: 100px; }
 
-      /* Pay select */
+      /* Pay/level select buttons */
       .pay-select { flex-direction: column; }
+      .pay-btn { padding: 8px 12px; font-size: 13px; }
 
       /* Weekly modal */
       .weekly-box { padding: 16px 12px; }
+
+      /* Profile detail rows */
+      .profile-detail-row { font-size: 13px; padding: 7px 0; }
+      .profile-label { min-width: 80px; font-size: 12px; }
+
+      /* Stats bar */
+      .stats-bar { font-size: 12px; padding: 6px 14px; }
+    }
+
+    /* ===== VERY SMALL SCREENS (≤400px) ===== */
+    @media (max-width: 400px) {
+      header h1 { font-size: 15px; }
+      header p { display: none; }
+      .btn-header-sm { font-size: 11px; padding: 5px 10px; }
+      .content { padding: 8px; }
+      td, thead th { padding: 6px 8px; font-size: 12px; }
+      .sub-group-header { padding: 8px 12px; }
+      .btn-add-in-header { font-size: 11px; padding: 4px 8px; }
+      .modal-box, .profile-modal-box { border-radius: 10px; }
+      .dash-stats-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .dash-stat-num { font-size: 20px; }
     }
 
 
@@ -2079,6 +2118,14 @@ if(localStorage.getItem('ccm_loggedIn')){
         <div class="age-hint" id="mf-age"></div>
       </div>
       <div class="modal-field">
+        <label>טלפון הורה <span class="required">*</span></label>
+        <input type="tel" id="mf-phone" placeholder="05X-XXXXXXX" dir="ltr">
+      </div>
+      <div class="modal-field">
+        <label>מייל הורה <span class="required">*</span></label>
+        <input type="email" id="mf-email" placeholder="example@mail.com" dir="ltr">
+      </div>
+      <div class="modal-field" style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0">
         <label>מספר שחקן</label>
         <div style="display:flex;gap:8px;align-items:center">
           <input type="text" id="mf-fed" placeholder="לא חובה" inputmode="numeric" style="flex:1">
@@ -2096,14 +2143,6 @@ if(localStorage.getItem('ccm_loggedIn')){
       <div class="modal-field">
         <label>תוקף כרטיס שחמטאי</label>
         <input type="date" id="mf-card-expiry" placeholder="ממולא אוטומטית בשליפה">
-      </div>
-      <div class="modal-field">
-        <label>טלפון הורה</label>
-        <input type="tel" id="mf-phone" placeholder="לא חובה" dir="ltr">
-      </div>
-      <div class="modal-field">
-        <label>מייל הורה</label>
-        <input type="email" id="mf-email" placeholder="לא חובה" dir="ltr">
       </div>
     </div>
     <div class="modal-actions">
@@ -2638,6 +2677,16 @@ function renderGroup(group, groupIdx) {
 function renderTeamPlayer(player, displayNum, teamIdx, subTeamIdx, originalIdx) {
   const { first, last } = splitName(player.name);
   const age = calcAge(player.birthYear);
+  const joinDateDisplay = player.joinDate
+    ? `<span style="font-size:12px;color:#2b6cb0">${formatDate(player.joinDate)}</span>`
+    : '<span style="color:#cbd5e0">—</span>';
+  const payStatus = player.paymentStatus || 'trial';
+  const payLabel = { trial: 'ניסיון', pending: 'ממתין', paid: 'שילם ✓' }[payStatus];
+  const levelMap = { beginner: 'מתחיל', intermediate: 'ממשיך', advanced: 'מתקדם' };
+  const levelClass = { beginner: 'level-beginner', intermediate: 'level-intermediate', advanced: 'level-advanced' };
+  const levelDisplay = player.level && levelMap[player.level]
+    ? `<span class="level-badge ${levelClass[player.level]}">${levelMap[player.level]}</span>`
+    : '<span style="color:#cbd5e0">—</span>';
   return `
     <tr class="player-row" onclick="openTeamPlayerProfile(${teamIdx},${subTeamIdx},${originalIdx})">
       <td class="idx">${displayNum}</td>
@@ -2652,6 +2701,9 @@ function renderTeamPlayer(player, displayNum, teamIdx, subTeamIdx, originalIdx) 
       <td class="${player.fedId ? 'fed-id' : 'fed-id empty'}">${player.fedId ? player.fedId : 'חסר'}</td>
       <td style="text-align:center">${player.rating ? `<span style="font-weight:600;color:#2b6cb0">${player.rating}</span>` : '<span style="color:#cbd5e0">—</span>'}</td>
       <td style="text-align:center">${player.cardExpiry ? cardExpiryBadge(player.cardExpiry) : '<span style="color:#cbd5e0">—</span>'}</td>
+      <td style="text-align:center">${joinDateDisplay}</td>
+      <td style="text-align:center"><span class="pay-badge pay-${payStatus}">${payLabel}</span></td>
+      <td style="text-align:center">${levelDisplay}</td>
     </tr>`;
 }
 
@@ -2666,7 +2718,8 @@ function renderTeamSubGroup(sg, showTime, teamIdx, subTeamIdx) {
           <div class="count">${totalPlayers} שחקנים</div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn-add-in-header" onclick="toggleAddTeamPlayerForm(${teamIdx},${subTeamIdx})">➕ הוסף שחקן</button>
+          <button class="btn-add-in-header" style="background:rgba(255,255,255,0.15)" onclick="printTeamPlayerList(${teamIdx},${subTeamIdx})">🖨️ הדפס</button>
+          <button class="btn-add-in-header" onclick="toggleAddTeamPlayerForm(${teamIdx},${subTeamIdx})">➕ הוסף משתתף</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -2678,6 +2731,9 @@ function renderTeamSubGroup(sg, showTime, teamIdx, subTeamIdx) {
               <th>מספר שחקן</th>
               <th style="text-align:center">מד כושר</th>
               <th style="text-align:center">כרטיס שחמטאי</th>
+              <th style="text-align:center">הצטרפות</th>
+              <th style="text-align:center">תשלום</th>
+              <th style="text-align:center">רמה</th>
             </tr>
           </thead>
           <tbody>
@@ -2796,6 +2852,12 @@ function renderTeamProfileDetails() {
       <span class="profile-label">📞 הורה</span>
       <span class="profile-value" dir="ltr"><a href="tel:${p.parentPhone}" style="color:#2b6cb0;text-decoration:none">${p.parentPhone}</a></span>
     </div>` : ''}
+    <div class="profile-detail-row">
+      <span class="profile-label">רמה</span>
+      <span class="profile-value">
+        ${p.level ? `<span class="level-badge ${{beginner:'level-beginner',intermediate:'level-intermediate',advanced:'level-advanced'}[p.level]||''}">${{beginner:'מתחיל',intermediate:'ממשיך',advanced:'מתקדם'}[p.level]||'—'}</span>` : '<span style="color:#a0aec0">לא הוגדר</span>'}
+      </span>
+    </div>
     ${p.parentEmail ? `<div class="profile-detail-row">
       <span class="profile-label">✉ מייל</span>
       <span class="profile-value" dir="ltr"><a href="mailto:${p.parentEmail}" style="color:#2b6cb0;text-decoration:none;font-size:13px">${p.parentEmail}</a></span>
@@ -2860,6 +2922,15 @@ function enableTeamProfileEdit() {
       <input type="hidden" id="pe-pay" value="${p.paymentStatus || 'trial'}">
     </div>
     <div class="modal-field">
+      <label>רמה</label>
+      <div class="pay-select">
+        <button type="button" class="pay-btn${(p.level||'')==='beginner'?' active-trial':''}" onclick="selectLevel(this,'beginner')">מתחיל</button>
+        <button type="button" class="pay-btn${(p.level||'')==='intermediate'?' active-pending':''}" onclick="selectLevel(this,'intermediate')">ממשיך</button>
+        <button type="button" class="pay-btn${(p.level||'')==='advanced'?' active-paid':''}" onclick="selectLevel(this,'advanced')">מתקדם</button>
+      </div>
+      <input type="hidden" id="pe-level" value="${p.level || ''}">
+    </div>
+    <div class="modal-field">
       <label>📞 טלפון הורה</label>
       <input type="tel" id="pe-phone" value="${p.parentPhone || ''}" placeholder="לא חובה" dir="ltr">
     </div>
@@ -2908,17 +2979,19 @@ async function saveTeamPlayerProfile() {
   const rating     = parseInt(document.getElementById('pe-rating')?.value) || null;
   const cardExpiry = document.getElementById('pe-card')?.value           || null;
   const paymentStatus = document.getElementById('pe-pay')?.value   || 'trial';
+  const level         = document.getElementById('pe-level')?.value  || null;
   const parentPhone   = document.getElementById('pe-phone')?.value?.trim() || null;
   const parentEmail   = document.getElementById('pe-email')?.value?.trim() || null;
   p.name = `${firstName} ${lastName}`.trim();
   p.firstName = firstName; p.lastName = lastName;
   p.birthYear = birthYear; p.gender = gender;
   p.fedId = fedId; p.rating = rating; p.cardExpiry = cardExpiry;
-  p.paymentStatus = paymentStatus; p.parentPhone = parentPhone; p.parentEmail = parentEmail;
+  p.paymentStatus = paymentStatus; p.level = level || null;
+  p.parentPhone = parentPhone; p.parentEmail = parentEmail;
   if (db && p._key) {
     try {
       await db.ref(`team_players/${t.id}/${subTeamIdx}/${p._key}`).update(
-        { firstName, lastName, birthYear, gender, fedId, rating, cardExpiry, paymentStatus, parentPhone: parentPhone||null, parentEmail: parentEmail||null }
+        { firstName, lastName, birthYear, gender, fedId, rating, cardExpiry, paymentStatus, level: level||null, parentPhone: parentPhone||null, parentEmail: parentEmail||null }
       );
       showToast('הנתונים נשמרו ✅');
     } catch(e) { showToast('שגיאה: ' + e.message, 'error'); return; }
@@ -3125,7 +3198,9 @@ async function submitAddPlayer() {
   const yearEl  = document.getElementById('mf-year');
   const fedEl   = document.getElementById('mf-fed');
 
-  [firstEl, lastEl, yearEl].forEach(el => el.classList.remove('input-error'));
+  const phoneEl = document.getElementById('mf-phone');
+  const emailEl = document.getElementById('mf-email');
+  [firstEl, lastEl, yearEl, phoneEl, emailEl].forEach(el => el.classList.remove('input-error'));
 
   const firstName = firstEl.value.trim();
   const lastName  = lastEl.value.trim();
@@ -3141,12 +3216,14 @@ async function submitAddPlayer() {
     if (valid) yearEl.focus();
     valid = false;
   }
+  if (!phoneEl.value.trim()) { phoneEl.classList.add('input-error'); if (valid) phoneEl.focus(); valid = false; }
+  if (!emailEl.value.trim()) { emailEl.classList.add('input-error'); if (valid) emailEl.focus(); valid = false; }
   if (!valid) return;
 
   const fedId = fedVal ? (parseInt(fedVal) || null) : null;
   const joinDate = new Date().toISOString().split('T')[0];
-  const parentPhone = document.getElementById('mf-phone').value.trim() || null;
-  const parentEmail = document.getElementById('mf-email').value.trim() || null;
+  const parentPhone = phoneEl.value.trim() || null;
+  const parentEmail = emailEl.value.trim() || null;
   const ratingRaw = document.getElementById('mf-rating').value.trim();
   const rating = ratingRaw ? (parseInt(ratingRaw) || null) : null;
   const cardExpiry = document.getElementById('mf-card-expiry').value || null;
@@ -3869,12 +3946,18 @@ function selectGender(g) {
 }
 
 function selectPayStatus(btn, status) {
-  document.querySelectorAll('.pay-btn').forEach(b => {
-    b.className = 'pay-btn';
-  });
+  btn.closest('.pay-select').querySelectorAll('.pay-btn').forEach(b => { b.className = 'pay-btn'; });
   btn.className = `pay-btn active-${status}`;
   document.getElementById('pe-pay').value = status;
 }
+
+function selectLevel(btn, level) {
+  btn.closest('.pay-select').querySelectorAll('.pay-btn').forEach(b => { b.className = 'pay-btn'; });
+  const classMap = { beginner: 'active-trial', intermediate: 'active-pending', advanced: 'active-paid' };
+  btn.className = `pay-btn ${classMap[level]}`;
+  document.getElementById('pe-level').value = level;
+}
+window.selectLevel = selectLevel;
 
 function updatePeAge(val) {
   const year = parseInt(val);
@@ -5825,6 +5908,7 @@ if (currentUser?.role === 'admin') {
   content.appendChild(prospectsPanel);
 }
 
+if (currentUser?.role === 'admin') {
 // ── כלים ────────────────────────────────────────
 addSidebarLabel('כלים');
 
@@ -5835,6 +5919,7 @@ tabsBar.appendChild(hoursBtn);
 const hoursPanel = document.createElement('div');
 hoursPanel.className = 'tab-panel'; hoursPanel.id = 'panel-hours'; hoursPanel.innerHTML = renderHoursPanel();
 content.appendChild(hoursPanel);
+}
 
 if (currentUser?.role === 'admin') {
   addSidebarLabel('מערכת');
@@ -7761,10 +7846,10 @@ function onSearchInput(query, ageMin = null, ageMax = null, gender = '') {
       <td>${badge}</td>
     </tr>`;
   }).join('');
-  div.innerHTML = `<table class="pay-table">
+  div.innerHTML = `<div style="overflow-x:auto"><table class="pay-table">
     <thead><tr><th>#</th><th>שם משפחה</th><th>שם פרטי</th><th>גיל</th><th>קבוצה</th><th>תשלום</th></tr></thead>
     <tbody>${rows}</tbody>
-  </table><div style="padding:8px 0;font-size:12px;color:#718096;text-align:center">${results.length} תוצאות</div>`;
+  </table></div><div style="padding:8px 0;font-size:12px;color:#718096;text-align:center">${results.length} תוצאות</div>`;
 }
 
 // ===== SETTINGS =====
@@ -9466,6 +9551,32 @@ async function restorePlayer(groupIdx, subGroupIdx, playerIdx, histKey) {
   }
 }
 window.restorePlayer = restorePlayer;
+
+function printTeamPlayerList(teamIdx, subTeamIdx) {
+  const t = teams[teamIdx];
+  const sg = t.subGroups[subTeamIdx];
+  const label = sg.time ? `${t.name} · ${sg.time}` : t.name;
+  const rows = sortedPlayers(sg.players).filter(({p}) => !p.hidden).map(({p}, num) => {
+    const {first, last} = splitName(p.name);
+    const age = p.birthYear ? `${p.birthYear} (גיל ${CURRENT_YEAR - p.birthYear})` : '—';
+    const rating = p.rating || '—';
+    return `<tr><td>${num+1}</td><td>${last}</td><td>${first}</td><td>${age}</td><td>${p.fedId ? `<a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#2b6cb0">${p.fedId}</a>` : '—'}</td><td>${rating}</td></tr>`;
+  }).join('');
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
+    <title>רשימת שחקנים — ${label}</title>
+    <style>body{font-family:Arial,sans-serif;padding:24px;color:#1a1a2e}h2{font-size:18px;margin-bottom:4px}.sub{font-size:13px;color:#718096;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#2b6cb0;color:white;padding:8px 12px;text-align:right}td{padding:7px 12px;border-bottom:1px solid #e2e8f0}tr:nth-child(even) td{background:#f7fafc}</style>
+    </head><body>
+    <h2>רשימת שחקנים — ${label}</h2>
+    <div class="sub">${new Date().toLocaleDateString('he-IL')} · ${sg.players.filter(p=>!p.hidden).length} שחקנים</div>
+    <table><thead><tr><th>#</th><th>שם משפחה</th><th>שם פרטי</th><th>שנת לידה</th><th>מספר שחקן</th><th>מד כושר</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+window.printTeamPlayerList = printTeamPlayerList;
 
 function printPlayerList(groupIdx, subGroupIdx) {
   const g = groups[groupIdx];
