@@ -908,7 +908,7 @@
     .btn-shortcut span { font-size:24px; }
 
     /* ===== PAYMENTS PANEL ===== */
-    .pay-panel-card { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); max-width:900px; overflow:hidden; }
+    .pay-panel-card { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); max-width:900px; overflow:hidden; width:100%; }
     .pay-summary-bar { display:flex; gap:12px; padding:16px 20px; background:#f7fafc; border-bottom:1px solid #e2e8f0; flex-wrap:wrap; }
     .pay-summary-box { flex:1; min-width:100px; background:white; border-radius:10px; padding:12px 16px; text-align:center; border:2px solid #e2e8f0; }
     .pay-summary-box .psb-num { font-size:28px; font-weight:700; }
@@ -923,6 +923,13 @@
     .pay-table tbody tr:hover td { background:#f7fafc; }
     .pay-quick-btn { padding:4px 12px; border-radius:8px; border:1px solid #bee3f8; background:#ebf8ff; color:#2b6cb0; cursor:pointer; font-size:12px; font-family:inherit; font-weight:600; }
     .pay-quick-btn:hover { background:#bee3f8; }
+
+    /* ===== WEEKLY SCHEDULE GRID ===== */
+    .weekly-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .weekly-grid { display: flex; min-height: 320px; min-width: 480px; }
+
+    /* ===== DASHBOARD ALERT SPLIT ===== */
+    .dash-alert-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
 
     /* ===== CALENDAR PANEL ===== */
     .cal-card { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); width:100%; overflow:hidden; }
@@ -1003,8 +1010,22 @@
       .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
       .dash-stat-num { font-size: 26px; }
       .profile-modal-box { width: calc(100vw - 32px); }
-      /* all modals responsive */
       .modal-overlay > div[style*="width"] { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important; }
+      /* Tables — horizontal scroll */
+      .table-scroll, .pay-panel-card, .sat-panel, .att-card { max-width: 100%; }
+      table { min-width: 0; }
+      .pay-panel-card { border-radius: 10px; }
+      /* Weekly grid — scrollable */
+      .weekly-grid { min-width: 440px; min-height: 240px; }
+      /* Calendar monthly */
+      .cal-day { min-height: 52px; }
+      .cal-group-dot { font-size: 10px; padding: 1px 4px; }
+      /* Generic table wrapper for panels without table-scroll */
+      .fed-players-table-wrap, .tourn-table-wrap, .sat-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      /* Dashboard — stats wider on tablet */
+      .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
+      /* Attendance controls */
+      .att-controls { max-width: 100%; }
     }
 
     /* ===== MOBILE (600px) ===== */
@@ -1088,9 +1109,19 @@
       /* Search panel */
       .search-filters { flex-wrap: wrap; gap: 8px; }
 
-      /* Calendar */
+      /* Calendar monthly */
       .cal-day { font-size: 11px; min-height: 36px; }
       .cal-header { padding: 10px 14px; }
+      .cal-month-title { font-size: 15px; }
+      .cal-legend { padding: 8px 12px; gap: 6px; }
+
+      /* Weekly schedule grid */
+      .weekly-grid { min-height: 180px; }
+      .weekly-grid-wrap { border-radius: 0; }
+
+      /* Dashboard alert split — stack on mobile */
+      .dash-alert-split { grid-template-columns: 1fr; }
+      .dash-alert-split > div:first-child { border-left: none; border-bottom: 1px solid #e2e8f0; }
 
       /* Name edit */
       .name-edit-input { min-width: 100px; }
@@ -1106,8 +1137,36 @@
       .profile-detail-row { font-size: 13px; padding: 7px 0; }
       .profile-label { min-width: 80px; font-size: 12px; }
 
+      /* Profile att-numbers — wrap to 2 columns */
+      .profile-att-numbers { flex-wrap: wrap; gap: 6px; }
+      .profile-att-numbers > div { min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); }
+
       /* Stats bar */
       .stats-bar { font-size: 12px; padding: 6px 14px; }
+
+      /* Settings panel — subgroup rows wrap */
+      .cg-sg-row, .ct-sg-row, .eg-sg-row, .et-sg-row { flex-wrap: wrap; }
+
+      /* Attendance control row — label stays, select full width */
+      .att-control-row { flex-wrap: wrap; }
+      .att-control-row label { min-width: 60px; }
+
+      /* Tournaments panel */
+      .tourn-card-header, .tourn-row { flex-wrap: wrap; gap: 6px; }
+
+      /* Saturday leagues */
+      .sat-round-header { flex-wrap: wrap; gap: 8px; }
+      .sat-table td, .sat-table th { padding: 7px 8px; font-size: 12px; }
+
+      /* Federation players table */
+      .fed-table td, .fed-table th { padding: 7px 8px; font-size: 12px; }
+
+      /* Payments group-filter cards — 2 per row */
+      .pay-group-cards { flex-wrap: wrap; }
+      .pay-group-cards > div { min-width: calc(50% - 6px); flex: 1 1 calc(50% - 6px); }
+
+      /* Reports table */
+      .rep-table td, .rep-table th { padding: 6px 8px; font-size: 12px; }
     }
 
     /* ===== VERY SMALL SCREENS (≤400px) ===== */
@@ -1122,6 +1181,13 @@
       .modal-box, .profile-modal-box { border-radius: 10px; }
       .dash-stats-row { grid-template-columns: 1fr 1fr; gap: 8px; }
       .dash-stat-num { font-size: 20px; }
+      .dash-stat { padding: 10px 6px; }
+      .dash-stat-label { font-size: 10px; }
+      .weekly-grid { min-width: 360px; min-height: 150px; }
+      .att-actions { gap: 4px; }
+      .btn-att { font-size: 12px; padding: 6px 8px; }
+      .profile-att-numbers > div { min-width: 100%; }
+      .pay-group-cards > div { min-width: 100%; }
     }
 
 
@@ -2179,6 +2245,7 @@ const FIREBASE_CONFIG = {
 let db = null;
 let auth = null;
 let _vacations = {};
+let _teamVacations = {};
 let _history = {};
 function initFirebase() {
   if (FIREBASE_CONFIG.apiKey === 'YOUR_API_KEY_HERE') return false;
@@ -2450,6 +2517,7 @@ const ALL_GROUPS = [
 
 let groups = [];
 let _useDbGroups = false; // true = groups come from Firebase, don't fallback to ALL_GROUPS
+let _deletedGroupIds = new Set(); // persisted in Firebase so ALL_GROUPS deletions survive refresh
 
 let teams = [];
 let _useDbTeams = false;
@@ -2578,8 +2646,17 @@ async function loadTeamPlayers() {
   } catch(e) { console.error('loadTeamPlayers error:', e); }
 }
 
+async function loadDeletedGroups() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('deletedGroupIds').get();
+    const data = snap.val();
+    if (data) _deletedGroupIds = new Set(Object.keys(data));
+  } catch(e) { console.warn('loadDeletedGroups error:', e); }
+}
+
 async function initializeApp() {
-  if (db) { await loadDbGroups(); await loadDbTeams(); }
+  if (db) { await loadDeletedGroups(); await loadDbGroups(); await loadDbTeams(); }
   buildApp();
 }
 
@@ -3596,6 +3673,7 @@ function rebuildTeamDateSelect() {
       style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit;width:100%">
       ${dates.map(d => `<option value="${d}"${d === teamAttState.date ? ' selected' : ''}>${formatDate(d)}</option>`).join('')}
     </select>`;
+    applyTeamDateMarkers();
   } else {
     container.innerHTML = `<input type="date" id="teamAttDate" value="${teamAttState.date}"
       onchange="onTeamAttDateChange(this.value)"
@@ -3880,12 +3958,13 @@ function renderTeamAttendanceContent() {
         <div class="att-control-row"><label>קטגוריה</label>
           <select id="teamAttSubSel" onchange="onTeamAttSubChange(this.value)" ${subDisabled}>${subOptions}</select></div>
         <div class="att-control-row"><label>תאריך</label>
-          <div id="teamAttDateContainer">${dateControl}</div></div>
+          <div id="teamAttDateContainer" style="flex:1">${dateControl}</div></div>
       </div>
       <div class="att-actions">
         <button class="btn-att btn-check-all" onclick="teamAttCheckAll()">✓ סמן הכל</button>
         <button class="btn-att btn-clear-all" onclick="teamAttClearAll()">✗ נקה הכל</button>
         <button class="btn-att btn-save" id="btnTeamSave" onclick="saveTeamAttendance()">💾 שמור נוכחות</button>
+        <button class="btn-att" onclick="toggleTeamVacation()" style="background:#fff5f5;color:#e53e3e;border:1px solid #fed7d7">🚫 חופשה</button>
         <span class="save-status" id="teamSaveStatus"></span>
       </div>
       <div class="att-player-list" id="teamAttPlayerList">
@@ -4306,7 +4385,7 @@ const reportsState = {
 let _reportsCache = { attendance: {}, notes: {} };
 
 function renderReportsPanel() {
-  if (!_useDbGroups && (!groups || groups.length === 0) && currentUser?.role === 'admin') groups = ALL_GROUPS;
+  if (!_useDbGroups && (!groups || groups.length === 0) && currentUser?.role === 'admin') groups = ALL_GROUPS.filter(g => !_deletedGroupIds.has(g.id));
   const hasGroups = groups.length > 0;
   const hasTeams  = teams.length > 0;
   if (!hasGroups && !hasTeams) return `
@@ -5077,41 +5156,55 @@ function _buildWeeklyGrid(entries, hint) {
       </div>`;
   }).join('');
 
-  return `<div style="display:flex;min-height:320px">${cols}</div>
-    <div style="padding:10px 16px;background:#f7fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#718096">${hint}</div>`;
+  return `<div class="weekly-grid-wrap"><div class="weekly-grid">${cols}</div></div>
+    ${hint ? `<div style="padding:10px 16px;background:#f7fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#718096">${hint}</div>` : ''}`;
 }
 
 function renderCalendarPanel() {
   const hasGroups = groups.filter(g => g.name).length > 0;
   const hasTeams  = (teams||[]).length > 0;
 
+  // Groups: color by subgroup level label (same label = same color across groups)
+  const sgLevelColorMap = {};
+  let sgLevelIdx = 0;
   const groupEntries = [];
   groups.forEach((g, gi) => {
     if (!g.name) return;
-    const color = GROUP_COLORS[gi % GROUP_COLORS.length];
     const sgWithDay = (g.subGroups||[]).filter(sg => sg.day != null && sg.day >= 0 && sg.day <= 4);
     if (sgWithDay.length > 0) {
-      sgWithDay.forEach(sg => groupEntries.push({ day: sg.day, color, time: sg.meetingTime||'', name: g.name, sublabel: sg.time||g.instructor||'', location: sg.location||'' }));
+      sgWithDay.forEach(sg => {
+        const levelKey = (sg.time||'').trim().toLowerCase();
+        if (!sgLevelColorMap[levelKey]) sgLevelColorMap[levelKey] = GROUP_COLORS[sgLevelIdx++ % GROUP_COLORS.length];
+        groupEntries.push({ day: sg.day, color: sgLevelColorMap[levelKey], time: sg.meetingTime||'', name: g.name, sublabel: sg.time||g.instructor||'', location: sg.location||'' });
+      });
     } else if (g.meetings && g.meetings.length > 0) {
+      const color = GROUP_COLORS[gi % GROUP_COLORS.length];
       g.meetings.forEach(m => { const d = Number(m.day); if (d >= 0 && d <= 4) groupEntries.push({ day:d, color, time:m.time||'', name:g.name, sublabel:g.instructor||'', location:m.location||'' }); });
     } else if (g.dayOfWeek >= 0 && g.dayOfWeek <= 4) {
+      const color = GROUP_COLORS[gi % GROUP_COLORS.length];
       groupEntries.push({ day:g.dayOfWeek, color, time:'', name:g.name, sublabel:g.instructor||'', location:'' });
     }
   });
 
+  // Teams: color by coach (same coach = same color)
+  const coachColorMap = {};
+  let coachColorIdx = 0;
   const teamEntries = [];
   (teams||[]).forEach((team, ti) => {
-    const color = TEAM_COLORS[ti % TEAM_COLORS.length];
+    const coachKey = (team.coach||'').trim() || team.name;
+    if (!coachColorMap[coachKey]) coachColorMap[coachKey] = TEAM_COLORS[coachColorIdx++ % TEAM_COLORS.length];
+    const color = coachColorMap[coachKey];
     const sgWithDay = (team.subGroups||[]).filter(sg => sg.day != null && sg.day >= 0 && sg.day <= 4);
     if (sgWithDay.length > 0) {
-      sgWithDay.forEach(sg => teamEntries.push({ day: sg.day, color, time: sg.meetingTime||'', name: team.name, sublabel: sg.time||team.coach||'', location: sg.location||'' }));
+      sgWithDay.forEach(sg => teamEntries.push({ day: sg.day, color, time: sg.meetingTime||'', name: team.name, sublabel: team.coach||'', location: sg.location||'' }));
     } else {
       (team.meetings||[]).forEach(m => { const d = Number(m.day); if (d >= 0 && d <= 4) teamEntries.push({ day:d, color, time:m.time||'', name:team.name, sublabel:team.coach||'', location:m.location||'' }); });
     }
   });
 
-  const groupsGrid = _buildWeeklyGrid(groupEntries, 'עבור ל⚙️ הגדרות ולחץ ✎ ערוך לצד החוג לעריכה');
-  const teamsGrid  = _buildWeeklyGrid(teamEntries,  'עבור ל⚙️ הגדרות ולחץ ✎ ערוך לצד הנבחרת לעריכה');
+  const isAdmin = currentUser?.role === 'admin';
+  const groupsGrid = _buildWeeklyGrid(groupEntries, isAdmin ? 'עבור ל⚙️ הגדרות ולחץ ✎ ערוך לצד החוג לעריכה' : '');
+  const teamsGrid  = _buildWeeklyGrid(teamEntries,  isAdmin ? 'עבור ל⚙️ הגדרות ולחץ ✎ ערוך לצד הנבחרת לעריכה' : '');
   const tabBtn = (id, label, active) => `<button id="${id}" onclick="switchCalTab('${active?'groups':'teams'}')" style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${active?'#2b6cb0':'transparent'};color:${active?'#2b6cb0':'#718096'};margin-bottom:-2px">${label}</button>`;
 
   if (hasGroups && !hasTeams) return `<div class="cal-card" style="overflow:hidden"><div class="cal-header"><span style="font-size:16px;font-weight:700">📅 לוח שנה שבועי — חוגים</span></div>${groupsGrid}</div>`;
@@ -5513,9 +5606,14 @@ async function loadVacations() {
   if (!db) return;
   try {
     const snap = await db.ref('vacations').get();
-    if (!snap.val()) return;
-    Object.entries(snap.val()).forEach(([gid, dates]) => {
+    if (snap.val()) Object.entries(snap.val()).forEach(([gid, dates]) => {
       _vacations[gid] = new Set(Object.keys(dates).filter(k => dates[k]));
+    });
+  } catch(e) { console.error(e); }
+  try {
+    const snap2 = await db.ref('teamVacations').get();
+    if (snap2.val()) Object.entries(snap2.val()).forEach(([tid, dates]) => {
+      _teamVacations[tid] = new Set(Object.keys(dates).filter(k => dates[k]));
     });
   } catch(e) { console.error(e); }
 }
@@ -5537,55 +5635,96 @@ async function toggleVacation() {
   applyDateMarkers();
 }
 
+async function toggleTeamVacation() {
+  const t = teams[teamAttState.teamIdx];
+  if (!t) return;
+  const date = teamAttState.date;
+  if (!_teamVacations[t.id]) _teamVacations[t.id] = new Set();
+  const isVac = _teamVacations[t.id].has(date);
+  if (isVac) {
+    _teamVacations[t.id].delete(date);
+    if (db) await db.ref(`teamVacations/${t.id}/${date}`).remove();
+    showToast('החופשה בוטלה');
+  } else {
+    _teamVacations[t.id].add(date);
+    if (db) await db.ref(`teamVacations/${t.id}/${date}`).set(true);
+    showToast('סומן כחופשה 🚫');
+  }
+  applyTeamDateMarkers();
+}
+
+function applyTeamDateMarkers() {
+  const sel = document.getElementById('teamAttDate');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  const t = teams[teamAttState.teamIdx];
+  if (!t) return;
+  Array.from(sel.options).forEach(opt => {
+    const isVac = _teamVacations[t.id]?.has(opt.value);
+    opt.text = (isVac ? '🚫 ' : '') + formatDate(opt.value);
+    opt.style.color = isVac ? '#e53e3e' : '';
+  });
+}
+window.toggleTeamVacation = toggleTeamVacation;
+
 // ===== WEEKLY ATTENDANCE ALERTS =====
 async function loadWeeklyAttendanceAlerts() {
-  if (!db) return [];
+  if (!db) return { groups: [], teams: [] };
   const today = new Date();
   const dow = today.getDay();
-  // Sunday of current week
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - dow);
   weekStart.setHours(0,0,0,0);
-  // Saturday of current week
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
   weekEnd.setHours(23,59,59,999);
-
   const toISO = d => d.toISOString().split('T')[0];
-  const missing = [];
+  const todayISO = toISO(today);
+
+  const missingGroups = [];
   try {
     for (let gi = 0; gi < groups.length; gi++) {
       const g = groups[gi];
-      const groupDates = getGroupDates(g.dayOfWeek);
-      const weekDates = groupDates.filter(d => {
-        const dt = new Date(d);
-        return dt >= weekStart && dt <= weekEnd;
+      const weekDates = getGroupDates(g.dayOfWeek).filter(d => {
+        const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
       });
       for (const date of weekDates) {
-        // Only alert for dates up to today
-        if (date > toISO(today)) continue;
         for (let si = 0; si < g.subGroups.length; si++) {
           try {
             const snap = await db.ref(`attendance/${g.id}/${si}/${date}`).get();
-            if (!snap.val()) {
-              missing.push({
-                groupName: g.name,
-                subGroupName: g.subGroups[si].time || '',
-                date: formatDate(date),
-                instructor: g.instructor || '',
-                instructorWa: g.instructorWa || ''
-              });
-            }
+            if (!snap.val()) missingGroups.push({ groupName: g.name, subGroupName: g.subGroups[si].time || '', date: formatDate(date), instructor: g.instructor || '', instructorWa: g.instructorWa || '' });
           } catch(e) { /* skip */ }
         }
       }
     }
-  } catch(e) { console.error('loadWeeklyAttendanceAlerts error:', e); }
-  return missing;
+  } catch(e) { console.error('loadWeeklyAttendanceAlerts groups error:', e); }
+
+  const missingTeams = [];
+  try {
+    for (let ti = 0; ti < teams.length; ti++) {
+      const t = teams[ti];
+      for (let si = 0; si < t.subGroups.length; si++) {
+        const sg = t.subGroups[si];
+        if (sg.day == null) continue;
+        const weekDates = getGroupDates(sg.day).filter(d => {
+          const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
+        });
+        for (const date of weekDates) {
+          try {
+            const snap = await db.ref(`team_attendance/${t.id}/${si}/${date}`).get();
+            if (!snap.val()) missingTeams.push({ groupName: t.name, subGroupName: sg.time || '', date: formatDate(date), instructor: t.coach || '', instructorWa: '' });
+          } catch(e) { /* skip */ }
+        }
+      }
+    }
+  } catch(e) { console.error('loadWeeklyAttendanceAlerts teams error:', e); }
+
+  return { groups: missingGroups, teams: missingTeams };
 }
 
 // ===== DASHBOARD =====
-function renderDashboard(missingAtt = []) {
+function renderDashboard(missingAtt = { groups: [], teams: [] }) {
+  // backward compat: if array passed (old callers), wrap it
+  if (Array.isArray(missingAtt)) missingAtt = { groups: missingAtt, teams: [] };
   const dowHe = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const today = new Date();
   const todayDow = today.getDay();
@@ -5625,9 +5764,9 @@ function renderDashboard(missingAtt = []) {
       ).join('');
 
   // ── Alerts ─────────────────────────────────────────────
-  const alerts = [];
-  if (totalPending > 0) alerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${totalPending}</strong> ממתינים לתשלום — <a href="#" onclick="switchTab('payments');return false" style="color:#2b6cb0">לתשלומים</a></span></div>`);
-  if (totalTrial > 0)   alerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🟡</span><span><strong>${totalTrial}</strong> שחקנים בשיעור ניסיון</span></div>`);
+  const generalAlerts = [];
+  if (totalPending > 0) generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${totalPending}</strong> ממתינים לתשלום — <a href="#" onclick="switchTab('payments');return false" style="color:#2b6cb0">לתשלומים</a></span></div>`);
+  if (totalTrial > 0)   generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🟡</span><span><strong>${totalTrial}</strong> שחקנים בשיעור ניסיון</span></div>`);
   const todayIso = today.toISOString().split('T')[0];
   if (currentUser?.role === 'admin') {
     const expiredCards = Object.values(_fedPlayers||{}).filter(p => p.cardExpiry && p.cardExpiry < todayIso);
@@ -5635,15 +5774,50 @@ function renderDashboard(missingAtt = []) {
       if (!p.cardExpiry || p.cardExpiry <= todayIso) return false;
       return Math.floor((new Date(p.cardExpiry) - today) / 86400000) <= 30;
     });
-    if (expiredCards.length > 0) alerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${expiredCards.length}</strong> כרטיסי שחמטאי פגי תוקף — <a href="#" onclick="switchTab('fed-players');return false" style="color:#2b6cb0">למאגר</a></span></div>`);
-    if (soonCards.length > 0)    alerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🟡</span><span><strong>${soonCards.length}</strong> כרטיסי שחמטאי יפקעו תוך 30 יום</span></div>`);
+    if (expiredCards.length > 0) generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${expiredCards.length}</strong> כרטיסי שחמטאי פגי תוקף — <a href="#" onclick="switchTab('fed-players');return false" style="color:#2b6cb0">למאגר</a></span></div>`);
+    if (soonCards.length > 0)    generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🟡</span><span><strong>${soonCards.length}</strong> כרטיסי שחמטאי יפקעו תוך 30 יום</span></div>`);
   }
-  missingAtt.forEach(m => {
-    const waBtn = (currentUser?.role === 'admin' && m.instructorWa)
+
+  const _attAlertRow = (m, isAdmin) => {
+    const waBtn = (isAdmin && m.instructorWa)
       ? `<a href="https://wa.me/${m.instructorWa}?text=${encodeURIComponent(`שלום ${m.instructor}, תזכורת למלא נוכחות עבור ${m.groupName} לתאריך ${m.date} 🙏`)}" target="_blank" style="margin-right:8px;background:#25D366;color:white;padding:3px 10px;border-radius:8px;font-size:12px;text-decoration:none;white-space:nowrap">📲 תזכורת</a>` : '';
-    alerts.unshift(`<div class="dash-alert-row"><span class="dash-alert-icon">🟠</span><span style="flex:1">לא הוזנה נוכחות: <strong>${m.groupName}${m.subGroupName ? ' · '+m.subGroupName : ''}</strong> (${m.date})</span>${waBtn}</div>`);
-  });
-  if (alerts.length === 0) alerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">✅</span><span style="color:#276749">אין התראות פתוחות</span></div>`);
+    return `<div class="dash-alert-row"><span class="dash-alert-icon">🟠</span><span style="flex:1">לא הוזנה נוכחות: <strong>${m.groupName}${m.subGroupName ? ' · '+m.subGroupName : ''}</strong> (${m.date})</span>${waBtn}</div>`;
+  };
+  const isAdm = currentUser?.role === 'admin';
+  const groupAttAlerts = [...missingAtt.groups].reverse().map(m => _attAlertRow(m, isAdm));
+  const teamAttAlerts  = [...missingAtt.teams].reverse().map(m => _attAlertRow(m, isAdm));
+
+  const hasGroups = groups.length > 0;
+  const hasTeams  = teams.length > 0;
+  const showSplit = hasGroups && hasTeams;
+
+  let alertsHtml;
+  if (showSplit) {
+    const groupCol = (groupAttAlerts.length
+      ? groupAttAlerts.join('')
+      : `<div class="dash-alert-row"><span class="dash-alert-icon">✅</span><span style="color:#276749">אין התראות</span></div>`);
+    const teamCol = (teamAttAlerts.length
+      ? teamAttAlerts.join('')
+      : `<div class="dash-alert-row"><span class="dash-alert-icon">✅</span><span style="color:#276749">אין התראות</span></div>`);
+    alertsHtml = `
+      ${generalAlerts.join('')}
+      ${generalAlerts.length ? `<div style="border-top:1px solid #e2e8f0;margin:4px 0"></div>` : ''}
+      <div class="dash-alert-split">
+        <div style="border-left:1px solid #e2e8f0">
+          <div style="font-size:11px;font-weight:700;color:#718096;padding:8px 18px 4px;letter-spacing:0.5px">חוגים</div>
+          ${groupCol}
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#718096;padding:8px 18px 4px;letter-spacing:0.5px">נבחרות</div>
+          ${teamCol}
+        </div>
+      </div>`;
+  } else {
+    const allAttAlerts = hasTeams ? teamAttAlerts : groupAttAlerts;
+    const combined = [...generalAlerts, ...allAttAlerts];
+    if (combined.length === 0) combined.push(`<div class="dash-alert-row"><span class="dash-alert-icon">✅</span><span style="color:#276749">אין התראות פתוחות</span></div>`);
+    alertsHtml = combined.join('');
+  }
 
   // ── Prospects pipeline ─────────────────────────────────
   const pCounts = { new:0, contacted:0, invited:0, joined:0, 'no-answer':0, declined:0 };
@@ -5707,8 +5881,8 @@ function renderDashboard(missingAtt = []) {
       <div class="dash-stats-row" style="grid-template-columns:repeat(${isAdmin && totalProspects>0 ? 5 : 4},1fr)">
         <div class="dash-stat"><div class="dash-stat-num" style="color:#2b6cb0">${totalPlayers}</div><div class="dash-stat-label">שחקנים</div></div>
         <div class="dash-stat"><div class="dash-stat-num" style="color:#6b46c1">${groups.length}</div><div class="dash-stat-label">חוגים</div></div>
-        <div class="dash-stat"><div class="dash-stat-num" style="color:#276749">${paidPct}%</div><div class="dash-stat-label">שילמו</div></div>
-        <div class="dash-stat"><div class="dash-stat-num" style="color:${totalPending>0?'#e53e3e':'#276749'}">${totalPending+totalTrial}</div><div class="dash-stat-label">לא שילמו</div></div>
+        <div class="dash-stat"><div class="dash-stat-num" style="color:#276749">${totalPaid}</div><div class="dash-stat-label">שילמו</div></div>
+        <div class="dash-stat"><div class="dash-stat-num" style="color:${(totalPending+totalTrial)>0?'#e53e3e':'#276749'}">${totalPlayers ? (100-paidPct) : 0}%</div><div class="dash-stat-label">לא שילמו</div></div>
         ${isAdmin && totalProspects>0 ? `<div class="dash-stat"><div class="dash-stat-num" style="color:#c05621">${pCounts.joined}</div><div class="dash-stat-label">הצטרפו מגנים</div></div>` : ''}
       </div>
     </div>` : ''}
@@ -5716,10 +5890,11 @@ function renderDashboard(missingAtt = []) {
     ${teams.length > 0 ? `
     <div class="dash-card" style="margin-bottom:20px">
       <div style="font-size:11px;font-weight:700;color:#718096;padding:12px 18px 4px;letter-spacing:0.5px;text-transform:uppercase">נבחרות</div>
-      <div class="dash-stats-row" style="grid-template-columns:repeat(3,1fr)">
+      <div class="dash-stats-row" style="grid-template-columns:repeat(4,1fr)">
         <div class="dash-stat"><div class="dash-stat-num" style="color:#553c9a">${totalTeamPlayers}</div><div class="dash-stat-label">שחקנים</div></div>
-        <div class="dash-stat"><div class="dash-stat-num" style="color:#276749">${teamPaidPct}%</div><div class="dash-stat-label">שילמו</div></div>
-        <div class="dash-stat"><div class="dash-stat-num" style="color:${teamPending>0?'#e53e3e':'#276749'}">${teamPending+teamTrial}</div><div class="dash-stat-label">לא שילמו</div></div>
+        <div class="dash-stat"><div class="dash-stat-num" style="color:#6b46c1">${teams.length}</div><div class="dash-stat-label">נבחרות</div></div>
+        <div class="dash-stat"><div class="dash-stat-num" style="color:#276749">${teamPaid}</div><div class="dash-stat-label">שילמו</div></div>
+        <div class="dash-stat"><div class="dash-stat-num" style="color:${(teamPending+teamTrial)>0?'#e53e3e':'#276749'}">${totalTeamPlayers ? (100-teamPaidPct) : 0}%</div><div class="dash-stat-label">לא שילמו</div></div>
       </div>
     </div>` : ''}
 
@@ -5732,7 +5907,7 @@ function renderDashboard(missingAtt = []) {
     <!-- Alerts (only) -->
     <div class="dash-card" style="margin-bottom:20px">
       <div class="dash-card-title">⚠️ התראות</div>
-      ${alerts.join('')}
+      ${alertsHtml}
     </div>
 
     ${isAdmin ? `
@@ -6137,7 +6312,7 @@ window.toggleSidebar = toggleSidebar;
 
 function buildApp() {
 if (!_useDbGroups && (!groups || groups.length === 0)) {
-  groups = ALL_GROUPS; // filter applied below for non-admin
+  groups = ALL_GROUPS.filter(g => !_deletedGroupIds.has(g.id));
 }
 // Filter groups for non-admin users (both Firebase and ALL_GROUPS)
 if (currentUser?.role !== 'admin') {
@@ -8562,18 +8737,6 @@ function openCreateGroupModal() {
             <div class="modal-field" style="flex:1"><label>WhatsApp</label>
               <input type="text" id="cg-wa" placeholder="972501234567" class="modal-input"></div>
           </div>
-          <div style="display:flex;gap:10px">
-            <div class="modal-field" style="flex:1"><label>יום בשבוע</label>
-              <select id="cg-day" class="modal-input">
-                <option value="0">יום ראשון</option>
-                <option value="1">יום שני</option>
-                <option value="2">יום שלישי</option>
-                <option value="3">יום רביעי</option>
-                <option value="4">יום חמישי</option>
-                <option value="5">יום שישי</option>
-              </select>
-            </div>
-          </div>
           <div>
             <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">קבוצות <span style="color:#e53e3e">*</span> <span style="font-size:11px;color:#a0aec0;font-weight:400">— לכל קבוצה ניתן להגדיר יום ושעה</span></label>
             <div id="cg-subgroups" style="display:flex;flex-direction:column">${_cgSgRow({})}</div>
@@ -8600,8 +8763,6 @@ async function saveNewGroup() {
   if (!name) { showToast('יש להזין שם חוג', 'error'); return; }
   const instructor = document.getElementById('cg-instructor')?.value?.trim() || '';
   const wa = document.getElementById('cg-wa')?.value?.trim() || '';
-  const dayOfWeek = parseInt(document.getElementById('cg-day')?.value || '0');
-  const dayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
   const sgRows = document.querySelectorAll('#cg-subgroups .cg-sg-row');
   const subGroupsRaw = [...sgRows].map(row => {
     const t = row.querySelector('.cg-sg-name')?.value?.trim() || '';
@@ -8610,8 +8771,10 @@ async function saveNewGroup() {
     return { time: t, day: (dv !== '' && dv != null) ? parseInt(dv) : null, meetingTime: row.querySelector('.cg-sg-mtime')?.value?.trim() || '', location: row.querySelector('.cg-sg-loc')?.value?.trim() || '' };
   }).filter(Boolean);
   if (subGroupsRaw.length === 0) { showToast('יש להוסיף לפחות קבוצה אחת', 'error'); return; }
+  const dayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
+  const dayOfWeek = subGroupsRaw.find(sg => sg.day != null)?.day ?? 0;
   const id = name.replace(/[^a-zA-Z0-9֐-׿]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
-  const groupDef = { name, instructor, instructorWa: wa, day: dayNames[dayOfWeek], dayOfWeek, subGroups: subGroupsRaw };
+  const groupDef = { name, instructor, instructorWa: wa, day: dayNames[dayOfWeek] || '', dayOfWeek, subGroups: subGroupsRaw };
   try {
     await db.ref(`dbGroups/${id}`).set(groupDef);
     _useDbGroups = true;
@@ -8768,6 +8931,8 @@ async function deleteDbGroup(groupId) {
   try {
     await db.ref(`dbGroups/${groupId}`).remove();
     await db.ref(`extra_players/${groupId}`).remove();
+    await db.ref(`deletedGroupIds/${groupId}`).set(true);
+    _deletedGroupIds.add(groupId);
     groups = groups.filter(g => g.id !== groupId);
     const btn = document.querySelector(`[data-tab="${groupId}"]`);
     if (btn) btn.remove();
