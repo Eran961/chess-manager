@@ -925,7 +925,7 @@
     .pay-quick-btn:hover { background:#bee3f8; }
 
     /* ===== CALENDAR PANEL ===== */
-    .cal-card { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); max-width:780px; overflow:hidden; }
+    .cal-card { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); width:100%; overflow:hidden; }
     .cal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; }
     .cal-nav-btn { background:none; border:1px solid #e2e8f0; border-radius:8px; padding:6px 14px; cursor:pointer; font-size:16px; font-family:inherit; color:#4a5568; }
     .cal-nav-btn:hover { background:#f7fafc; }
@@ -2118,6 +2118,14 @@ if(localStorage.getItem('ccm_loggedIn')){
         <div class="age-hint" id="mf-age"></div>
       </div>
       <div class="modal-field">
+        <label>מין <span class="required">*</span></label>
+        <div class="pay-select" id="mf-gender-select">
+          <button type="button" class="pay-btn" id="mf-gender-m" onclick="selectModalGender('m')">👦 זכר</button>
+          <button type="button" class="pay-btn" id="mf-gender-f" onclick="selectModalGender('f')">👧 נקבה</button>
+        </div>
+        <input type="hidden" id="mf-gender" value="">
+      </div>
+      <div class="modal-field">
         <label>טלפון הורה <span class="required">*</span></label>
         <input type="tel" id="mf-phone" placeholder="05X-XXXXXXX" dir="ltr">
       </div>
@@ -2455,14 +2463,19 @@ async function loadDbGroups() {
     const data = snap.val();
     if (!data) return;
     _useDbGroups = true;
-    groups = Object.entries(data).map(([id, g]) => ({
+    groups = Object.entries(data).filter(([id, g]) => g && g.name).map(([id, g]) => ({
       id,
       name: g.name,
       instructor: g.instructor || '',
       instructorWa: g.instructorWa || '',
       day: g.day || '',
       dayOfWeek: g.dayOfWeek ?? -1,
-      subGroups: (g.subGroups || [{ time: 'קבוצה א' }]).map(sg => ({ time: sg.time || '', players: [] }))
+      meetings: Array.isArray(g.meetings) ? g.meetings : (g.meetings ? Object.values(g.meetings) : []),
+      subGroups: Array.isArray(g.subGroups)
+        ? g.subGroups.map(sg => ({ time: sg.time || '', day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '', players: [] }))
+        : g.subGroups
+          ? Object.values(g.subGroups).map(sg => ({ time: sg.time || '', day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '', players: [] }))
+          : [{ time: 'קבוצה א', day: null, meetingTime: '', location: '', players: [] }]
     }));
   } catch(e) { console.error('loadDbGroups error:', e); }
 }
@@ -2509,11 +2522,11 @@ async function loadDbTeams() {
         coach:    t.coach    || '',
         coachWa:  t.coachWa  || '',
         region:   t.region   || '',
+        meetings: t.meetings  || [],
         subGroups: (t.subGroups || [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }])
-                    .map(sg => ({ time: sg.time || '', players: [] }))
+                    .map(sg => ({ time: sg.time || '', day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '', players: [] }))
       }));
     } else if (db) {
-      // Seed default teams on first load
       await seedDefaultTeams();
     }
   } catch(e) { console.error('loadDbTeams error:', e); }
@@ -2661,9 +2674,14 @@ function renderSubGroup(sg, showTime, groupIdx, subGroupIdx) {
 
 function renderGroup(group, groupIdx) {
   const showTime = group.subGroups.length > 1 || (group.subGroups[0] && group.subGroups[0].time);
-  const header = `<div class="group-name-header" id="gname-header-${groupIdx}">
-    <span class="group-name-text">${group.name}</span>
-    <button class="btn-edit-name" onclick="editGroupName(${groupIdx})" title="ערוך שם">✎</button>
+  const meetingsBadge = (group.meetings || []).length > 0
+    ? `<span style="font-size:12px;color:rgba(255,255,255,0.6);margin-right:6px">${formatTeamMeetingsSummary(group.meetings)}</span>` : '';
+  const header = `<div class="group-name-header" id="gname-header-${groupIdx}" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span class="group-name-text">${group.name}</span>
+      <button class="btn-edit-name" onclick="editGroupName(${groupIdx})" title="ערוך שם">✎</button>
+      ${meetingsBadge}
+    </div>
   </div>`;
   const historySection = `<div style="margin-top:8px">
     <button onclick="toggleHistory(${groupIdx})" style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;color:#718096;font-family:inherit;width:100%;text-align:center">📋 היסטוריית שינויים</button>
@@ -2750,11 +2768,27 @@ function renderTeamSubGroup(sg, showTime, teamIdx, subTeamIdx) {
 function renderTeamGroup(team, teamIdx) {
   const showTime = team.subGroups.length > 1;
   const coachBadge = team.coach ? `<span style="font-size:13px;color:rgba(255,255,255,0.75);font-weight:400"> · ${team.coach}</span>` : '';
-  const header = `<div class="group-name-header">
-    <span class="group-name-text">🏅 ${team.name}</span>${coachBadge}
+  const meetingsBadge = (team.meetings || []).length > 0
+    ? `<span style="font-size:12px;color:rgba(255,255,255,0.6);margin-right:8px">${formatTeamMeetingsSummary(team.meetings)}</span>` : '';
+  const header = `<div class="group-name-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="group-name-text">🏅 ${team.name}</span>${coachBadge}${meetingsBadge}
+    </div>
   </div>`;
   return header + team.subGroups.map((sg, si) => renderTeamSubGroup(sg, showTime, teamIdx, si)).join('');
 }
+
+function formatTeamMeetingsSummary(meetings) {
+  const dayNames = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+  const byDay = {};
+  (meetings || []).forEach(m => {
+    const d = dayNames[m.day] || '';
+    if (!byDay[m.day]) byDay[m.day] = { label: d, times: [] };
+    byDay[m.day].times.push(m.time);
+  });
+  return Object.values(byDay).map(d => `יום ${d.label} ${d.times.join(',')}`).join(' | ');
+}
+window.formatTeamMeetingsSummary = formatTeamMeetingsSummary;
 
 // --- Add team player (reuses addPlayerModal) ---
 
@@ -2879,30 +2913,38 @@ function enableTeamProfileEdit() {
   if (!det) return;
   det.innerHTML = `
     <div class="modal-field">
-      <label>שם משפחה <span class="required">*</span></label>
-      <input type="text" id="pe-last" value="${last}">
-    </div>
-    <div class="modal-field">
       <label>שם פרטי <span class="required">*</span></label>
       <input type="text" id="pe-first" value="${first}">
     </div>
     <div class="modal-field">
-      <label>שנת לידה</label>
+      <label>שם משפחה <span class="required">*</span></label>
+      <input type="text" id="pe-last" value="${last}">
+    </div>
+    <div class="modal-field">
+      <label>שנת לידה <span class="required">*</span></label>
       <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1990" max="${CURRENT_YEAR - 2}"
         placeholder="לדוגמה: 2015" oninput="updatePeAge(this.value)">
       <div class="age-hint" id="pe-age">${age}</div>
     </div>
     <div class="modal-field">
-      <label>מספר שחקן</label>
-      <input type="number" id="pe-fed" value="${p.fedId || ''}" placeholder="לא חובה">
-    </div>
-    <div class="modal-field">
-      <label>מין</label>
-      <div style="display:flex;gap:8px">
-        <button type="button" id="pe-gender-m" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" onclick="selectGender('m')">זכר</button>
-        <button type="button" id="pe-gender-f" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" onclick="selectGender('f')">נקבה</button>
+      <label>מין <span class="required">*</span></label>
+      <div class="pay-select">
+        <button type="button" id="pe-gender-m" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" onclick="selectGender('m')">👦 זכר</button>
+        <button type="button" id="pe-gender-f" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" onclick="selectGender('f')">👧 נקבה</button>
       </div>
       <input type="hidden" id="pe-gender" value="${p.gender || ''}">
+    </div>
+    <div class="modal-field">
+      <label>📞 טלפון הורה <span class="required">*</span></label>
+      <input type="tel" id="pe-phone" value="${p.parentPhone || ''}" placeholder="05X-XXXXXXX" dir="ltr">
+    </div>
+    <div class="modal-field">
+      <label>✉ מייל הורה <span class="required">*</span></label>
+      <input type="email" id="pe-email" value="${p.parentEmail || ''}" placeholder="example@mail.com" dir="ltr">
+    </div>
+    <div class="modal-field" style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0">
+      <label>מספר שחקן</label>
+      <input type="number" id="pe-fed" value="${p.fedId || ''}" placeholder="לא חובה">
     </div>
     <div class="modal-field">
       <label>מד כושר</label>
@@ -2929,14 +2971,6 @@ function enableTeamProfileEdit() {
         <button type="button" class="pay-btn${(p.level||'')==='advanced'?' active-paid':''}" onclick="selectLevel(this,'advanced')">מתקדם</button>
       </div>
       <input type="hidden" id="pe-level" value="${p.level || ''}">
-    </div>
-    <div class="modal-field">
-      <label>📞 טלפון הורה</label>
-      <input type="tel" id="pe-phone" value="${p.parentPhone || ''}" placeholder="לא חובה" dir="ltr">
-    </div>
-    <div class="modal-field">
-      <label>✉ מייל הורה</label>
-      <input type="email" id="pe-email" value="${p.parentEmail || ''}" placeholder="לא חובה" dir="ltr">
     </div>
     <div class="modal-actions" style="padding:0;margin-top:4px">
       <button class="btn-form-cancel" onclick="renderTeamProfileDetails()">ביטול</button>
@@ -3100,6 +3134,9 @@ function toggleAddPlayerForm(groupIdx, subGroupIdx) {
   });
   document.getElementById('mf-age').textContent = '';
   document.getElementById('fed-lookup-status').textContent = '';
+  document.getElementById('mf-gender').value = '';
+  document.getElementById('mf-gender-m').className = 'pay-btn';
+  document.getElementById('mf-gender-f').className = 'pay-btn';
   document.getElementById('addPlayerModal').classList.add('open');
   setTimeout(() => document.getElementById('mf-first').focus(), 50);
 }
@@ -3198,9 +3235,11 @@ async function submitAddPlayer() {
   const yearEl  = document.getElementById('mf-year');
   const fedEl   = document.getElementById('mf-fed');
 
-  const phoneEl = document.getElementById('mf-phone');
-  const emailEl = document.getElementById('mf-email');
+  const phoneEl  = document.getElementById('mf-phone');
+  const emailEl  = document.getElementById('mf-email');
+  const genderEl = document.getElementById('mf-gender');
   [firstEl, lastEl, yearEl, phoneEl, emailEl].forEach(el => el.classList.remove('input-error'));
+  document.getElementById('mf-gender-select')?.classList.remove('input-error');
 
   const firstName = firstEl.value.trim();
   const lastName  = lastEl.value.trim();
@@ -3216,12 +3255,17 @@ async function submitAddPlayer() {
     if (valid) yearEl.focus();
     valid = false;
   }
+  if (!genderEl.value) {
+    document.getElementById('mf-gender-select')?.classList.add('input-error');
+    valid = false;
+  }
   if (!phoneEl.value.trim()) { phoneEl.classList.add('input-error'); if (valid) phoneEl.focus(); valid = false; }
   if (!emailEl.value.trim()) { emailEl.classList.add('input-error'); if (valid) emailEl.focus(); valid = false; }
   if (!valid) return;
 
   const fedId = fedVal ? (parseInt(fedVal) || null) : null;
   const joinDate = new Date().toISOString().split('T')[0];
+  const gender = genderEl.value || null;
   const parentPhone = phoneEl.value.trim() || null;
   const parentEmail = emailEl.value.trim() || null;
   const ratingRaw = document.getElementById('mf-rating').value.trim();
@@ -3235,7 +3279,7 @@ async function submitAddPlayer() {
     const subTeamIdx = _modalSubGroupIdx;
     const t  = teams[teamIdx];
     const sg = t.subGroups[subTeamIdx];
-    const newPlayer = { name: `${firstName} ${lastName}`, firstName, lastName, birthYear, fedId, joinDate, rating, cardExpiry, gender: null, paymentStatus: 'trial', parentPhone, parentEmail, hidden: false };
+    const newPlayer = { name: `${firstName} ${lastName}`, firstName, lastName, birthYear, fedId, joinDate, rating, cardExpiry, gender: gender || null, paymentStatus: 'trial', parentPhone, parentEmail, hidden: false };
     sg.players.push(newPlayer);
     document.getElementById('addPlayerModal').classList.remove('open');
     if (db) {
@@ -3293,7 +3337,8 @@ async function loadExtraPlayers() {
           sg.players.push({ name: `${p.firstName} ${p.lastName}`, birthYear: p.birthYear, fedId: p.fedId || null, joinDate: p.joinDate || null, added: true, rating: p.rating || null, cardExpiry: p.cardExpiry || null });
         });
       });
-      document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);
+      const ep = document.getElementById('panel-' + g.id);
+      if (ep) ep.innerHTML = renderGroup(g, groupIdx);
     });
   } catch(e) {
     console.error('Error loading extra players:', e);
@@ -3303,6 +3348,7 @@ async function loadExtraPlayers() {
 // ===== ATTENDANCE FUNCTIONS =====
 
 function getGroupDates(dayOfWeek) {
+  if (dayOfWeek < 0) return [];
   const start = new Date(YEAR_START);
   const end = new Date(YEAR_END);
   const dates = [];
@@ -3315,9 +3361,21 @@ function getGroupDates(dayOfWeek) {
   return dates;
 }
 
-function defaultDateForGroup(dayOfWeek) {
+function getGroupMeetingDates(group) {
+  if (group.meetings && group.meetings.length > 0) {
+    const days = [...new Set(group.meetings.map(m => Number(m.day)).filter(d => d >= 0 && d <= 6))];
+    const all = days.flatMap(day => getGroupDates(day));
+    return [...new Set(all)].sort();
+  }
+  return getGroupDates(group.dayOfWeek);
+}
+
+function defaultDateForGroup(dayOfWeekOrGroup) {
   const today = new Date().toISOString().split('T')[0];
-  const dates = getGroupDates(dayOfWeek);
+  const dates = typeof dayOfWeekOrGroup === 'object'
+    ? getGroupMeetingDates(dayOfWeekOrGroup)
+    : getGroupDates(dayOfWeekOrGroup);
+  if (!dates.length) return today;
   let selected = dates[0];
   for (const d of dates) {
     if (d <= today) selected = d;
@@ -3348,7 +3406,7 @@ function cardExpiryBadge(cardExpiry) {
 const attState = {
   groupIdx: 0,
   subGroupIdx: 0,
-  date: defaultDateForGroup(ALL_GROUPS[0].dayOfWeek),
+  date: defaultDateForGroup(ALL_GROUPS[0].dayOfWeek ?? -1),
 };
 
 const teamAttState = {
@@ -3508,15 +3566,54 @@ async function saveAttendance() {
 
 // ===== TEAM ATTENDANCE =====
 
+function getTeamMeetingDates(team) {
+  if (!team || !team.meetings || team.meetings.length === 0) return [];
+  const days = [...new Set(team.meetings.map(m => Number(m.day)).filter(d => d >= 0 && d <= 6))];
+  const all = days.flatMap(day => getGroupDates(day));
+  return [...new Set(all)].sort();
+}
+
+function defaultDateForTeam(team) {
+  const today = new Date().toISOString().split('T')[0];
+  const dates = getTeamMeetingDates(team);
+  if (!dates.length) return today;
+  let selected = dates[0];
+  for (const d of dates) {
+    if (d <= today) selected = d;
+    else break;
+  }
+  return selected;
+}
+
+function rebuildTeamDateSelect() {
+  const t = teams[teamAttState.teamIdx];
+  if (!t) return;
+  const dates = getTeamMeetingDates(t);
+  const container = document.getElementById('teamAttDateContainer');
+  if (!container) return;
+  if (dates.length > 0) {
+    container.innerHTML = `<select id="teamAttDate" onchange="onTeamAttDateChange(this.value)"
+      style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit;width:100%">
+      ${dates.map(d => `<option value="${d}"${d === teamAttState.date ? ' selected' : ''}>${formatDate(d)}</option>`).join('')}
+    </select>`;
+  } else {
+    container.innerHTML = `<input type="date" id="teamAttDate" value="${teamAttState.date}"
+      onchange="onTeamAttDateChange(this.value)"
+      style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit">`;
+  }
+}
+
 function onTeamAttChange(val) {
   teamAttState.teamIdx = parseInt(val);
   teamAttState.subTeamIdx = 0;
   const t = teams[teamAttState.teamIdx];
+  teamAttState.date = defaultDateForTeam(t);
   const subSel = document.getElementById('teamAttSubSel');
   if (subSel) {
     subSel.innerHTML = t.subGroups.map((sg, i) => `<option value="${i}">${sg.time || 'שחקנים'}</option>`).join('');
     subSel.disabled = t.subGroups.length === 1;
   }
+  rebuildTeamDateSelect();
   loadTeamAttendance();
 }
 window.onTeamAttChange = onTeamAttChange;
@@ -3642,7 +3739,7 @@ window.saveTeamAttendance = saveTeamAttendance;
 function onAttGroupChange(val) {
   attState.groupIdx = parseInt(val);
   attState.subGroupIdx = 0;
-  attState.date = defaultDateForGroup(groups[attState.groupIdx].dayOfWeek);
+  attState.date = defaultDateForGroup(groups[attState.groupIdx]);
   _attDatesWithData = new Set();
   rebuildSubGroupSelect();
   rebuildDateSelect();
@@ -3666,7 +3763,7 @@ function rebuildDateSelect() {
   const g = groups[attState.groupIdx];
   const sel = document.getElementById('attDateSel');
   if (!sel) return;
-  sel.innerHTML = getGroupDates(g.dayOfWeek).map(d =>
+  sel.innerHTML = getGroupMeetingDates(g).map(d =>
     `<option value="${d}"${d === attState.date ? ' selected' : ''}>${formatDate(d)}</option>`
   ).join('');
 }
@@ -3736,7 +3833,7 @@ function renderGroupAttendanceContent() {
           <select id="attSubGroupSel" onchange="onAttSubGroupChange(this.value)" ${subGroupDisabled}>${subGroupOptions}</select></div>
         <div class="att-control-row"><label>תאריך</label>
           <select id="attDateSel" onchange="onAttDateChange(this.value)">
-            ${getGroupDates(groups[attState.groupIdx].dayOfWeek).map(d =>
+            ${getGroupMeetingDates(groups[attState.groupIdx]).map(d =>
               `<option value="${d}"${d === attState.date ? ' selected' : ''}>${formatDate(d)}</option>`
             ).join('')}
           </select></div>
@@ -3765,6 +3862,15 @@ function renderTeamAttendanceContent() {
   const teamOptions  = teams.map((tm, i) => `<option value="${i}" ${i===teamAttState.teamIdx?'selected':''}>${tm.name}</option>`).join('');
   const subOptions   = t.subGroups.map((sg, i) => `<option value="${i}" ${i===teamAttState.subTeamIdx?'selected':''}>${sg.time || 'שחקנים'}</option>`).join('');
   const subDisabled  = t.subGroups.length === 1 ? 'disabled' : '';
+  const teamDates    = getTeamMeetingDates(t);
+  const dateControl  = teamDates.length > 0
+    ? `<select id="teamAttDate" onchange="onTeamAttDateChange(this.value)"
+        style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit;width:100%">
+        ${teamDates.map(d => `<option value="${d}"${d === teamAttState.date ? ' selected' : ''}>${formatDate(d)}</option>`).join('')}
+       </select>`
+    : `<input type="date" id="teamAttDate" value="${teamAttState.date}"
+        onchange="onTeamAttDateChange(this.value)"
+        style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit">`;
   return `
     <div class="att-card">
       <div class="att-card-header">🏅 נוכחות נבחרות</div>
@@ -3774,9 +3880,7 @@ function renderTeamAttendanceContent() {
         <div class="att-control-row"><label>קטגוריה</label>
           <select id="teamAttSubSel" onchange="onTeamAttSubChange(this.value)" ${subDisabled}>${subOptions}</select></div>
         <div class="att-control-row"><label>תאריך</label>
-          <input type="date" id="teamAttDate" value="${teamAttState.date}"
-            onchange="onTeamAttDateChange(this.value)"
-            style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit"></div>
+          <div id="teamAttDateContainer">${dateControl}</div></div>
       </div>
       <div class="att-actions">
         <button class="btn-att btn-check-all" onclick="teamAttCheckAll()">✓ סמן הכל</button>
@@ -3873,30 +3977,38 @@ function enableProfileEdit() {
   document.getElementById('btnProfileEdit').style.display = 'none';
   document.getElementById('profileDetails').innerHTML = `
     <div class="modal-field">
-      <label>שם משפחה <span class="required">*</span></label>
-      <input type="text" id="pe-last" value="${last}">
-    </div>
-    <div class="modal-field">
       <label>שם פרטי <span class="required">*</span></label>
       <input type="text" id="pe-first" value="${first}">
     </div>
     <div class="modal-field">
-      <label>שנת לידה</label>
+      <label>שם משפחה <span class="required">*</span></label>
+      <input type="text" id="pe-last" value="${last}">
+    </div>
+    <div class="modal-field">
+      <label>שנת לידה <span class="required">*</span></label>
       <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1990" max="${CURRENT_YEAR - 2}"
         placeholder="לדוגמה: 2015" oninput="updatePeAge(this.value)">
       <div class="age-hint" id="pe-age">${age}</div>
     </div>
     <div class="modal-field">
-      <label>מספר שחקן</label>
-      <input type="number" id="pe-fed" value="${p.fedId || ''}" placeholder="לא חובה">
-    </div>
-    <div class="modal-field">
-      <label>מין</label>
-      <div style="display:flex;gap:8px">
-        <button type="button" id="pe-gender-m" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" onclick="selectGender('m')">זכר</button>
-        <button type="button" id="pe-gender-f" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" onclick="selectGender('f')">נקבה</button>
+      <label>מין <span class="required">*</span></label>
+      <div class="pay-select">
+        <button type="button" id="pe-gender-m" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" onclick="selectGender('m')">👦 זכר</button>
+        <button type="button" id="pe-gender-f" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" onclick="selectGender('f')">👧 נקבה</button>
       </div>
       <input type="hidden" id="pe-gender" value="${p.gender || ''}">
+    </div>
+    <div class="modal-field">
+      <label>📞 טלפון הורה <span class="required">*</span></label>
+      <input type="tel" id="pe-phone" value="${p.parentPhone || ''}" placeholder="05X-XXXXXXX" dir="ltr">
+    </div>
+    <div class="modal-field">
+      <label>✉ מייל הורה <span class="required">*</span></label>
+      <input type="email" id="pe-email" value="${p.parentEmail || ''}" placeholder="example@mail.com" dir="ltr">
+    </div>
+    <div class="modal-field" style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0">
+      <label>מספר שחקן</label>
+      <input type="number" id="pe-fed" value="${p.fedId || ''}" placeholder="לא חובה">
     </div>
     <div class="modal-field">
       <label>סטטוס תשלום</label>
@@ -3906,14 +4018,6 @@ function enableProfileEdit() {
         <button type="button" class="pay-btn${p.paymentStatus==='paid'?' active-paid':''}" onclick="selectPayStatus(this,'paid')">שילם ✓</button>
       </div>
       <input type="hidden" id="pe-pay" value="${p.paymentStatus || 'trial'}">
-    </div>
-    <div class="modal-field">
-      <label>📞 טלפון הורה</label>
-      <input type="tel" id="pe-phone" value="${p.parentPhone || ''}" placeholder="לא חובה" dir="ltr">
-    </div>
-    <div class="modal-field">
-      <label>✉ מייל הורה</label>
-      <input type="email" id="pe-email" value="${p.parentEmail || ''}" placeholder="לא חובה" dir="ltr">
     </div>
     <div class="modal-actions" style="padding:0;margin-top:4px">
       <button class="btn-form-cancel" onclick="cancelProfileEdit()">ביטול</button>
@@ -3944,6 +4048,14 @@ function selectGender(g) {
   document.getElementById('pe-gender-f').className = 'pay-btn' + (g==='f'?' active-pending':'');
   document.getElementById('pe-gender').value = g;
 }
+
+function selectModalGender(g) {
+  document.getElementById('mf-gender-m').className = 'pay-btn' + (g==='m'?' active-paid':'');
+  document.getElementById('mf-gender-f').className = 'pay-btn' + (g==='f'?' active-pending':'');
+  document.getElementById('mf-gender').value = g;
+  document.getElementById('mf-gender-select')?.classList.remove('input-error');
+}
+window.selectModalGender = selectModalGender;
 
 function selectPayStatus(btn, status) {
   btn.closest('.pay-select').querySelectorAll('.pay-btn').forEach(b => { b.className = 'pay-btn'; });
@@ -4923,106 +5035,455 @@ function setPayGroupFilter(f) {
   document.getElementById('panel-payments').innerHTML = renderPaymentsPanel();
 }
 
-// ===== CALENDAR PANEL =====
-let _calYear = new Date().getFullYear(), _calMonth = new Date().getMonth(); // 0-based month
+// ===== COMBINED CALENDAR PANEL =====
 
-const HOLIDAYS_DATA = [
-  { name: 'ראש השנה', start: '2025-09-22', end: '2025-09-24', bg: '#fed7d7', color: '#c53030' },
-  { name: 'צום גדליה', start: '2025-09-25', end: '2025-09-25', bg: '#e2e8f0', color: '#4a5568' },
-  { name: 'יום כיפור', start: '2025-10-01', end: '2025-10-02', bg: '#fed7d7', color: '#c53030' },
-  { name: 'סוכות', start: '2025-10-06', end: '2025-10-07', bg: '#fed7d7', color: '#c53030' },
-  { name: 'חוה"מ סוכות', start: '2025-10-08', end: '2025-10-12', bg: '#fefcbf', color: '#b7791f' },
-  { name: 'שמחת תורה', start: '2025-10-13', end: '2025-10-14', bg: '#fed7d7', color: '#c53030' },
-  { name: 'חנוכה', start: '2025-12-25', end: '2026-01-02', bg: '#fefcbf', color: '#b7791f' },
-  { name: "ט'ו בשבט", start: '2026-02-13', end: '2026-02-13', bg: '#c6f6d5', color: '#276749' },
-  { name: 'פורים', start: '2026-03-03', end: '2026-03-04', bg: '#fefcbf', color: '#b7791f' },
-  { name: 'ערב פסח', start: '2026-03-31', end: '2026-03-31', bg: '#fed7d7', color: '#c53030' },
-  { name: 'פסח', start: '2026-04-01', end: '2026-04-02', bg: '#fed7d7', color: '#c53030' },
-  { name: 'חוה"מ פסח', start: '2026-04-03', end: '2026-04-07', bg: '#fefcbf', color: '#b7791f' },
-  { name: 'פסח', start: '2026-04-08', end: '2026-04-08', bg: '#fed7d7', color: '#c53030' },
-  { name: 'יום השואה', start: '2026-04-15', end: '2026-04-15', bg: '#e2e8f0', color: '#4a5568' },
-  { name: 'יום הזיכרון', start: '2026-04-21', end: '2026-04-21', bg: '#e2e8f0', color: '#4a5568' },
-  { name: 'יום העצמאות', start: '2026-04-22', end: '2026-04-23', bg: '#c6f6d5', color: '#276749' },
-  { name: "ל'ג בעומר", start: '2026-05-16', end: '2026-05-16', bg: '#fefcbf', color: '#b7791f' },
-  { name: 'שבועות', start: '2026-05-21', end: '2026-05-22', bg: '#fed7d7', color: '#c53030' },
-];
+function _buildWeeklyGrid(entries, hint) {
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי'];
+  const byDay = {};
+  [0,1,2,3,4].forEach(d => byDay[d] = []);
+  entries.forEach(e => { const d = Number(e.day); if (d >= 0 && d <= 4) byDay[d].push(e); });
+  [0,1,2,3,4].forEach(d => byDay[d].sort((a,b) => (a.time||'').localeCompare(b.time||'')));
 
-function buildHolidayMap() {
-  const map = {};
-  HOLIDAYS_DATA.forEach(h => {
-    let d = new Date(h.start);
-    const end = new Date(h.end);
-    while (d <= end) {
-      const key = d.toISOString().split('T')[0];
-      if (!map[key]) map[key] = h;
-      d.setDate(d.getDate() + 1);
-    }
-  });
-  return map;
+  const cols = [0,1,2,3,4].map(d => {
+    const items = byDay[d];
+
+    // Group items into time-slots: same time → same row, different time → new row
+    const slots = [];
+    const slotMap = {};
+    items.forEach(item => {
+      const key = item.time || '_';
+      if (!slotMap[key]) { slotMap[key] = []; slots.push(slotMap[key]); }
+      slotMap[key].push(item);
+    });
+
+    // Column flex = widest concurrent row (so multi-item days get proportionally more space)
+    const maxPerRow = slots.reduce((m, s) => Math.max(m, s.length), 1);
+
+    const rows = slots.map(slot => {
+      const cards = slot.map(item => `
+        <div style="flex:1;min-width:0;overflow:hidden;background:${item.color}18;border-right:3px solid ${item.color};border-radius:6px;padding:6px 8px">
+          ${item.time ? `<div style="font-size:11px;font-weight:700;color:${item.color};white-space:nowrap">${item.time}</div>` : ''}
+          <div style="font-size:12px;font-weight:600;color:#1a202c;${item.time?'margin-top:2px':''}overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.name}</div>
+          ${item.sublabel ? `<div style="font-size:11px;color:#4a5568;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👤 ${item.sublabel}</div>` : ''}
+          ${item.location ? `<div style="font-size:11px;color:#718096;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📍 ${item.location}</div>` : ''}
+        </div>`).join('');
+      return `<div style="display:flex;gap:4px;margin-bottom:6px">${cards}</div>`;
+    }).join('');
+
+    return `
+      <div style="flex:${maxPerRow};min-width:0;border-right:1px solid #e2e8f0;padding:10px 8px">
+        <div style="font-size:13px;font-weight:700;color:#2b6cb0;margin-bottom:8px;text-align:center;border-bottom:2px solid #2b6cb0;padding-bottom:4px">יום ${dayNames[d]}</div>
+        ${rows || '<div style="color:#cbd5e0;font-size:12px;text-align:center;padding-top:8px">—</div>'}
+      </div>`;
+  }).join('');
+
+  return `<div style="display:flex;min-height:320px">${cols}</div>
+    <div style="padding:10px 16px;background:#f7fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#718096">${hint}</div>`;
 }
 
 function renderCalendarPanel() {
-  const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-  const dowNames = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
-  const firstDay = new Date(_calYear, _calMonth, 1);
-  const lastDay  = new Date(_calYear, _calMonth + 1, 0);
-  const today    = new Date();
+  const hasGroups = groups.filter(g => g.name).length > 0;
+  const hasTeams  = (teams||[]).length > 0;
 
-  // map dayOfWeek → group info
-  const groupByDow = {};
+  const groupEntries = [];
   groups.forEach((g, gi) => {
-    if (!groupByDow[g.dayOfWeek]) groupByDow[g.dayOfWeek] = [];
-    groupByDow[g.dayOfWeek].push({ name: g.name, color: GROUP_COLORS[gi % GROUP_COLORS.length] });
+    if (!g.name) return;
+    const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+    const sgWithDay = (g.subGroups||[]).filter(sg => sg.day != null && sg.day >= 0 && sg.day <= 4);
+    if (sgWithDay.length > 0) {
+      sgWithDay.forEach(sg => groupEntries.push({ day: sg.day, color, time: sg.meetingTime||'', name: g.name, sublabel: sg.time||g.instructor||'', location: sg.location||'' }));
+    } else if (g.meetings && g.meetings.length > 0) {
+      g.meetings.forEach(m => { const d = Number(m.day); if (d >= 0 && d <= 4) groupEntries.push({ day:d, color, time:m.time||'', name:g.name, sublabel:g.instructor||'', location:m.location||'' }); });
+    } else if (g.dayOfWeek >= 0 && g.dayOfWeek <= 4) {
+      groupEntries.push({ day:g.dayOfWeek, color, time:'', name:g.name, sublabel:g.instructor||'', location:'' });
+    }
   });
 
-  const holidayMap = buildHolidayMap();
+  const teamEntries = [];
+  (teams||[]).forEach((team, ti) => {
+    const color = TEAM_COLORS[ti % TEAM_COLORS.length];
+    const sgWithDay = (team.subGroups||[]).filter(sg => sg.day != null && sg.day >= 0 && sg.day <= 4);
+    if (sgWithDay.length > 0) {
+      sgWithDay.forEach(sg => teamEntries.push({ day: sg.day, color, time: sg.meetingTime||'', name: team.name, sublabel: sg.time||team.coach||'', location: sg.location||'' }));
+    } else {
+      (team.meetings||[]).forEach(m => { const d = Number(m.day); if (d >= 0 && d <= 4) teamEntries.push({ day:d, color, time:m.time||'', name:team.name, sublabel:team.coach||'', location:m.location||'' }); });
+    }
+  });
 
-  // build grid cells
-  let cells = '';
-  // empty cells before first day
-  for (let i = 0; i < firstDay.getDay(); i++) cells += '<div class="cal-day other-month"></div>';
-  for (let d = 1; d <= lastDay.getDate(); d++) {
-    const dt = new Date(_calYear, _calMonth, d);
-    const isToday = dt.toDateString() === today.toDateString();
-    const dots = (groupByDow[dt.getDay()] || []).map(g =>
-      `<span class="cal-group-dot" style="background:${g.color}">${g.name.replace(' — ', ' ')}</span>`
-    ).join('');
-    const hol = holidayMap[dt.toISOString().split('T')[0]];
-    const holBg = hol ? `background:${hol.bg};` : '';
-    const holLabel = hol ? `<div style="font-size:10px;color:${hol.color};font-weight:600;line-height:1.2;margin-top:2px">${hol.name}</div>` : '';
-    cells += `<div class="cal-day${isToday?' today':''}" style="${holBg}"><div class="cal-day-num">${d}</div>${dots}${holLabel}</div>`;
+  const groupsGrid = _buildWeeklyGrid(groupEntries, 'עבור ל⚙️ הגדרות ולחץ ✎ ערוך לצד החוג לעריכה');
+  const teamsGrid  = _buildWeeklyGrid(teamEntries,  'עבור ל⚙️ הגדרות ולחץ ✎ ערוך לצד הנבחרת לעריכה');
+  const tabBtn = (id, label, active) => `<button id="${id}" onclick="switchCalTab('${active?'groups':'teams'}')" style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${active?'#2b6cb0':'transparent'};color:${active?'#2b6cb0':'#718096'};margin-bottom:-2px">${label}</button>`;
+
+  if (hasGroups && !hasTeams) return `<div class="cal-card" style="overflow:hidden"><div class="cal-header"><span style="font-size:16px;font-weight:700">📅 לוח שנה שבועי — חוגים</span></div>${groupsGrid}</div>`;
+  if (hasTeams  && !hasGroups) return `<div class="cal-card" style="overflow:hidden"><div class="cal-header"><span style="font-size:16px;font-weight:700">📅 לוח שנה שבועי — נבחרות</span></div>${teamsGrid}</div>`;
+
+  return `<div class="cal-card" style="overflow:hidden">
+    <div style="display:flex;border-bottom:2px solid #e2e8f0;padding:0 16px">
+      ${tabBtn('cal-tab-btn-groups','🗓 חוגים',true)}
+      ${tabBtn('cal-tab-btn-teams','🏅 נבחרות',false)}
+    </div>
+    <div id="cal-content-groups">${groupsGrid}</div>
+    <div id="cal-content-teams" style="display:none">${teamsGrid}</div>
+  </div>`;
+}
+window.renderCalendarPanel = renderCalendarPanel;
+
+function switchCalTab(tab) {
+  const isGroups = tab === 'groups';
+  const gc = document.getElementById('cal-content-groups');
+  const tc = document.getElementById('cal-content-teams');
+  if (gc) gc.style.display = isGroups ? '' : 'none';
+  if (tc) tc.style.display = isGroups ? 'none' : '';
+  const gb = document.getElementById('cal-tab-btn-groups');
+  const tb = document.getElementById('cal-tab-btn-teams');
+  if (gb) { gb.style.borderBottom = isGroups ? '3px solid #2b6cb0' : '3px solid transparent'; gb.style.color = isGroups ? '#2b6cb0' : '#718096'; gb.onclick = () => switchCalTab('groups'); }
+  if (tb) { tb.style.borderBottom = isGroups ? '3px solid transparent' : '3px solid #2b6cb0'; tb.style.color = isGroups ? '#718096' : '#2b6cb0'; tb.onclick = () => switchCalTab('teams'); }
+}
+window.switchCalTab = switchCalTab;
+
+// ===== GUIDE PANEL =====
+function renderGuidePanel() {
+  const section = (icon, title, color, steps, tips = []) => `
+    <div style="background:white;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:20px;overflow:hidden">
+      <div style="background:${color};padding:14px 20px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">${icon}</span>
+        <span style="font-size:16px;font-weight:700;color:white">${title}</span>
+      </div>
+      <div style="padding:18px 20px">
+        <ol style="margin:0;padding-right:20px;display:flex;flex-direction:column;gap:10px">
+          ${steps.map(s => `<li style="font-size:14px;color:#2d3748;line-height:1.6">${s}</li>`).join('')}
+        </ol>
+        ${tips.length ? `<div style="margin-top:14px;background:#fffbeb;border-right:3px solid #f6ad55;border-radius:6px;padding:10px 14px">
+          <div style="font-size:12px;font-weight:700;color:#744210;margin-bottom:4px">💡 טיפים</div>
+          ${tips.map(t => `<div style="font-size:13px;color:#744210;margin-top:3px">• ${t}</div>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  return `
+    <div style="max-width:720px;margin:0 auto;padding:24px 16px">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="font-size:36px;margin-bottom:8px">📖</div>
+        <h2 style="font-size:22px;font-weight:800;color:#1a202c;margin:0 0 6px">מדריך למדריך</h2>
+        <p style="color:#718096;font-size:14px;margin:0">כל מה שצריך לדעת כדי לנהל את הנבחרת / החוג שלך במערכת</p>
+      </div>
+
+      <!-- מבנה המערכת -->
+      <div style="background:#ebf8ff;border-radius:12px;padding:16px 20px;margin-bottom:20px;border-right:4px solid #2b6cb0">
+        <div style="font-size:14px;font-weight:700;color:#2c5282;margin-bottom:8px">🗺️ מבנה המערכת</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          ${[['🗓 חוגים','ניהול קבוצות לימוד שבועיות'],['🏅 נבחרות','קבוצות תחרותיות'],['📋 נוכחות','רישום נוכחות לפי תאריך'],['👤 שחקנים','פרטים אישיים + הישגים'],['📅 לוח שנה','מפגשים לפי ימים']].map(([i,d]) =>
+            `<div style="background:white;border-radius:8px;padding:8px 12px;font-size:13px;min-width:120px;flex:1">
+              <div style="font-weight:700;color:#2b6cb0">${i}</div>
+              <div style="color:#718096;font-size:12px;margin-top:2px">${d}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      ${section('➕','הוספת משתתף חדש','linear-gradient(135deg,#2b6cb0,#2c5282)',[
+        'עבור ללשונית החוג או הנבחרת הרלוונטית מהתפריט הצדדי',
+        'לחץ על כפתור <strong>➕ הוסף משתתף</strong> (בפינה הימנית של הקבוצה)',
+        'מלא את שם פרטי, שם משפחה, שנת לידה, מין (שדות חובה מסומנים *)',
+        'הכנס טלפון ומייל הורה (חובה)',
+        'אם יש מספר שחקן באיגוד — הכנס אותו ולחץ <strong>🔍 שלוף</strong> למילוי אוטומטי',
+        'לחץ <strong>➕ הוסף</strong>'
+      ],[
+        'לחיצה על "🔍 שלוף" ממלאת אוטומטית מד כושר ותוקף כרטיס מאתר האיגוד',
+        'ניתן לשלוף נתונים גם בעריכה מאוחר יותר'
+      ])}
+
+      ${section('📋','רישום נוכחות','linear-gradient(135deg,#276749,#2f855a)',[
+        'עבור ללשונית <strong>📋 נוכחות</strong> מהתפריט',
+        'בחר חוג / נבחרת מהרשימה הנפתחת',
+        'בחר תאריך — <em>המערכת מציגה רק תאריכים של ימי הפגישה</em>',
+        'סמן ✓ לידי כל משתתף שנוכח (לחיצה על השורה מסמנת/מבטלת)',
+        'לחץ <strong>💾 שמור נוכחות</strong>',
+        'אם הייתה חופשה — לחץ על <strong>🚫 חופשה</strong> במקום לסמן נוכחות'
+      ],[
+        'ניתן לסמן הכל / לנקה הכל בכפתורים המהירים',
+        'הנוכחות נשמרת בענן — ניתן לחזור ולערוך בכל עת'
+      ])}
+
+      ${section('✏️','עריכת פרטי משתתף','linear-gradient(135deg,#553c9a,#44337a)',[
+        'לחץ על שם המשתתף בטבלה — יפתח חלון הפרופיל',
+        'לחץ על <strong>✎ ערוך</strong> בפינה הימנית של חלון הפרופיל',
+        'ערוך את הפרטים הנדרשים (שדות חובה מסומנים *)',
+        'לחץ <strong>💾 שמור</strong>'
+      ],[
+        'ניתן להעביר משתתף לחוג / נבחרת אחרת ישירות מחלון העריכה',
+        'סטטוס תשלום (ניסיון / ממתין / שילם) מתעדכן כאן'
+      ])}
+
+      ${section('🖨️','הדפסת רשימת משתתפים','linear-gradient(135deg,#744210,#975a16)',[
+        'גלול לקבוצה הרצויה בתוך החוג / הנבחרת',
+        'לחץ על <strong>🖨️ הדפס</strong> בפינה הימנית של הכותרת',
+        'ייפתח חלון הדפסה עם הרשימה — שמור כ-PDF או הדפס'
+      ])}
+
+
+${section('📊','צפייה בנוכחות וסטטיסטיקות','linear-gradient(135deg,#c53030,#9b2c2c)',[
+        'לחץ על שם משתתף לפתיחת הפרופיל',
+        'בחלק התחתון של הפרופיל תוצג <strong>היסטוריית נוכחות</strong>',
+        'לסיכום כלל הקבוצה — עבור ל<strong>📊 דוחות</strong> בתפריט',
+        'לסיכום תשלומים — עבור ל<strong>💳 תשלומים</strong>'
+      ])}
+
+      <div style="background:#f0fff4;border-radius:12px;padding:16px 20px;border-right:4px solid #38a169;margin-top:8px">
+        <div style="font-size:14px;font-weight:700;color:#276749;margin-bottom:8px">✅ שים לב</div>
+        <div style="font-size:13px;color:#276749;line-height:1.8">
+          • כל השינויים נשמרים <strong>אוטומטית בענן</strong> — אין צורך ב"שמור" לכל פעולה (חוץ מנוכחות)<br>
+          • המערכת עובדת <strong>מכל מכשיר</strong> — מחשב, טאבלט, טלפון<br>
+          • בעיה? פנה למנהל המערכת
+        </div>
+      </div>
+    </div>`;
+}
+window.renderGuidePanel = renderGuidePanel;
+
+// ===== TEAM CALENDAR COLORS =====
+const TEAM_COLORS = ['#2b6cb0','#276749','#744210','#553c9a','#c53030','#285e61','#7b341e','#1a365d','#2d3748','#6b46c1','#2c7a7b','#9c4221'];
+
+function renderTeamCalendarPanel() { return renderCalendarPanel(); }
+window.renderTeamCalendarPanel = renderTeamCalendarPanel;
+
+// ===== TEAM MEETINGS MODAL =====
+function openTeamMeetingsModal(teamIdx) {
+  const team = teams[teamIdx];
+  if (!team) return;
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const rows = (team.meetings || []).map((m, i) => `
+    <div id="tm-row-${i}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f4f8;flex-wrap:wrap">
+      <select id="tm-day-${i}" class="modal-input" style="width:100px">
+        ${dayNames.map((d,di) => `<option value="${di}"${m.day===di?' selected':''}>${d}</option>`).join('')}
+      </select>
+      <input type="text" id="tm-time-${i}" value="${m.time||''}" placeholder="12:50" class="modal-input" style="width:80px" dir="ltr">
+      <input type="text" id="tm-loc-${i}" value="${m.location||''}" placeholder="שם ביה&quot;ס / מרכז" class="modal-input" style="flex:1;min-width:120px">
+      <button onclick="removeTmRow(${i})" style="background:#fff5f5;border:1px solid #fed7d7;color:#c53030;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap;font-family:inherit">✕ הסר</button>
+    </div>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.id = 'teamMeetingsOverlay';
+  overlay.innerHTML = `
+    <div class="modal-box" style="width:520px">
+      <div class="modal-header">
+        <div><h3>⚙️ מפגשים — ${team.name}</h3><div style="font-size:12px;opacity:0.8;margin-top:2px">👤 ${team.coach||''}</div></div>
+        <button class="modal-close" onclick="document.getElementById('teamMeetingsOverlay').remove()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="tm-rows">${rows}</div>
+        <button onclick="addTmRow()" style="width:100%;margin-top:10px;padding:9px;background:#ebf8ff;border:1px dashed #63b3ed;color:#2b6cb0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">+ הוסף מפגש</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-form-cancel" onclick="document.getElementById('teamMeetingsOverlay').remove()">ביטול</button>
+        <button class="btn-form-submit" onclick="saveTeamMeetings(${teamIdx})">💾 שמור</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  window._tmTeamIdx = teamIdx;
+  window._tmRowCount = (team.meetings || []).length;
+}
+window.openTeamMeetingsModal = openTeamMeetingsModal;
+
+function addTmRow() {
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const i = window._tmRowCount++;
+  const div = document.createElement('div');
+  div.id = `tm-row-${i}`;
+  div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f4f8;flex-wrap:wrap';
+  div.innerHTML = `
+    <select id="tm-day-${i}" class="modal-input" style="width:100px">
+      ${dayNames.map((d,di) => `<option value="${di}">${d}</option>`).join('')}
+    </select>
+    <input type="text" id="tm-time-${i}" placeholder="12:50" class="modal-input" style="width:80px" dir="ltr">
+    <input type="text" id="tm-loc-${i}" placeholder="שם ביה&quot;ס / מרכז" class="modal-input" style="flex:1;min-width:120px">
+    <button onclick="removeTmRow(${i})" style="background:#fff5f5;border:1px solid #fed7d7;color:#c53030;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap;font-family:inherit">✕ הסר</button>`;
+  document.getElementById('tm-rows').appendChild(div);
+}
+window.addTmRow = addTmRow;
+
+function removeTmRow(i) {
+  document.getElementById(`tm-row-${i}`)?.remove();
+}
+window.removeTmRow = removeTmRow;
+
+async function saveTeamMeetings(teamIdx) {
+  const team = teams[teamIdx];
+  if (!team) return;
+  const meetings = [];
+  for (let i = 0; i < window._tmRowCount; i++) {
+    const row = document.getElementById(`tm-row-${i}`);
+    if (!row) continue;
+    const day  = parseInt(document.getElementById(`tm-day-${i}`)?.value ?? -1);
+    const time = document.getElementById(`tm-time-${i}`)?.value?.trim() || '';
+    const loc  = document.getElementById(`tm-loc-${i}`)?.value?.trim() || '';
+    if (day >= 0 && (time || loc)) meetings.push({ day, time, location: loc });
   }
-  // fill remaining
-  const total = firstDay.getDay() + lastDay.getDate();
-  for (let i = 0; i < (7 - total % 7) % 7; i++) cells += '<div class="cal-day other-month"></div>';
+  team.meetings = meetings;
+  if (db && team.id) {
+    try {
+      await db.ref(`dbTeams/${team.id}/meetings`).set(meetings.length ? meetings : null);
+    } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); return; }
+  }
+  document.getElementById('teamMeetingsOverlay')?.remove();
+  const panel = document.getElementById('panel-team-' + team.id);
+  if (panel) panel.innerHTML = renderTeamGroup(team, teamIdx);
+  const tcPanel = document.getElementById('panel-calendar');
+  if (tcPanel && tcPanel.classList.contains('active')) tcPanel.innerHTML = renderCalendarPanel();
+  // refresh attendance date selector if this team is currently selected
+  if (teamAttState.teamIdx === teamIdx) {
+    teamAttState.date = defaultDateForTeam(team);
+    rebuildTeamDateSelect();
+  }
+  showToast(`מפגשים עודכנו ✅`);
+}
+window.saveTeamMeetings = saveTeamMeetings;
 
-  const legend = groups.map((g, gi) =>
-    `<div class="cal-legend-item"><div class="cal-legend-dot" style="background:${GROUP_COLORS[gi%GROUP_COLORS.length]}"></div>${g.name}</div>`
-  ).join('');
+// ===== SHARED MEETING ROW HELPERS =====
+window._mtCounts = {};
 
-  return `<div class="cal-card">
-    <div class="cal-header">
-      <button class="cal-nav-btn" onclick="calNav(-1)" ${(_calYear===2026&&_calMonth===5)?'disabled style="opacity:.3;cursor:default"':''}>→</button>
-      <div class="cal-month-title">${monthNames[_calMonth]} ${_calYear}</div>
-      <button class="cal-nav-btn" onclick="calNav(1)" ${(_calYear===2025&&_calMonth===8)?'disabled style="opacity:.3;cursor:default"':''}>←</button>
-    </div>
-    <div class="cal-grid">
-      ${dowNames.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
-      ${cells}
-    </div>
-    <div class="cal-legend">${legend}</div>
+function _meetingsSection(meetings, prefix) {
+  window._mtCounts[prefix] = meetings.length;
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const rows = meetings.map((m, i) => _meetingRow(m, i, prefix, dayNames)).join('');
+  return `<div>
+    <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">מפגשים שבועיים</label>
+    <div id="${prefix}-rows" style="min-height:4px">${rows}</div>
+    <button onclick="addMeetingRow('${prefix}')" style="width:100%;margin-top:8px;padding:8px;background:#ebf8ff;border:1px dashed #63b3ed;color:#2b6cb0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">+ הוסף מפגש</button>
   </div>`;
 }
 
-function calNav(dir) {
-  _calMonth -= dir; // RTL: ← = קדימה
-  if (_calMonth < 0) { _calMonth = 11; _calYear--; }
-  if (_calMonth > 11) { _calMonth = 0; _calYear++; }
-  // גבולות: ספטמבר 2025 עד יוני 2026
-  if (_calYear < 2025 || (_calYear === 2025 && _calMonth < 8)) { _calYear = 2025; _calMonth = 8; }
-  if (_calYear > 2026 || (_calYear === 2026 && _calMonth > 5)) { _calYear = 2026; _calMonth = 5; }
-  document.getElementById('panel-calendar').innerHTML = renderCalendarPanel();
+function _meetingRow(m, i, prefix, dayNames) {
+  dayNames = dayNames || ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  return `<div id="${prefix}-row-${i}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f4f8;flex-wrap:wrap">
+    <select id="${prefix}-day-${i}" class="modal-input" style="width:100px">
+      ${dayNames.map((d,di) => `<option value="${di}"${(m&&m.day===di)?' selected':''}>${d}</option>`).join('')}
+    </select>
+    <input type="text" id="${prefix}-time-${i}" value="${m&&m.time||''}" placeholder="16:00" class="modal-input" style="width:80px" dir="ltr">
+    <input type="text" id="${prefix}-loc-${i}" value="${m&&m.location||''}" placeholder="מיקום (אופציונלי)" class="modal-input" style="flex:1;min-width:120px">
+    <button onclick="removeMeetingRow('${prefix}',${i})" style="background:#fff5f5;border:1px solid #fed7d7;color:#c53030;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap;font-family:inherit">✕ הסר</button>
+  </div>`;
 }
+
+window.addMeetingRow = function(prefix) {
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const i = window._mtCounts[prefix]++;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = _meetingRow({}, i, prefix, dayNames);
+  document.getElementById(`${prefix}-rows`)?.appendChild(tmp.firstElementChild);
+};
+window.removeMeetingRow = function(prefix, i) {
+  document.getElementById(`${prefix}-row-${i}`)?.remove();
+};
+
+function readMeetingRows(prefix) {
+  const meetings = [];
+  const count = window._mtCounts[prefix] || 0;
+  for (let i = 0; i < count; i++) {
+    const row = document.getElementById(`${prefix}-row-${i}`);
+    if (!row) continue;
+    const day = parseInt(document.getElementById(`${prefix}-day-${i}`)?.value ?? '-1');
+    const time = document.getElementById(`${prefix}-time-${i}`)?.value?.trim() || '';
+    const loc  = document.getElementById(`${prefix}-loc-${i}`)?.value?.trim() || '';
+    if (day >= 0 && (time || loc)) meetings.push({ day, time, location: loc });
+  }
+  return meetings;
+}
+
+// ===== GROUP MEETINGS MODAL =====
+function openGroupMeetingsModal(groupIdx) {
+  const group = groups[groupIdx];
+  if (!group) return;
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const rows = (group.meetings || []).map((m, i) => `
+    <div id="gm-row-${i}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f4f8;flex-wrap:wrap">
+      <select id="gm-day-${i}" class="modal-input" style="width:100px">
+        ${dayNames.map((d,di) => `<option value="${di}"${m.day===di?' selected':''}>${d}</option>`).join('')}
+      </select>
+      <input type="text" id="gm-time-${i}" value="${m.time||''}" placeholder="12:50" class="modal-input" style="width:80px" dir="ltr">
+      <input type="text" id="gm-loc-${i}" value="${m.location||''}" placeholder="מיקום (אופציונלי)" class="modal-input" style="flex:1;min-width:120px">
+      <button onclick="removeGmRow(${i})" style="background:#fff5f5;border:1px solid #fed7d7;color:#c53030;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap;font-family:inherit">✕ הסר</button>
+    </div>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.id = 'groupMeetingsOverlay';
+  overlay.innerHTML = `
+    <div class="modal-box" style="width:520px">
+      <div class="modal-header">
+        <div><h3>⚙️ מפגשים — ${group.name}</h3><div style="font-size:12px;opacity:0.8;margin-top:2px">👤 ${group.instructor||''}</div></div>
+        <button class="modal-close" onclick="document.getElementById('groupMeetingsOverlay').remove()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="gm-rows">${rows}</div>
+        <button onclick="addGmRow()" style="width:100%;margin-top:10px;padding:9px;background:#ebf8ff;border:1px dashed #63b3ed;color:#2b6cb0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">+ הוסף מפגש</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-form-cancel" onclick="document.getElementById('groupMeetingsOverlay').remove()">ביטול</button>
+        <button class="btn-form-submit" onclick="saveGroupMeetings(${groupIdx})">💾 שמור</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  window._gmGroupIdx = groupIdx;
+  window._gmRowCount = (group.meetings || []).length;
+}
+window.openGroupMeetingsModal = openGroupMeetingsModal;
+
+function addGmRow() {
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const i = window._gmRowCount++;
+  const div = document.createElement('div');
+  div.id = `gm-row-${i}`;
+  div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f4f8;flex-wrap:wrap';
+  div.innerHTML = `
+    <select id="gm-day-${i}" class="modal-input" style="width:100px">
+      ${dayNames.map((d,di) => `<option value="${di}">${d}</option>`).join('')}
+    </select>
+    <input type="text" id="gm-time-${i}" placeholder="12:50" class="modal-input" style="width:80px" dir="ltr">
+    <input type="text" id="gm-loc-${i}" placeholder="מיקום (אופציונלי)" class="modal-input" style="flex:1;min-width:120px">
+    <button onclick="removeGmRow(${i})" style="background:#fff5f5;border:1px solid #fed7d7;color:#c53030;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap;font-family:inherit">✕ הסר</button>`;
+  document.getElementById('gm-rows').appendChild(div);
+}
+window.addGmRow = addGmRow;
+
+function removeGmRow(i) { document.getElementById(`gm-row-${i}`)?.remove(); }
+window.removeGmRow = removeGmRow;
+
+async function saveGroupMeetings(groupIdx) {
+  const group = groups[groupIdx];
+  if (!group) return;
+  const meetings = [];
+  for (let i = 0; i < window._gmRowCount; i++) {
+    const row = document.getElementById(`gm-row-${i}`);
+    if (!row) continue;
+    const day  = parseInt(document.getElementById(`gm-day-${i}`)?.value ?? -1);
+    const time = document.getElementById(`gm-time-${i}`)?.value?.trim() || '';
+    const loc  = document.getElementById(`gm-loc-${i}`)?.value?.trim() || '';
+    if (day >= 0 && (time || loc)) meetings.push({ day, time, location: loc });
+  }
+  group.meetings = meetings;
+  if (db && group.id) {
+    try {
+      await db.ref(`dbGroups/${group.id}/meetings`).set(meetings.length ? meetings : null);
+    } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); return; }
+  }
+  document.getElementById('groupMeetingsOverlay')?.remove();
+  // refresh the group panel
+  const panel = document.getElementById('panel-' + group.id);
+  if (panel) panel.innerHTML = renderGroup(group, groupIdx);
+  // refresh calendar if visible
+  const calP = document.getElementById('panel-calendar');
+  if (calP && calP.classList.contains('active')) calP.innerHTML = renderCalendarPanel();
+  // refresh attendance date selector if this group is selected
+  if (attState.groupIdx === groupIdx) {
+    attState.date = defaultDateForGroup(group);
+    rebuildDateSelect();
+    loadAttendance();
+  }
+  showToast('מפגשים עודכנו ✅');
+}
+window.saveGroupMeetings = saveGroupMeetings;
+
 
 // ===== BACKUP =====
 async function exportBackup() {
@@ -5132,8 +5593,8 @@ function renderDashboard(missingAtt = []) {
 
   // ── Stats ──────────────────────────────────────────────
   let totalPlayers = 0, totalPaid = 0, totalPending = 0, totalTrial = 0;
-  groups.forEach(g => g.subGroups.forEach(sg => {
-    sg.players.forEach(p => {
+  groups.forEach(g => (g.subGroups || []).forEach(sg => {
+    (sg.players || []).forEach(p => {
       if (p.hidden) return;
       totalPlayers++;
       const s = p.paymentStatus || 'trial';
@@ -5149,8 +5610,8 @@ function renderDashboard(missingAtt = []) {
   const todaySection = todayGroups.length === 0
     ? `<div style="padding:16px 18px;color:#718096;font-size:13px">אין חוגים היום</div>`
     : todayGroups.map(({ g, gi }) =>
-        g.subGroups.map((sg, si) => {
-          const cnt = sg.players.filter(p => !p.hidden).length;
+        (g.subGroups || []).map((sg, si) => {
+          const cnt = (sg.players || []).filter(p => !p.hidden).length;
           const color = GROUP_COLORS[gi % GROUP_COLORS.length];
           return `<div class="dash-today-row">
             <div class="dash-today-dot" style="background:${color}"></div>
@@ -5733,7 +6194,7 @@ tabsBar.appendChild(homeBtn);
 const homePanel = document.createElement('div');
 homePanel.className = 'tab-panel active';
 homePanel.id = 'panel-home';
-homePanel.innerHTML = renderDashboard();
+try { homePanel.innerHTML = renderDashboard(); } catch(e) { homePanel.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה בדשבורד: ${e.message}</div>`; console.error('renderDashboard failed:', e); }
 content.appendChild(homePanel);
 setTimeout(() => loadAuditWidget(), 500);
 
@@ -5755,6 +6216,7 @@ if (groups.length > 0 || currentUser?.role === 'admin') {
     content.appendChild(noGroupsPanel);
   } else {
     groups.forEach((group, i) => {
+      if (!group.id || !group.name) return; // skip corrupted entries
       const btn = document.createElement('button');
       btn.className = 'tab-btn';
       btn.dataset.tab = group.id;
@@ -5765,7 +6227,8 @@ if (groups.length > 0 || currentUser?.role === 'admin') {
       const panel = document.createElement('div');
       panel.className = 'tab-panel';
       panel.id = 'panel-' + group.id;
-      panel.innerHTML = renderGroup(group, i);
+      try { panel.innerHTML = renderGroup(group, i); }
+      catch(e) { panel.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה בטעינת החוג: ${e.message}</div>`; console.error('renderGroup failed:', group, e); }
       content.appendChild(panel);
     });
   }
@@ -5851,6 +6314,17 @@ tabsBar.appendChild(calBtn);
 const calPanel = document.createElement('div');
 calPanel.className = 'tab-panel'; calPanel.id = 'panel-calendar'; calPanel.innerHTML = renderCalendarPanel();
 content.appendChild(calPanel);
+
+// ── מדריך ────────────────────────────────────────
+addSidebarLabel('עזרה');
+const guideBtn = document.createElement('button');
+guideBtn.className = 'tab-btn'; guideBtn.dataset.tab = 'guide'; guideBtn.textContent = '❓ מדריך למדריך';
+guideBtn.onclick = () => switchTab('guide');
+tabsBar.appendChild(guideBtn);
+const guidePanel = document.createElement('div');
+guidePanel.className = 'tab-panel'; guidePanel.id = 'panel-guide';
+guidePanel.innerHTML = renderGuidePanel();
+content.appendChild(guidePanel);
 
 if (currentUser?.role === 'admin') {
   // ── תחרויות ─────────────────────────────────────
@@ -7486,7 +7960,8 @@ async function loadPlayerOverrides() {
           if (o.fedId)     sg.players[idx].fedId     = o.fedId;
         });
       });
-      document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);
+      const op = document.getElementById('panel-' + g.id);
+      if (op) op.innerHTML = renderGroup(g, groupIdx);
     });
   } catch(e) {
     console.error('Error loading player overrides:', e);
@@ -7649,7 +8124,8 @@ async function loadGroupNames() {
           if (sgNames[g.id][sgIdx] != null) sg.time = sgNames[g.id][sgIdx];
         });
       }
-      document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);
+      const gp = document.getElementById('panel-' + g.id);
+      if (gp) gp.innerHTML = renderGroup(g, groupIdx);
     });
   } catch(e) { console.error('Error loading group names:', e); }
 }
@@ -7670,7 +8146,8 @@ async function loadPayments() {
           if (sg.players[idx]) sg.players[idx].paymentStatus = status;
         });
       });
-      document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);
+      const pp = document.getElementById('panel-' + g.id);
+      if (pp) pp.innerHTML = renderGroup(g, groupIdx);
     });
   } catch(e) {
     console.error('Error loading payments:', e);
@@ -7867,12 +8344,16 @@ async function loadSettings() {
 function renderSettingsPanel() {
   const groupRows = groups.map((g, i) => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:6px">
-      <div>
+      <div style="flex:1;min-width:0">
         <span style="font-weight:600;font-size:14px">${g.name}</span>
         ${g.instructor ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${g.instructor}</span>` : ''}
         <span style="font-size:12px;color:#a0aec0"> · ${g.subGroups.length} קבוצות</span>
+        ${(g.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(g.meetings)}</span>` : ''}
       </div>
-      <button onclick="deleteDbGroup('${g.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק חוג">🗑</button>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        <button onclick="openEditGroupModal(${i})" style="background:#ebf8ff;border:1px solid #bee3f8;color:#2b6cb0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+        <button onclick="deleteDbGroup('${g.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק חוג">🗑</button>
+      </div>
     </div>`).join('');
   return `
   <div style="display:flex;flex-direction:column;gap:20px;max-width:560px">
@@ -7904,11 +8385,16 @@ function renderSettingsPanel() {
             const regionHeader = region ? `<div style="font-size:11px;font-weight:700;color:#718096;letter-spacing:0.8px;text-transform:uppercase;padding:8px 4px 4px">― ${region} ―</div>` : '';
             return regionHeader + regionTeams.map(t => `
               <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:4px">
-                <div>
+                <div style="flex:1;min-width:0">
                   <span style="font-weight:600;font-size:14px">🏅 ${t.name}</span>
                   ${t.coach ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${t.coach}</span>` : ''}
+                  <span style="font-size:11px;color:#a0aec0;margin-right:6px">${t.subGroups.length} קטגורי${t.subGroups.length===1?'ה':'ות'}</span>
+                  ${(t.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(t.meetings)}</span>` : ''}
                 </div>
-                <button onclick="deleteDbTeam('${t.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק נבחרת">🗑</button>
+                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                  <button onclick="openEditTeamModal('${t.id}')" style="background:#ebf8ff;border:1px solid #bee3f8;color:#2b6cb0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+                  <button onclick="deleteDbTeam('${t.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק נבחרת">🗑</button>
+                </div>
               </div>`).join('');
           }).join('');
         })()}</div>
@@ -8042,6 +8528,23 @@ window.doEndYear = doEndYear;
 
 // ===== CREATE GROUP =====
 
+const _SG_DAY_OPTS = `<option value="">— יום —</option><option value="0">ראשון</option><option value="1">שני</option><option value="2">שלישי</option><option value="3">רביעי</option><option value="4">חמישי</option><option value="5">שישי</option>`;
+
+function _sgDayOpts(selected) {
+  const days = ['ראשון','שני','שלישי','רביעי','חמישי','שישי'];
+  return `<option value="">— יום —</option>` + days.map((d,i) => `<option value="${i}"${selected===i?' selected':''}>${d}</option>`).join('');
+}
+
+function _cgSgRow(sg) {
+  return `<div class="cg-sg-row" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f0f4f8">
+    <input type="text" class="modal-input cg-sg-name" value="${sg.time||''}" placeholder="שם קבוצה" style="flex:2;min-width:90px">
+    <select class="modal-input cg-sg-day" style="width:90px">${_sgDayOpts(sg.day)}</select>
+    <input type="text" class="modal-input cg-sg-mtime" value="${sg.meetingTime||''}" placeholder="16:00" style="width:68px" dir="ltr">
+    <input type="text" class="modal-input cg-sg-loc" value="${sg.location||''}" placeholder="מיקום" style="flex:1;min-width:70px">
+    <button onclick="this.closest('.cg-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+  </div>`;
+}
+
 function openCreateGroupModal() {
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
@@ -8072,13 +8575,8 @@ function openCreateGroupModal() {
             </div>
           </div>
           <div>
-            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">קבוצות / שעות <span style="color:#e53e3e">*</span></label>
-            <div id="cg-subgroups" style="display:flex;flex-direction:column;gap:6px">
-              <div class="cg-sg-row" style="display:flex;gap:6px">
-                <input type="text" placeholder="לדוגמה: 16:00–18:00 או קבוצה א" class="modal-input cg-sg-input" style="flex:1">
-                <button onclick="this.closest('.cg-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>
-              </div>
-            </div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">קבוצות <span style="color:#e53e3e">*</span> <span style="font-size:11px;color:#a0aec0;font-weight:400">— לכל קבוצה ניתן להגדיר יום ושעה</span></label>
+            <div id="cg-subgroups" style="display:flex;flex-direction:column">${_cgSgRow({})}</div>
             <button onclick="addCgSubgroup()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;color:#4a5568;margin-top:6px">+ הוסף קבוצה</button>
           </div>
           <button onclick="saveNewGroup()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 צור חוג</button>
@@ -8091,12 +8589,9 @@ window.openCreateGroupModal = openCreateGroupModal;
 function addCgSubgroup() {
   const cont = document.getElementById('cg-subgroups');
   if (!cont) return;
-  const row = document.createElement('div');
-  row.className = 'cg-sg-row';
-  row.style.cssText = 'display:flex;gap:6px';
-  row.innerHTML = `<input type="text" placeholder="לדוגמה: 16:00–18:00 או קבוצה ב" class="modal-input cg-sg-input" style="flex:1">
-    <button onclick="this.closest('.cg-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>`;
-  cont.appendChild(row);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = _cgSgRow({});
+  cont.appendChild(tmp.firstElementChild);
 }
 window.addCgSubgroup = addCgSubgroup;
 
@@ -8107,15 +8602,20 @@ async function saveNewGroup() {
   const wa = document.getElementById('cg-wa')?.value?.trim() || '';
   const dayOfWeek = parseInt(document.getElementById('cg-day')?.value || '0');
   const dayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
-  const sgInputs = document.querySelectorAll('.cg-sg-input');
-  const subGroups = [...sgInputs].map(el => ({ time: el.value.trim() })).filter(sg => sg.time);
-  if (subGroups.length === 0) { showToast('יש להוסיף לפחות קבוצה אחת', 'error'); return; }
+  const sgRows = document.querySelectorAll('#cg-subgroups .cg-sg-row');
+  const subGroupsRaw = [...sgRows].map(row => {
+    const t = row.querySelector('.cg-sg-name')?.value?.trim() || '';
+    if (!t) return null;
+    const dv = row.querySelector('.cg-sg-day')?.value;
+    return { time: t, day: (dv !== '' && dv != null) ? parseInt(dv) : null, meetingTime: row.querySelector('.cg-sg-mtime')?.value?.trim() || '', location: row.querySelector('.cg-sg-loc')?.value?.trim() || '' };
+  }).filter(Boolean);
+  if (subGroupsRaw.length === 0) { showToast('יש להוסיף לפחות קבוצה אחת', 'error'); return; }
   const id = name.replace(/[^a-zA-Z0-9֐-׿]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
-  const groupDef = { name, instructor, instructorWa: wa, day: dayNames[dayOfWeek], dayOfWeek, subGroups };
+  const groupDef = { name, instructor, instructorWa: wa, day: dayNames[dayOfWeek], dayOfWeek, subGroups: subGroupsRaw };
   try {
     await db.ref(`dbGroups/${id}`).set(groupDef);
     _useDbGroups = true;
-    groups.push({ id, ...groupDef, subGroups: subGroups.map(sg => ({ time: sg.time, players: [] })) });
+    groups.push({ id, ...groupDef, subGroups: subGroupsRaw.map(sg => ({ ...sg, players: [] })) });
     document.querySelector('.friday-modal')?.remove();
     showToast(`החוג "${name}" נוצר ✅`);
     // Add new tab dynamically
@@ -8146,6 +8646,122 @@ async function saveNewGroup() {
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.saveNewGroup = saveNewGroup;
+
+// ===== EDIT GROUP (combined name + meetings) =====
+
+function openEditGroupModal(groupIdx) {
+  const group = groups[groupIdx];
+  if (!group) return;
+  const dayDisplayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
+  const dayOpts = dayDisplayNames.map((d,i) => `<option value="${i}"${(group.dayOfWeek||0)===i?' selected':''}>${d}</option>`).join('');
+  const sgRows = (group.subGroups||[]).map((sg, i) => `
+    <div class="eg-sg-row" data-idx="${i}" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f0f4f8">
+      <input type="text" class="modal-input eg-sg-name" value="${sg.time||''}" placeholder="שם קבוצה" style="flex:2;min-width:90px">
+      <select class="modal-input eg-sg-day" style="width:90px">${_sgDayOpts(sg.day)}</select>
+      <input type="text" class="modal-input eg-sg-mtime" value="${sg.meetingTime||''}" placeholder="16:00" style="width:68px" dir="ltr">
+      <input type="text" class="modal-input eg-sg-loc" value="${sg.location||''}" placeholder="מיקום" style="flex:1;min-width:70px">
+      <button onclick="this.closest('.eg-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+    </div>`).join('');
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open" id="editGroupOverlay" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:500px">
+        <div class="modal-header">
+          <span class="modal-title">✎ עריכת חוג — ${group.name}</span>
+          <button class="modal-close" onclick="document.getElementById('editGroupOverlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div class="modal-field"><label>שם החוג <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="eg-name" value="${group.name}" class="modal-input"></div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>מדריך</label>
+              <input type="text" id="eg-instructor" value="${group.instructor||''}" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>WhatsApp</label>
+              <input type="text" id="eg-wa" value="${group.instructorWa||''}" class="modal-input"></div>
+          </div>
+          <div class="modal-field"><label>יום בשבוע (לנוכחות)</label>
+            <select id="eg-day" class="modal-input">${dayOpts}</select></div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">קבוצות <span style="color:#e53e3e">*</span> <span style="font-size:11px;color:#a0aec0;font-weight:400">— לכל קבוצה ניתן להגדיר יום ושעה</span></label>
+            <div id="eg-subgroups" style="display:flex;flex-direction:column">${sgRows}</div>
+            <button onclick="addEgSubgroup()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;color:#4a5568;margin-top:6px">+ הוסף קבוצה</button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-form-cancel" onclick="document.getElementById('editGroupOverlay').remove()">ביטול</button>
+          <button class="btn-form-submit" onclick="saveEditGroup(${groupIdx})">💾 שמור שינויים</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openEditGroupModal = openEditGroupModal;
+
+function addEgSubgroup() {
+  const cont = document.getElementById('eg-subgroups');
+  if (!cont) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = `<div class="eg-sg-row" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f0f4f8">
+    <input type="text" class="modal-input eg-sg-name" placeholder="שם קבוצה" style="flex:2;min-width:90px">
+    <select class="modal-input eg-sg-day" style="width:90px">${_sgDayOpts(null)}</select>
+    <input type="text" class="modal-input eg-sg-mtime" placeholder="16:00" style="width:68px" dir="ltr">
+    <input type="text" class="modal-input eg-sg-loc" placeholder="מיקום" style="flex:1;min-width:70px">
+    <button onclick="this.closest('.eg-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+  </div>`;
+  cont.appendChild(tmp.firstElementChild);
+}
+window.addEgSubgroup = addEgSubgroup;
+
+async function saveEditGroup(groupIdx) {
+  const group = groups[groupIdx];
+  if (!group) return;
+  const name = document.getElementById('eg-name')?.value?.trim();
+  if (!name) { showToast('יש להזין שם חוג', 'error'); return; }
+  const instructor = document.getElementById('eg-instructor')?.value?.trim() || '';
+  const wa = document.getElementById('eg-wa')?.value?.trim() || '';
+  const dayOfWeek = parseInt(document.getElementById('eg-day')?.value || '0');
+  const dayDisplayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
+
+  const sgDivs = document.querySelectorAll('#eg-subgroups .eg-sg-row');
+  const newSubGroups = [];
+  sgDivs.forEach(row => {
+    const val = row.querySelector('.eg-sg-name')?.value?.trim();
+    if (!val) return;
+    const oldIdx = row.dataset.idx != null ? parseInt(row.dataset.idx) : -1;
+    const players = (oldIdx >= 0 && group.subGroups[oldIdx]) ? group.subGroups[oldIdx].players || [] : [];
+    const dv = row.querySelector('.eg-sg-day')?.value;
+    const day = (dv !== '' && dv != null) ? parseInt(dv) : null;
+    const meetingTime = row.querySelector('.eg-sg-mtime')?.value?.trim() || '';
+    const location = row.querySelector('.eg-sg-loc')?.value?.trim() || '';
+    newSubGroups.push({ time: val, day, meetingTime, location, players });
+  });
+  if (newSubGroups.length === 0) { showToast('יש להוסיף לפחות קבוצה אחת', 'error'); return; }
+
+  group.name = name; group.instructor = instructor; group.instructorWa = wa;
+  group.dayOfWeek = dayOfWeek; group.day = dayDisplayNames[dayOfWeek];
+  group.subGroups = newSubGroups;
+
+  if (db && group.id) {
+    try {
+      await db.ref(`dbGroups/${group.id}`).update({
+        name, instructor, instructorWa: wa,
+        day: dayDisplayNames[dayOfWeek], dayOfWeek,
+        subGroups: newSubGroups.map(sg => ({ time: sg.time, day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '' }))
+      });
+    } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); return; }
+  }
+
+  document.getElementById('editGroupOverlay')?.remove();
+  const panel = document.getElementById('panel-' + group.id);
+  if (panel) panel.innerHTML = renderGroup(group, groupIdx);
+  const tabBtn = document.querySelector(`[data-tab="${group.id}"]`);
+  if (tabBtn) tabBtn.textContent = name;
+  const sp = document.getElementById('panel-settings');
+  if (sp) { sp.innerHTML = renderSettingsPanel(); loadInstructorsList(); }
+  const calP = document.getElementById('panel-calendar');
+  if (calP && calP.classList.contains('active')) calP.innerHTML = renderCalendarPanel();
+  showToast('החוג עודכן ✅');
+}
+window.saveEditGroup = saveEditGroup;
 
 async function deleteDbGroup(groupId) {
   if (!confirm('למחוק את החוג לצמיתות? כל השחקנים והנתונים שלו יימחקו.')) return;
@@ -8768,6 +9384,159 @@ window.deleteUser = deleteUser;
 
 // ===== CREATE / DELETE TEAM =====
 
+function _ctSgRow(sg) {
+  return `<div class="ct-sg-row" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f0f4f8">
+    <input type="text" class="modal-input ct-sg-name" value="${sg.time||''}" placeholder="שם קטגוריה (לדוגמה: בנים)" style="flex:2;min-width:90px">
+    <select class="modal-input ct-sg-day" style="width:90px">${_sgDayOpts(sg.day)}</select>
+    <input type="text" class="modal-input ct-sg-mtime" value="${sg.meetingTime||''}" placeholder="16:00" style="width:68px" dir="ltr">
+    <input type="text" class="modal-input ct-sg-loc" value="${sg.location||''}" placeholder="מיקום" style="flex:1;min-width:70px">
+    <button onclick="this.closest('.ct-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+  </div>`;
+}
+
+function openEditTeamModal(teamId) {
+  const team = teams.find(t => t.id === teamId);
+  if (!team) return;
+  const teamIdx = teams.indexOf(team);
+
+  const sgRows = () => document.getElementById('et-subgroups')?.querySelectorAll('.et-sg-row') || [];
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open" id="editTeamOverlay" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+          <span class="modal-title">✎ עריכת נבחרת — ${team.name}</span>
+          <button class="modal-close" onclick="document.getElementById('editTeamOverlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:2">
+              <label>שם הנבחרת <span style="color:#e53e3e">*</span></label>
+              <input type="text" id="et-name" value="${team.name}" class="modal-input">
+            </div>
+            <div class="modal-field" style="flex:1">
+              <label>אזור</label>
+              <select id="et-region" class="modal-input">
+                <option value="">ללא</option>
+                <option value="מערב"${team.region==='מערב'?' selected':''}>מערב</option>
+                <option value="מזרח"${team.region==='מזרח'?' selected':''}>מזרח</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="modal-field">
+            <label>מאמן</label>
+            <input type="text" id="et-coach" value="${team.coach||''}" class="modal-input" placeholder="שם המאמן">
+          </div>
+
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">
+              קטגוריות
+              <span style="font-size:11px;color:#a0aec0;font-weight:400;margin-right:4px">— לכל קטגוריה ניתן להגדיר יום ושעה</span>
+            </label>
+            <div id="et-subgroups" style="display:flex;flex-direction:column">
+              ${team.subGroups.map((sg, i) => {
+                const playerCount = sg.players?.length || 0;
+                return `<div class="et-sg-row" data-idx="${i}" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f0f4f8">
+                  <input type="text" class="modal-input et-sg-name" value="${sg.time||''}" placeholder="שם קטגוריה" style="flex:2;min-width:90px">
+                  <select class="modal-input et-sg-day" style="width:90px">${_sgDayOpts(sg.day)}</select>
+                  <input type="text" class="modal-input et-sg-mtime" value="${sg.meetingTime||''}" placeholder="16:00" style="width:68px" dir="ltr">
+                  <input type="text" class="modal-input et-sg-loc" value="${sg.location||''}" placeholder="מיקום" style="flex:1;min-width:70px">
+                  <span style="font-size:11px;color:#718096;white-space:nowrap;flex-shrink:0">${playerCount > 0 ? playerCount + ' שח׳' : ''}</span>
+                  <button onclick="removeEtRow(this,${playerCount})" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1;padding:2px;flex-shrink:0" title="מחק קטגוריה">✕</button>
+                </div>`;
+              }).join('')}
+            </div>
+            <button onclick="addEtRow()" style="width:100%;margin-top:8px;padding:8px;background:#f7fafc;border:1px dashed #cbd5e0;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;color:#4a5568">+ הוסף קטגוריה</button>
+          </div>
+          <div style="background:#fffbeb;border-radius:8px;padding:10px 14px;font-size:12px;color:#744210;border-right:3px solid #f6ad55">
+            ⚠️ מחיקת קטגוריה שיש בה שחקנים תסיר גם את השחקנים. לא ניתן לשחזר.
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-form-cancel" onclick="document.getElementById('editTeamOverlay').remove()">ביטול</button>
+          <button class="btn-form-submit" onclick="saveEditedTeam('${teamId}')">💾 שמור שינויים</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openEditTeamModal = openEditTeamModal;
+
+function addEtRow() {
+  const cont = document.getElementById('et-subgroups');
+  if (!cont) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = `<div class="et-sg-row" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f0f4f8">
+    <input type="text" class="modal-input et-sg-name" placeholder="שם קטגוריה" style="flex:2;min-width:90px">
+    <select class="modal-input et-sg-day" style="width:90px">${_sgDayOpts(null)}</select>
+    <input type="text" class="modal-input et-sg-mtime" placeholder="16:00" style="width:68px" dir="ltr">
+    <input type="text" class="modal-input et-sg-loc" placeholder="מיקום" style="flex:1;min-width:70px">
+    <button onclick="removeEtRow(this,0)" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1;padding:2px;flex-shrink:0">✕</button>
+  </div>`;
+  cont.appendChild(tmp.firstElementChild);
+}
+window.addEtRow = addEtRow;
+
+function removeEtRow(btn, playerCount) {
+  if (playerCount > 0 && !confirm(`לקטגוריה זו יש ${playerCount} שחקנים. למחוק בכל זאת?`)) return;
+  btn.closest('.et-sg-row').remove();
+}
+window.removeEtRow = removeEtRow;
+
+async function saveEditedTeam(teamId) {
+  const team = teams.find(t => t.id === teamId);
+  if (!team) return;
+  const teamIdx = teams.indexOf(team);
+
+  const name  = document.getElementById('et-name')?.value?.trim();
+  const coach = document.getElementById('et-coach')?.value?.trim() || '';
+  const region = document.getElementById('et-region')?.value || '';
+
+  if (!name) { showToast('יש להזין שם נבחרת', 'error'); return; }
+
+  const rows = document.querySelectorAll('#et-subgroups .et-sg-row');
+  const newSubGroups = [];
+  rows.forEach((row, i) => {
+    const nameVal = row.querySelector('.et-sg-name')?.value?.trim() || `נבחרת ${String.fromCharCode(1488+i)}`;
+    const oldIdx = row.dataset.idx != null ? parseInt(row.dataset.idx) : -1;
+    const players = (oldIdx >= 0 && team.subGroups[oldIdx]) ? team.subGroups[oldIdx].players || [] : [];
+    const dv = row.querySelector('.et-sg-day')?.value;
+    const day = (dv !== '' && dv != null) ? parseInt(dv) : null;
+    const meetingTime = row.querySelector('.et-sg-mtime')?.value?.trim() || '';
+    const location = row.querySelector('.et-sg-loc')?.value?.trim() || '';
+    newSubGroups.push({ time: nameVal, day, meetingTime, location, players });
+  });
+
+  if (newSubGroups.length === 0) { showToast('חייבת להיות לפחות קטגוריה אחת', 'error'); return; }
+
+  team.name = name; team.coach = coach; team.region = region;
+  team.subGroups = newSubGroups;
+
+  if (db && teamId) {
+    try {
+      await db.ref(`dbTeams/${teamId}`).update({
+        name, coach, region,
+        subGroups: newSubGroups.map(sg => ({ time: sg.time, day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '' }))
+      });
+    } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); return; }
+  }
+
+  document.getElementById('editTeamOverlay')?.remove();
+
+  const panel = document.getElementById('panel-team-' + teamId);
+  if (panel) panel.innerHTML = renderTeamGroup(team, teamIdx);
+  const btn = document.querySelector(`[data-tab="team-${teamId}"]`);
+  if (btn) btn.textContent = '🏅 ' + name + (coach ? ' — ' + coach : '');
+  const sp = document.getElementById('panel-settings');
+  if (sp) { sp.innerHTML = renderSettingsPanel(); loadInstructorsList(); }
+  const calP = document.getElementById('panel-calendar');
+  if (calP && calP.classList.contains('active')) calP.innerHTML = renderCalendarPanel();
+
+  showToast('נבחרת עודכנה ✅');
+}
+window.saveEditedTeam = saveEditedTeam;
+
 function openCreateTeamModal() {
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
@@ -8791,13 +9560,8 @@ function openCreateTeamModal() {
             </div>
           </div>
           <div>
-            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">קטגוריות <span style="font-size:12px;color:#a0aec0">(אם יש יותר מאחת)</span></label>
-            <div id="ct-subgroups" style="display:flex;flex-direction:column;gap:6px">
-              <div class="ct-sg-row" style="display:flex;gap:6px">
-                <input type="text" placeholder='לדוגמה: בנים / בנות / מעורב' class="modal-input ct-sg-input" style="flex:1">
-                <button onclick="this.closest('.ct-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>
-              </div>
-            </div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">קטגוריות <span style="font-size:11px;color:#a0aec0;font-weight:400">— לכל קטגוריה ניתן להגדיר יום ושעה</span></label>
+            <div id="ct-subgroups" style="display:flex;flex-direction:column">${_ctSgRow({})}</div>
             <button onclick="addCtSubgroup()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;color:#4a5568;margin-top:6px">+ הוסף קטגוריה</button>
           </div>
           <button onclick="saveNewTeam()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 צור נבחרת</button>
@@ -8810,11 +9574,9 @@ window.openCreateTeamModal = openCreateTeamModal;
 function addCtSubgroup() {
   const cont = document.getElementById('ct-subgroups');
   if (!cont) return;
-  const row = document.createElement('div');
-  row.className = 'ct-sg-row'; row.style.cssText = 'display:flex;gap:6px';
-  row.innerHTML = `<input type="text" placeholder="קטגוריה נוספת" class="modal-input ct-sg-input" style="flex:1">
-    <button onclick="this.closest('.ct-sg-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>`;
-  cont.appendChild(row);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = _ctSgRow({});
+  cont.appendChild(tmp.firstElementChild);
 }
 window.addCtSubgroup = addCtSubgroup;
 
@@ -8824,15 +9586,20 @@ async function saveNewTeam() {
   const coach  = document.getElementById('ct-coach')?.value?.trim()  || '';
   const wa     = document.getElementById('ct-wa')?.value?.trim()     || '';
   const region = document.getElementById('ct-region')?.value         || '';
-  const sgInputs = document.querySelectorAll('.ct-sg-input');
-  const subGroups = [...sgInputs].map(el => ({ time: el.value.trim() })).filter(sg => sg.time);
-  if (subGroups.length === 0) subGroups.push({ time: 'שחקנים' });
+  const ctRows = document.querySelectorAll('#ct-subgroups .ct-sg-row');
+  let subGroups = [...ctRows].map(row => {
+    const t = row.querySelector('.ct-sg-name')?.value?.trim() || '';
+    if (!t) return null;
+    const dv = row.querySelector('.ct-sg-day')?.value;
+    return { time: t, day: (dv !== '' && dv != null) ? parseInt(dv) : null, meetingTime: row.querySelector('.ct-sg-mtime')?.value?.trim() || '', location: row.querySelector('.ct-sg-loc')?.value?.trim() || '' };
+  }).filter(Boolean);
+  if (subGroups.length === 0) subGroups = [{ time: 'שחקנים', day: null, meetingTime: '', location: '' }];
   const id = 'team-' + name.replace(/[^a-zA-Z0-9א-ת]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
   const teamDef = { name, coach, coachWa: wa, region, subGroups };
   try {
     await db.ref(`dbTeams/${id}`).set(teamDef);
     _useDbTeams = true;
-    const newTeam = { id, ...teamDef, region, subGroups: subGroups.map(sg => ({ time: sg.time, players: [] })) };
+    const newTeam = { id, ...teamDef, region, subGroups: subGroups.map(sg => ({ ...sg, players: [] })) };
     teams.push(newTeam);
     document.querySelector('.friday-modal')?.remove();
     showToast(`הנבחרת "${name}" נוצרה ✅`);
@@ -10898,6 +11665,22 @@ async function initData() {
 }
 
 initAuth();
+
+// Global error catcher — helps diagnose crashes
+window.addEventListener('error', (e) => {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const msg = `שגיאה: ${e.message}\nבשורה: ${e.lineno}\nבקובץ: ${(e.filename||'').split('/').pop()}`;
+  const existing = document.getElementById('_dbg_err');
+  if (existing) { existing.textContent = msg; return; }
+  const div = document.createElement('div');
+  div.id = '_dbg_err';
+  div.style.cssText = 'position:fixed;bottom:16px;left:16px;background:#c53030;color:white;padding:12px 16px;border-radius:10px;font-size:12px;font-family:monospace;z-index:9999;max-width:420px;white-space:pre-wrap;cursor:pointer';
+  div.textContent = msg;
+  div.title = 'לחץ להעתיק';
+  div.onclick = () => { navigator.clipboard?.writeText(msg); div.style.background='#276749'; div.textContent='✅ הועתק'; setTimeout(()=>div.remove(),2000); };
+  document.body.appendChild(div);
+  setTimeout(() => div?.remove(), 15000);
+});
 </script>
 
 <div id="weekly-modal" onclick="if(event.target===this)hideWeeklyModal()">
