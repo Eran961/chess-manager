@@ -1033,6 +1033,10 @@
       .landing-topbar-left img { height: 38px; }
       .btn-login-top { padding: 8px 16px; font-size: 14px; }
       .btn-instructors { padding: 8px 12px; font-size: 13px; }
+      /* Move login button to 2nd position in nav (right after עמוד הבית) */
+      .site-nav > button:first-child { order: -2; }
+      .nav-tab-login { order: -1; margin-right: 0; border-right: 1px solid rgba(255,255,255,0.1); }
+      .btn-theme-toggle { display: none; }
       /* Stack schedule + sidebar vertically */
       .landing-main { flex-direction: column; overflow: visible; }
       .landing-sidebar {
