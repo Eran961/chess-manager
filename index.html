@@ -1026,6 +1026,30 @@
       .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
       /* Attendance controls */
       .att-controls { max-width: 100%; }
+
+      /* ===== LANDING PAGE — TABLET/MOBILE ===== */
+      .landing-topbar { padding: 10px 14px; gap: 10px; }
+      .landing-topbar-left .club-name { font-size: 13px; }
+      .landing-topbar-left img { height: 38px; }
+      .btn-login-top { padding: 8px 16px; font-size: 14px; }
+      .btn-instructors { padding: 8px 12px; font-size: 13px; }
+      /* Stack schedule + sidebar vertically */
+      .landing-main { flex-direction: column; overflow: visible; }
+      .landing-sidebar {
+        width: 100%; border-right: none; border-top: 1px solid rgba(255,255,255,0.1);
+        border-left: none; flex-direction: row; flex-wrap: wrap; gap: 10px; padding: 14px 14px;
+      }
+      .sidebar-card { flex: 1 1 calc(50% - 6px); min-width: 160px; }
+      .sidebar-cta { width: 100%; }
+      .landing-schedule-area { padding: 12px 14px; }
+      /* Site (public) pages */
+      .site-title-row { padding: 12px 16px; }
+      .site-title-text h1 { font-size: 20px; }
+      .site-logo-img { height: 44px; }
+      .hero-section { height: 300px; }
+      .hero-overlay h2 { font-size: 22px; }
+      .hero-overlay p { font-size: 14px; margin-bottom: 18px; }
+      .page-section-title { padding: 14px 16px; }
     }
 
     /* ===== MOBILE (600px) ===== */
@@ -1143,6 +1167,25 @@
 
       /* Stats bar */
       .stats-bar { font-size: 12px; padding: 6px 14px; }
+
+      /* ===== LANDING PAGE — MOBILE ===== */
+      .landing-topbar { padding: 8px 12px; }
+      .btn-instructors { display: none; } /* hide on small screens, login is the priority */
+      .btn-login-top { padding: 9px 20px; font-size: 14px; font-weight: 800; }
+      .landing-sidebar { flex-direction: column; }
+      .sidebar-card { flex: none; width: 100%; min-width: 0; }
+      .hero-section { height: 220px; }
+      .hero-overlay h2 { font-size: 18px; }
+      .hero-overlay p { font-size: 13px; }
+      .stat-item { min-width: 100px; padding: 14px 10px; }
+      .stat-num { font-size: 22px; }
+      .site-title-row { flex-direction: column; gap: 8px; text-align: center; padding: 12px 16px; }
+      .site-title-text h1 { font-size: 18px; }
+      /* Login modal — ensure full-width card on mobile */
+      .login-card { padding: 28px 20px; border-radius: 16px; }
+      .login-card .login-logo { font-size: 36px; }
+      .login-card h2 { font-size: 19px; }
+      .login-field input { font-size: 16px; } /* prevent iOS zoom */
 
       /* Settings panel — subgroup rows wrap */
       .cg-sg-row, .ct-sg-row, .eg-sg-row, .et-sg-row { flex-wrap: wrap; }
@@ -1318,6 +1361,8 @@
     body.landing-active > header,
     body.landing-active > .tabs-bar,
     body.landing-active > .tab-content { display: none !important; }
+    body.landing-active { overflow-x: hidden; }
+    #landing-page { overflow-x: hidden; }
 
     /* ===== PUBLIC WEBSITE ===== */
     #landing-page { flex-direction:column; }
