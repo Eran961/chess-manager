@@ -2284,7 +2284,7 @@ if(localStorage.getItem('ccm_loggedIn')){
       </div>
       <div class="modal-field">
         <label>שנת לידה <span class="required">*</span></label>
-        <input type="number" id="mf-year" placeholder="לדוגמה: 2015" min="1990" max="2024"
+        <input type="number" id="mf-year" placeholder="לדוגמה: 2015" min="1900" max="2024"
           oninput="updateModalAge(this.value)">
         <div class="age-hint" id="mf-age"></div>
       </div>
@@ -3104,7 +3104,7 @@ function enableTeamProfileEdit() {
     </div>
     <div class="modal-field">
       <label>שנת לידה <span class="required">*</span></label>
-      <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1990" max="${CURRENT_YEAR - 2}"
+      <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1900" max="${CURRENT_YEAR - 2}"
         placeholder="לדוגמה: 2015" oninput="updatePeAge(this.value)">
       <div class="age-hint" id="pe-age">${age}</div>
     </div>
@@ -3332,7 +3332,7 @@ function closeAddModal(e) {
 function updateModalAge(val) {
   const year = parseInt(val);
   const hint = document.getElementById('mf-age');
-  hint.textContent = (year >= 1990 && year <= CURRENT_YEAR) ? `גיל ${CURRENT_YEAR - year}` : '';
+  hint.textContent = (year >= 1900 && year <= CURRENT_YEAR) ? `גיל ${CURRENT_YEAR - year}` : '';
 }
 
 async function lookupFedPlayer() {
@@ -3432,7 +3432,7 @@ async function submitAddPlayer() {
   if (!firstName) { firstEl.classList.add('input-error'); firstEl.focus(); valid = false; }
   if (!lastName)  { lastEl.classList.add('input-error');  if (valid) lastEl.focus(); valid = false; }
   const birthYear = parseInt(yearVal);
-  if (!yearVal || isNaN(birthYear) || birthYear < 1990 || birthYear > CURRENT_YEAR - 2) {
+  if (!yearVal || isNaN(birthYear) || birthYear < 1900 || birthYear > CURRENT_YEAR - 2) {
     yearEl.classList.add('input-error');
     if (valid) yearEl.focus();
     valid = false;
@@ -4170,7 +4170,7 @@ function enableProfileEdit() {
     </div>
     <div class="modal-field">
       <label>שנת לידה <span class="required">*</span></label>
-      <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1990" max="${CURRENT_YEAR - 2}"
+      <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1900" max="${CURRENT_YEAR - 2}"
         placeholder="לדוגמה: 2015" oninput="updatePeAge(this.value)">
       <div class="age-hint" id="pe-age">${age}</div>
     </div>
@@ -4258,7 +4258,7 @@ window.selectLevel = selectLevel;
 function updatePeAge(val) {
   const year = parseInt(val);
   const el = document.getElementById('pe-age');
-  if (el) el.textContent = (year >= 1990 && year <= CURRENT_YEAR) ? `גיל ${CURRENT_YEAR - year}` : '';
+  if (el) el.textContent = (year >= 1900 && year <= CURRENT_YEAR) ? `גיל ${CURRENT_YEAR - year}` : '';
 }
 
 function cancelProfileEdit() {
