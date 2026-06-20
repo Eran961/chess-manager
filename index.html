@@ -11439,9 +11439,6 @@ function buildSingleTypeSection(type) {
     const s = DIV_STYLES[divName] || DEFAULT_STYLE;
     const divTeams = byDiv[divName];
     const cardsHTML = divTeams.map(t => {
-      const captainLine = t.captain
-        ? `<div style="font-size:12px;color:#718096;margin-top:3px">👤 ${t.captain}</div>`
-        : '';
       return `
         <div onclick="openTeamDetail(${t.idx})"
           style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:white;border-radius:12px;margin-bottom:8px;border:1.5px solid #e2e8f0;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.05)"
@@ -11450,8 +11447,10 @@ function buildSingleTypeSection(type) {
           <div style="display:flex;align-items:center;gap:13px">
             <div style="width:42px;height:42px;border-radius:11px;background:${s.grad};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">♟</div>
             <div>
-              <div style="font-size:15px;font-weight:700;color:#1a202c">${t.name}</div>
-              ${captainLine}
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-size:15px;font-weight:700;color:#1a202c">${t.name}</span>
+                ${t.captain ? `<span style="font-size:12px;color:#718096;font-weight:500">· 👤 ${t.captain}</span>` : ''}
+              </div>
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
@@ -11870,6 +11869,13 @@ async function syncAllTeamsData(type) {
       if (pr.ok) {
         const pd = await pr.json();
         await db.ref(`teamPlayersCache/${team.teamId}`).set({players: pd.players, rounds: pd.rounds, ts: Date.now()});
+        if (pd.captain) {
+          const idx = _clubTeams.findIndex(t => t.teamId === team.teamId);
+          if (idx >= 0) {
+            _clubTeams[idx].captain = pd.captain;
+            await db.ref(`clubTeams/${idx}/captain`).set(pd.captain);
+          }
+        }
       }
       if (_syncAbort) return;
       const sr = await fetch('https://chess-manager-7wkr.onrender.com/api/team-rounds-stream', {

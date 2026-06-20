@@ -217,6 +217,19 @@ def parse_board_games(table) -> list:
     return games
 
 
+def parse_team_captain(html: str) -> str:
+    """Extract the team contact/captain name from the TeamContactsGrid table."""
+    soup = BeautifulSoup(html, "html.parser")
+    table = soup.find("table", id=re.compile(r"TeamContactsGrid", re.I))
+    if not table:
+        return ""
+    for tr in table.find_all("tr"):
+        cells = [clean_text(td) for td in tr.find_all("td")]
+        if len(cells) >= 2 and cells[0]:
+            return cells[0]
+    return ""
+
+
 def parse_team_roster(html: str) -> list:
     """Extract the official ordered player roster from the team page."""
     soup = BeautifulSoup(html, "html.parser")
@@ -492,16 +505,18 @@ def team_players(body: TeamPlayersRequest):
         if cached and now - cached["ts"] < CACHE_TTL and cached.get("roster") is not None:
             rounds = cached["rounds"]
             roster = cached["roster"]
+            captain = cached.get("captain", "")
         else:
             html = fetch_url(url)
             rounds = parse_team_matches(html, team)
             roster = parse_team_roster(html)
-            _team_cache[body.teamId] = {"rounds": rounds, "roster": roster, "ts": now}
+            captain = parse_team_captain(html)
+            _team_cache[body.teamId] = {"rounds": rounds, "roster": roster, "captain": captain, "ts": now}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
     players = aggregate_players(rounds, body.teamName, roster)
-    return JSONResponse(content={"players": players, "rounds": len(rounds)})
+    return JSONResponse(content={"players": players, "rounds": len(rounds), "captain": captain})
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
