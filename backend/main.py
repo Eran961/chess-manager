@@ -217,6 +217,36 @@ def parse_board_games(table) -> list:
     return games
 
 
+def parse_team_roster(html: str) -> list:
+    """Extract the official ordered player roster from the team page."""
+    soup = BeautifulSoup(html, "html.parser")
+    # Try known table ID patterns for the registered players table
+    roster_table = (
+        soup.find("table", id=re.compile(r"PlayersList|PlayersGridView|TeamPlayers|PlayersRepeater", re.I))
+    )
+    if not roster_table:
+        return []
+    players = []
+    pos = 0
+    for tr in roster_table.find_all("tr"):
+        cells = tr.find_all("td")
+        if not cells:
+            continue  # header row
+        pos += 1
+        # Name is in a link, or first non-numeric text cell
+        a = tr.find("a")
+        name = clean_text(a) if a else None
+        if not name:
+            for c in cells:
+                t = clean_text(c)
+                if t and not re.match(r"^\d+$", t):
+                    name = t
+                    break
+        if name:
+            players.append({"position": pos, "name": name})
+    return players
+
+
 def parse_team_matches(html: str, team: dict) -> list:
     """Return all rounds for a team, each with its own date field (DD/MM/YYYY)."""
     soup = BeautifulSoup(html, "html.parser")
@@ -261,9 +291,18 @@ def parse_team_matches(html: str, team: dict) -> list:
     return results
 
 
-def aggregate_players(rounds: list, team_name: str) -> list:
-    """Aggregate per-player stats from all rounds for a given team, sorted by typical board."""
+def aggregate_players(rounds: list, team_name: str, roster: list) -> list:
+    """Aggregate per-player stats. Includes all roster members, sorted by roster position."""
     players: dict = {}
+
+    # Seed all registered players (including those who never played)
+    for r in roster:
+        players[r["name"]] = {
+            "name": r["name"], "position": r["position"],
+            "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0,
+        }
+
+    # Merge in game results
     for r in rounds:
         if not r.get("isPlayed"):
             continue
@@ -271,27 +310,19 @@ def aggregate_players(rounds: list, team_name: str) -> list:
         for g in r.get("games", []):
             name = g["homePlayer"] if is_home else g["awayPlayer"]
             result = g["homeResult"] if is_home else g["awayResult"]
-            board = g.get("board")
             if not name or result is None:
                 continue
             if name not in players:
-                players[name] = {"name": name, "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0, "boards": []}
+                # Played but not on roster (substitute etc.)
+                players[name] = {"name": name, "position": 999, "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}
             p = players[name]
             p["games"] += 1
             p["points"] += result
-            if board is not None:
-                p["boards"].append(board)
             if result == 1.0:   p["wins"] += 1
             elif result == 0.5: p["draws"] += 1
             else:               p["losses"] += 1
 
-    result_list = []
-    for p in players.values():
-        boards = p.pop("boards")
-        p["avgBoard"] = round(sum(boards) / len(boards), 1) if boards else 99
-        result_list.append(p)
-
-    return sorted(result_list, key=lambda x: (x["avgBoard"], -x["games"]))
+    return sorted(players.values(), key=lambda x: x["position"])
 
 
 def fetch_team(team: dict, fed_date: str) -> tuple:
@@ -457,14 +488,16 @@ def team_players(body: TeamPlayersRequest):
         cached = _team_cache.get(body.teamId)
         if cached and now - cached["ts"] < CACHE_TTL:
             rounds = cached["rounds"]
+            roster = cached.get("roster", [])
         else:
             html = fetch_url(url)
             rounds = parse_team_matches(html, team)
-            _team_cache[body.teamId] = {"rounds": rounds, "ts": now}
+            roster = parse_team_roster(html)
+            _team_cache[body.teamId] = {"rounds": rounds, "roster": roster, "ts": now}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    players = aggregate_players(rounds, body.teamName)
+    players = aggregate_players(rounds, body.teamName, roster)
     return JSONResponse(content={"players": players, "rounds": len(rounds)})
 
 
