@@ -11431,10 +11431,7 @@ function buildSingleTypeSection(type) {
       <div style="max-width:640px;padding:60px 20px;text-align:center">
         <div style="font-size:52px;margin-bottom:16px;opacity:.4">♟</div>
         <div style="font-size:16px;font-weight:700;color:#4a5568;margin-bottom:6px">אין קבוצות ${type} כרגע</div>
-        <div style="font-size:13px;color:#a0aec0;margin-bottom:24px">לחץ "סנכרן מאיגוד" לשליפת הקבוצות הפעילות</div>
-        <button onclick="syncClubTeamsFromSite()"
-          style="background:#2b6cb0;color:white;border:none;border-radius:10px;padding:11px 26px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
-          🔄 סנכרן מאיגוד</button>
+        <div style="font-size:13px;color:#a0aec0;margin-bottom:24px">לחץ "סנכרן כל הקבוצות מהאיגוד" בראש העמוד</div>
       </div>`;
   }
 
@@ -11485,9 +11482,6 @@ function buildSingleTypeSection(type) {
           <div style="font-size:20px;font-weight:800;color:#1a202c">${type}</div>
           <div style="font-size:13px;color:#718096;margin-top:2px">${teams.length} קבוצות פעילות</div>
         </div>
-        <button onclick="syncClubTeamsFromSite()"
-          style="background:#2b6cb0;color:white;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">
-          🔄 סנכרן מאיגוד</button>
       </div>
       ${sectionsHTML}
       <details style="margin-top:6px">
