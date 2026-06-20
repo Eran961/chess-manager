@@ -205,6 +205,56 @@ def fetch_team(team: dict, fed_date: str) -> tuple:
         return team["name"], "fail", []
 
 
+def fetch_team_rounds(team: dict) -> tuple:
+    """Return ALL rounds for a team (no date filter) for client-side caching."""
+    team_id = team.get("teamId")
+    url = f"https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId={team_id}"
+    try:
+        now = time.time()
+        cached = _team_cache.get(team_id)
+        if cached and now - cached["ts"] < CACHE_TTL:
+            rounds = cached["rounds"]
+        else:
+            html = fetch_url(url)
+            rounds = parse_team_matches(html, team)
+            _team_cache[team_id] = {"rounds": rounds, "ts": now}
+        return team["name"], "ok", rounds
+    except Exception:
+        return team["name"], "fail", []
+
+
+class TeamRoundsRequest(BaseModel):
+    teams: list
+
+
+@app.post("/api/team-rounds-stream")
+async def team_rounds_stream(body: TeamRoundsRequest):
+    async def generate():
+        loop = asyncio.get_event_loop()
+        pending = {
+            asyncio.ensure_future(
+                loop.run_in_executor(executor, fetch_team_rounds, team)
+            )
+            for team in body.teams
+        }
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                team_name, status, rounds = task.result()
+                payload = json.dumps(
+                    {"teamName": team_name, "status": status, "rounds": rounds},
+                    ensure_ascii=False
+                )
+                yield f"data: {payload}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 class TeamMatchRequest(BaseModel):
     teams: list
     date: str  # YYYY-MM-DD

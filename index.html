@@ -10807,63 +10807,98 @@ async function syncSatDate() {
   if (!targetDate) { showToast('יש לבחור תאריך', 'error'); return; }
 
   const teamsWithId = _clubTeams.filter(t => t.teamId);
-  if (teamsWithId.length === 0) {
-    showToast('יש לסנכרן קבוצות מהאיגוד תחילה', 'error');
-    return;
-  }
+  if (!teamsWithId.length) { showToast('יש לסנכרן קבוצות מהאיגוד תחילה', 'error'); return; }
+
+  const [y, mo, d] = targetDate.split('-');
+  const fedDate = `${d}/${mo}/${y}`;
 
   const btn = document.getElementById('btn-sync-date');
-  if (btn) { btn.disabled = true; btn.textContent = `⏳ 0/${teamsWithId.length}`; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ בודק מטמון...'; }
 
+  // ── 1. Load Firebase cache in ONE read ──────────────────────────────────────
+  const CACHE_TTL_MS = 3 * 3600 * 1000; // 3 hours
+  const now = Date.now();
+  let allCache = {};
+  try { const snap = await db.ref('teamRoundsCache').get(); allCache = snap.val() || {}; } catch(e) {}
+
+  // ── 2. Split: fresh (local filter) vs stale (need backend) ─────────────────
   const allMatches = [];
   const teamStatuses = {};
-  let completed = 0;
-  const total = teamsWithId.length;
+  const staleTeams = [];
 
-  try {
-    const res = await fetch('https://chess-manager-7wkr.onrender.com/api/team-matches-stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teams: teamsWithId, date: targetDate }),
-      signal: AbortSignal.timeout(120000),
-    });
-    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let streamDone = false;
-
-    while (!streamDone) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop();
-      for (const event of events) {
-        if (!event.startsWith('data: ')) continue;
-        const data = JSON.parse(event.slice(6));
-        if (data.done) { streamDone = true; break; }
-        completed++;
-        teamStatuses[data.teamName] = data.status;
-        allMatches.push(...(data.matches || []));
-        if (btn) btn.textContent = `⏳ ${completed}/${total}`;
-      }
+  for (const team of teamsWithId) {
+    const cached = allCache[team.teamId];
+    if (cached && (now - (cached.ts || 0)) < CACHE_TTL_MS) {
+      const matches = (cached.rounds || []).filter(r => r.matchDate === fedDate);
+      teamStatuses[team.name] = matches.length > 0 ? 'ok' : 'nodate';
+      allMatches.push(...matches);
+    } else {
+      staleTeams.push(team);
     }
-  } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
-    showToast('❌ שגיאה: ' + e.message, 'error');
-    return;
   }
 
+  // ── 3. Fetch only stale teams from backend ──────────────────────────────────
+  if (staleTeams.length > 0) {
+    if (btn) btn.textContent = `⏳ 0/${staleTeams.length}`;
+    let completed = 0;
+    const newRoundsCache = {}; // batch Firebase writes
+
+    try {
+      const res = await fetch('https://chess-manager-7wkr.onrender.com/api/team-rounds-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teams: staleTeams }),
+        signal: AbortSignal.timeout(120000),
+      });
+      if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop();
+        for (const event of events) {
+          if (!event.startsWith('data: ')) continue;
+          const data = JSON.parse(event.slice(6));
+          if (data.done) break;
+          completed++;
+          if (btn) btn.textContent = `⏳ ${completed}/${staleTeams.length}`;
+          const team = staleTeams.find(t => t.name === data.teamName);
+          if (team && data.status !== 'fail') {
+            newRoundsCache[team.teamId] = { rounds: data.rounds || [], ts: now };
+          }
+          const matches = (data.rounds || []).filter(r => r.matchDate === fedDate);
+          teamStatuses[data.teamName] = data.status === 'fail' ? 'fail' : (matches.length ? 'ok' : 'nodate');
+          allMatches.push(...matches);
+        }
+      }
+    } catch(e) {
+      if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
+      showToast('❌ שגיאה: ' + e.message, 'error'); return;
+    }
+
+    // Batch-write new rounds to Firebase cache
+    if (Object.keys(newRoundsCache).length) {
+      try { await db.ref('teamRoundsCache').update(newRoundsCache); } catch(e) {}
+    }
+  }
+
+  // ── 4. Show results ─────────────────────────────────────────────────────────
   if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
 
   const ok     = Object.entries(teamStatuses).filter(([,v])=>v==='ok').map(([k])=>k);
   const noDate = Object.entries(teamStatuses).filter(([,v])=>v==='nodate').map(([k])=>k);
   const failed = Object.entries(teamStatuses).filter(([,v])=>v==='fail').map(([k])=>k);
+  const fromCache = teamsWithId.length - staleTeams.length;
   const lines = [];
+  if (fromCache > 0) lines.push(`⚡ ${fromCache} קבוצות ממטמון`);
   if (ok.length)     lines.push(`✅ נטענו: ${ok.join(', ')}`);
-  if (noDate.length) lines.push(`📅 אין משחק: ${noDate.join(', ')}`);
+  if (noDate.length) lines.push(`📅 אין משחק: ${noDate.length} קבוצות`);
   if (failed.length) lines.push(`❌ נכשל: ${failed.join(', ')}`);
 
   const dateDisplay = new Date(targetDate + 'T12:00:00')
@@ -10871,7 +10906,7 @@ async function syncSatDate() {
 
   lines.unshift(allMatches.length > 0 ? `📋 נמצאו ${allMatches.length} משחקים` : '📋 לא נמצאו משחקים');
   showToast(lines.join('\n'), allMatches.length > 0 ? 'success' : 'error');
-  if (allMatches.length === 0) return;
+  if (!allMatches.length) return;
 
   _satDates[targetDate] = { dateDisplay, matches: allMatches };
   await db.ref(`satDates/${targetDate}`).set({ dateDisplay, matches: allMatches });
