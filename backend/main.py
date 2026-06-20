@@ -515,25 +515,46 @@ def team_players(body: TeamPlayersRequest):
 
 @app.get("/api/debug-team")
 def debug_team(teamId: int = Query(...)):
-    """Return raw repeater HTML for a team page to inspect date location."""
+    """Show all tables on team page + player names from roster candidates vs game results."""
     url = f"https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId={teamId}"
     try:
         html = fetch_url(url)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
     soup = BeautifulSoup(html, "html.parser")
-    tables = soup.find_all("table", id=re.compile(r"RoundsRepeter_ctl\d+_GamesGridView", re.I))
-    snippets = []
-    for t in tables[:3]:  # first 3 rounds only
-        parent = t.parent
-        snippets.append({
-            "tableId": t.get("id"),
-            "tableText": clean_text(t)[:300],
-            "parentTag": parent.name if parent else None,
-            "parentId": parent.get("id") if parent else None,
-            "parentText": clean_text(parent)[:300] if parent else None,
+
+    # All non-rounds tables
+    non_round_tables = []
+    for t in soup.find_all("table"):
+        tid = t.get("id", "")
+        if re.search(r"RoundsRepeter", tid, re.I):
+            continue
+        rows = [tr for tr in t.find_all("tr") if tr.find_all("td")]
+        if not rows:
+            continue
+        links = [clean_text(a) for a in t.find_all("a", href=re.compile(r"Player", re.I))]
+        non_round_tables.append({
+            "id": tid,
+            "rows": len(rows),
+            "playerLinks": links[:20],
+            "firstRowCells": [clean_text(td) for td in rows[0].find_all("td")][:6],
         })
-    return JSONResponse(content={"rounds": snippets, "totalTables": len(tables)})
+
+    # Player names from first round game table
+    game_tables = soup.find_all("table", id=re.compile(r"RoundsRepeter_ctl00_GamesGridView", re.I))
+    game_names = []
+    if game_tables:
+        tbody = game_tables[0].find("tbody")
+        if tbody:
+            for tr in tbody.find_all("tr"):
+                cells = [clean_text(td) for td in tr.find_all("td")]
+                if len(cells) >= 5:
+                    game_names.append({"home": cells[1], "away": cells[4]})
+
+    return JSONResponse(content={
+        "nonRoundTables": non_round_tables,
+        "gameNamesRound1": game_names,
+    })
 
 
 @app.get("/health")
