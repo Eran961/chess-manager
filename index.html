@@ -10823,70 +10823,24 @@ async function syncSatDate() {
   const teamStatuses = {};
   if (btn) btn.textContent = `⏳ 0/${teamsWithId.length}`;
 
-  async function fetchTeamMatches(team) {
-    const url = `https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId=${team.teamId}`;
-    let html = '';
-    const proxies = [
-      `https://chess-manager-7wkr.onrender.com/proxy?url=${encodeURIComponent(url)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    ];
-    for (const proxy of proxies) {
-      try {
-        const res = await fetch(proxy, { signal: AbortSignal.timeout(20000) });
-        if (res.ok) { html = await res.text(); if (html.length > 500) break; }
-      } catch(e2) { /* try next */ }
-    }
-    if (!html || html.length < 200) {
-      teamStatuses[team.name] = 'fail'; completed++;
-      if (btn) btn.textContent = `⏳ ${completed}/${teamsWithId.length}`;
-      return [];
-    }
-    const result = [];
-    const roundTables = [...html.matchAll(/RoundsRepeter_ctl\d+_GamesGridView[^>]*>([\s\S]*?)<\/table>/gi)];
-    for (const tbl of roundTables) {
-      const tableHtml = tbl[1];
-      const firstTd = tableHtml.match(/<tbody>[\s\S]*?<td[^>]*>\s*([^<]+?)\s*<\/td>/i);
-      if (!(firstTd?.[1]?.trim()||'').includes(fedDate)) continue;
-      const thead = tableHtml.match(/<thead>([\s\S]*?)<\/thead>/i)?.[1] || '';
-      const thCells = [...thead.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m =>
-        m[1].replace(/<[^>]+>/g,' ').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
-             .replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim());
-      const roundNumber = parseInt(thCells[0]?.match(/סיבוב\s*(\d+)/)?.[1]) || null;
-      const homeTeam = thead.match(/HostTeamHL[^>]*>([^<]+)<\/a>/i)?.[1]?.trim() || thCells[1] || '';
-      const awayTeam = thead.match(/AwayTeamHL[^>]*>([^<]+)<\/a>/i)?.[1]?.trim() || thCells[5] || '';
-      const homeScore = /[\d.]/.test(thCells[2]) ? parseFloat(thCells[2]) : null;
-      const awayScore = /[\d.]/.test(thCells[4]) ? parseFloat(thCells[4]) : null;
-      if (!homeTeam && !awayTeam) continue;
-      const div = team.division || '';
-      result.push({ teamId: team.teamId, teamName: team.name, type: team.type||'בוגרים', division: div,
-        roundNumber, homeTeam, awayTeam, homeScore, awayScore,
-        isPlayed: homeScore!==null && awayScore!==null,
-        timeSlot: (div==='ג'||div.includes('ג')) ? '15:00' : '10:00' });
-    }
-    teamStatuses[team.name] = result.length > 0 ? 'ok' : 'nodate';
-    completed++; if (btn) btn.textContent = `⏳ ${completed}/${teamsWithId.length}`;
-    return result;
+  // Single request to backend — server fetches all teams in parallel and returns JSON
+  let data;
+  try {
+    if (btn) btn.textContent = '⏳ שולח בקשה...';
+    const apiUrl = `https://chess-manager-7wkr.onrender.com/api/team-matches?teamIds=${teamsWithId.map(t=>t.teamId).join(',')}&teamData=${encodeURIComponent(JSON.stringify(teamsWithId))}&date=${targetDate}`;
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+    data = await res.json();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
+    showToast('❌ שגיאה: ' + e.message, 'error');
+    return;
   }
-
-  const BATCH = 2;
-  const allResults = [];
-  for (let i = 0; i < teamsWithId.length; i += BATCH) {
-    const batch = teamsWithId.slice(i, i + BATCH);
-    const res = await Promise.all(batch.map(t => fetchTeamMatches(t).catch(() => {
-      teamStatuses[t.name]='fail'; completed++; if(btn) btn.textContent=`⏳ ${completed}/${teamsWithId.length}`; return [];
-    })));
-    allResults.push(...res);
-    if (i + BATCH < teamsWithId.length) await new Promise(r => setTimeout(r, 1500));
-  }
-  const matches = allResults.flat();
 
   if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
 
-  const seen = new Set();
-  const deduped = matches.filter(m => {
-    const key = `${m.homeTeam}|${m.awayTeam}|${m.roundNumber}`;
-    if (seen.has(key)) return false; seen.add(key); return true;
-  });
+  const deduped = data.matches || [];
+  const teamStatuses = data.statuses || {};
 
   const ok     = Object.entries(teamStatuses).filter(([,v])=>v==='ok').map(([k])=>k);
   const noDate = Object.entries(teamStatuses).filter(([,v])=>v==='nodate').map(([k])=>k);
@@ -10899,7 +10853,6 @@ async function syncSatDate() {
   const dateDisplay = new Date(targetDate + 'T12:00:00')
     .toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  if (deduped.length > 0) { _satDates[targetDate] = { dateDisplay, matches: deduped }; }
   lines.unshift(deduped.length > 0 ? `📋 נמצאו ${deduped.length} משחקים` : '📋 לא נמצאו משחקים');
   showToast(lines.join('\n'), deduped.length > 0 ? 'success' : 'error');
   if (deduped.length === 0) { if(btn){btn.disabled=false;btn.textContent='📥 טען';} return; }
@@ -11374,50 +11327,10 @@ async function syncClubTeamsFromSite() {
   const btn = document.getElementById('btn-sync-teams');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ טוען...'; }
   try {
-    const url = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=LeagueTeams';
-    let html = '';
-    const proxies = [
-      `https://chess-manager-7wkr.onrender.com/proxy?url=${encodeURIComponent(url)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    ];
-    for (const proxy of proxies) {
-      try {
-        const res = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
-        if (res.ok) { html = await res.text(); if (html.length > 1000) break; }
-      } catch(e2) { /* try next */ }
-    }
-    if (!html || html.length < 500) throw new Error('לא ניתן לטעון את דף הקבוצות');
-
-    // Table: LeagueTeamsGridView
-    // Columns: [0]=סוג ליגה  [1]=רמת ליגה לעונה הבאה  [2]=ליגה נוכחית  [3]=סטטוס עונה  [4]=מספר קבוצה  [5]=קבוצה  [6]=סטטוס
-    const tableMatch = html.match(/LeagueTeamsGridView[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/i)
-                    || html.match(/LeagueTeamsGridView[\s\S]*?(<tr[\s\S]*?(?=<\/table))/i);
-    const tableHtml = tableMatch ? tableMatch[1] || tableMatch[0] : html;
-
-    const rows = [...tableHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
-    const found = [];
-    for (const row of rows) {
-      const cells = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c =>
-        c[1].replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-             .replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()
-      );
-      if (cells.length < 7) continue;
-      const status = cells[6]; // סטטוס
-      if (!status.includes('פעילה') || status.includes('לא פעילה')) continue;
-
-      const type     = cells[0].trim(); // בוגרים / נוער / נשים
-      const division = cells[1].trim().replace(/[''']/g, ''); // לאומית / ארצית / א / ב / ג
-      const name     = cells[5].trim(); // שם הקבוצה
-      // Extract teamId from hidden input value in col[5] raw HTML
-      const tidMatch = row[1].match(/TeamIdHF[^>]*value="(\d+)"/i);
-      const teamId   = tidMatch ? parseInt(tidMatch[1]) : null;
-
-      if (!name || name.length < 2) continue;
-      found.push({ name, type, division, teamId });
-    }
-
-    if (found.length === 0) throw new Error('לא נמצאו קבוצות פעילות בדף');
-
+    const res = await fetch('https://chess-manager-7wkr.onrender.com/api/club-teams?clubId=31', { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+    const found = await res.json();
+    if (!found.length) throw new Error('לא נמצאו קבוצות פעילות');
     await db.ref('clubTeams').set(found);
     _clubTeams = found;
     showToast(`נמצאו ${found.length} קבוצות פעילות`, 'success');
@@ -11824,55 +11737,21 @@ async function syncFedPlayersFromSite(silent = false) {
   if (btn) { btn.disabled = true; btn.innerHTML = '⏳ מסנכרן...'; }
   if (statusEl) { statusEl.style.color = '#718096'; statusEl.textContent = 'מסנכרן...'; }
   try {
-    const url = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=Players';
-    let html = '';
-    const proxies = [
-      `https://chess-manager-7wkr.onrender.com/proxy?url=${encodeURIComponent(url)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    ];
-    for (const proxy of proxies) {
-      try {
-        const res = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
-        if (res.ok) { html = await res.text(); if (html.length > 1000) break; }
-      } catch(e2) { console.warn('proxy failed:', proxy, e2.message); }
-    }
-    if (!html || html.length < 500) throw new Error('לא ניתן לטעון את דף שחקני המועדון');
-
+    const res = await fetch('https://chess-manager-7wkr.onrender.com/api/club-players?clubId=31', { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+    const list = await res.json();
+    if (!list.length) throw new Error('לא נמצאו שחקנים — ייתכן שמבנה הדף השתנה');
     const parsed = {};
-    // Parse table rows containing player links
-    const rowMatches = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
-      .filter(m => /Player\.aspx\?Id=/i.test(m[1]));
-    for (const rowM of rowMatches) {
-      const rowHtml = rowM[1];
-      const playerMatch = rowHtml.match(/Player\.aspx\?Id=(\d+)[^>]*>([^<]+)<\/a>/i);
-      if (!playerMatch) continue;
-      const fedId = parseInt(playerMatch[1]);
-      const name = playerMatch[2].trim();
-      if (!fedId || !name || name.length < 2) continue;
-      // Try to extract rating — look for 3-4 digit number in td cells
-      const cells = [...rowHtml.matchAll(/<td[^>]*>\s*([^<\s][^<]*?)\s*<\/td>/gi)].map(m => m[1].trim());
-      const ratingCandidate = cells.find(c => /^\d{3,4}$/.test(c));
-      // Try birth year (4-digit starting with 19xx or 20xx)
-      const birthCandidate = cells.find(c => /^(19|20)\d{2}$/.test(c));
-      parsed[fedId] = {
-        name, fedId,
-        rating: ratingCandidate ? parseInt(ratingCandidate) : null,
-        birthYear: birthCandidate ? parseInt(birthCandidate) : null,
+    for (const p of list) {
+      parsed[p.fedId] = {
+        name: p.name, fedId: p.fedId,
+        rating: p.rating, birthYear: p.birthYear,
+        cardExpiry: _fedPlayers[p.fedId]?.cardExpiry || null,
         lastSync: Date.now()
       };
     }
-    const count = Object.keys(parsed).length;
-    if (count === 0) throw new Error('לא נמצאו שחקנים — ייתכן שמבנה הדף השתנה');
-    if (db) {
-      // Merge: keep existing cardExpiry/details, update name/rating/birthYear
-      for (const [fid, np] of Object.entries(parsed)) {
-        if (_fedPlayers[fid]) {
-          np.cardExpiry = _fedPlayers[fid].cardExpiry || np.cardExpiry;
-        }
-      }
-      await db.ref('fedPlayers').set(parsed);
-      _fedPlayers = parsed;
-    }
+    const count = list.length;
+    if (db) { await db.ref('fedPlayers').set(parsed); _fedPlayers = parsed; }
     localStorage.setItem('fedPlayersLastSync', String(Date.now()));
     _fedPlayersLastSync = String(Date.now());
     if (statusEl) { statusEl.style.color = '#276749'; statusEl.textContent = `✅ ${count} שחקנים`; }
