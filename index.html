@@ -6663,7 +6663,7 @@ if (currentUser?.role === 'admin') {
   tabsBar.appendChild(leagueStarsBtn);
   const leagueStarsPanel = document.createElement('div');
   leagueStarsPanel.className = 'tab-panel'; leagueStarsPanel.id = 'panel-league-stars';
-  leagueStarsPanel.innerHTML = <div style="padding:20px" id="league-stars-content"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div>;
+  leagueStarsPanel.innerHTML = '<div style="padding:20px" id="league-stars-content"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div>';
   content.appendChild(leagueStarsPanel);
   const satBtn = document.createElement('button');
   satBtn.className = 'tab-btn'; satBtn.dataset.tab = 'saturday'; satBtn.textContent = '🏅 מפגשי ליגה';
