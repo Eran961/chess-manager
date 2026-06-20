@@ -7,7 +7,12 @@ from bs4 import BeautifulSoup
 import asyncio
 import re
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
+
+# In-memory cache: {teamId: {"rounds": [...], "ts": float}}
+_team_cache: dict = {}
+CACHE_TTL = 3600  # 1 hour
 
 app = FastAPI()
 
@@ -133,17 +138,19 @@ def parse_team_matches(html: str, team: dict) -> list:
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for table in soup.find_all("table", id=re.compile(r"RoundsRepeter_ctl\d+_GamesGridView", re.I)):
+        # Find date: look in thead first (for future/scheduled rounds), then tbody (for played rounds)
+        thead = table.find("thead")
         tbody = table.find("tbody")
-        if not tbody:
+        match_date = None
+        # Search entire table text for a DD/MM/YYYY date pattern
+        table_text = clean_text(table)
+        date_m = re.search(r"(\d{2}/\d{2}/\d{4})", table_text)
+        if date_m:
+            match_date = date_m.group(1)
+        if not match_date:
             continue
-        first_td = tbody.find("td")
-        if not first_td:
+        if not thead:
             continue
-        first_td_text = clean_text(first_td)
-        date_m = re.search(r"(\d{2}/\d{2}/\d{4})", first_td_text)
-        if not date_m:
-            continue
-        match_date = date_m.group(1)  # DD/MM/YYYY
         thead = table.find("thead")
         if not thead:
             continue
@@ -180,15 +187,21 @@ def parse_team_matches(html: str, team: dict) -> list:
 
 
 def fetch_team(team: dict, fed_date: str) -> tuple:
-    url = f"https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId={team['teamId']}"
+    team_id = team.get("teamId")
+    url = f"https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId={team_id}"
     try:
-        html = fetch_url(url)
-        all_rounds = parse_team_matches(html, team)
-        # filter to requested date
+        now = time.time()
+        cached = _team_cache.get(team_id)
+        if cached and now - cached["ts"] < CACHE_TTL:
+            all_rounds = cached["rounds"]
+        else:
+            html = fetch_url(url)
+            all_rounds = parse_team_matches(html, team)
+            _team_cache[team_id] = {"rounds": all_rounds, "ts": now}
         matches = [m for m in all_rounds if m.get("matchDate") == fed_date]
         status = "ok" if matches else "nodate"
         return team["name"], status, matches
-    except Exception as e:
+    except Exception:
         return team["name"], "fail", []
 
 
