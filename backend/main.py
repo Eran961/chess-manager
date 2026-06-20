@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Query, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from curl_cffi import requests as cf_requests
 from bs4 import BeautifulSoup
 import asyncio
 import re
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 app = FastAPI()
@@ -211,6 +212,50 @@ async def team_matches(body: TeamMatchRequest):
                 all_matches.append(m)
 
     return JSONResponse(content={"matches": all_matches, "statuses": statuses})
+
+
+@app.post("/api/team-matches-stream")
+async def team_matches_stream(body: TeamMatchRequest):
+    try:
+        y, mo, d = body.date.split("-")
+        fed_date = f"{d}/{mo}/{y}"
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD")
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        seen_keys = set()
+
+        pending = {
+            asyncio.ensure_future(
+                loop.run_in_executor(executor, fetch_team, team, fed_date)
+            )
+            for team in body.teams
+        }
+
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                team_name, status, matches = task.result()
+                clean = []
+                for m in matches:
+                    key = f"{m['homeTeam']}|{m['awayTeam']}|{m['roundNumber']}"
+                    if key not in seen_keys:
+                        seen_keys.add(key)
+                        clean.append(m)
+                payload = json.dumps(
+                    {"teamName": team_name, "status": status, "matches": clean},
+                    ensure_ascii=False
+                )
+                yield f"data: {payload}\n\n"
+
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────

@@ -10813,21 +10813,43 @@ async function syncSatDate() {
   }
 
   const btn = document.getElementById('btn-sync-date');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ טוען...'; }
+  if (btn) { btn.disabled = true; btn.textContent = `⏳ 0/${teamsWithId.length}`; }
 
-  // Single request to backend — server fetches all teams in parallel and returns JSON
-  let data;
+  const allMatches = [];
+  const teamStatuses = {};
+  let completed = 0;
+  const total = teamsWithId.length;
+
   try {
-    if (btn) btn.textContent = '⏳ שולח בקשה...';
-    const apiUrl = `https://chess-manager-7wkr.onrender.com/api/team-matches`;
-    const res = await fetch(apiUrl, {
+    const res = await fetch('https://chess-manager-7wkr.onrender.com/api/team-matches-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teams: teamsWithId, date: targetDate }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(120000),
     });
     if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
-    data = await res.json();
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let streamDone = false;
+
+    while (!streamDone) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop();
+      for (const event of events) {
+        if (!event.startsWith('data: ')) continue;
+        const data = JSON.parse(event.slice(6));
+        if (data.done) { streamDone = true; break; }
+        completed++;
+        teamStatuses[data.teamName] = data.status;
+        allMatches.push(...(data.matches || []));
+        if (btn) btn.textContent = `⏳ ${completed}/${total}`;
+      }
+    }
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
     showToast('❌ שגיאה: ' + e.message, 'error');
@@ -10835,9 +10857,6 @@ async function syncSatDate() {
   }
 
   if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
-
-  const deduped = data.matches || [];
-  const teamStatuses = data.statuses || {};
 
   const ok     = Object.entries(teamStatuses).filter(([,v])=>v==='ok').map(([k])=>k);
   const noDate = Object.entries(teamStatuses).filter(([,v])=>v==='nodate').map(([k])=>k);
@@ -10850,13 +10869,13 @@ async function syncSatDate() {
   const dateDisplay = new Date(targetDate + 'T12:00:00')
     .toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  lines.unshift(deduped.length > 0 ? `📋 נמצאו ${deduped.length} משחקים` : '📋 לא נמצאו משחקים');
-  showToast(lines.join('\n'), deduped.length > 0 ? 'success' : 'error');
-  if (deduped.length === 0) { if(btn){btn.disabled=false;btn.textContent='📥 טען';} return; }
+  lines.unshift(allMatches.length > 0 ? `📋 נמצאו ${allMatches.length} משחקים` : '📋 לא נמצאו משחקים');
+  showToast(lines.join('\n'), allMatches.length > 0 ? 'success' : 'error');
+  if (allMatches.length === 0) return;
 
-  _satDates[targetDate] = { dateDisplay, matches: deduped };
-  await db.ref(`satDates/${targetDate}`).set({ dateDisplay, matches: deduped });
-  showToast(`נטענו ${deduped.length} משחקים לתאריך ${dateDisplay}`, 'success');
+  _satDates[targetDate] = { dateDisplay, matches: allMatches };
+  await db.ref(`satDates/${targetDate}`).set({ dateDisplay, matches: allMatches });
+  showToast(`נטענו ${allMatches.length} משחקים לתאריך ${dateDisplay}`, 'success');
 
   const el = document.getElementById('panel-saturday');
   if (el) { el.innerHTML = buildSatLeaguesHTML(); renderClubTeamsList(); }
