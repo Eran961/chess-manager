@@ -11569,11 +11569,13 @@ function openTeamDetail(teamIdx) {
   const sp = document.getElementById('tdpanel-schedule');
   const pp = document.getElementById('tdpanel-players');
   if (sp) sp.innerHTML = '';
-  if (pp) { pp.innerHTML = ''; pp.style.display = 'none'; }
+  if (pp) { pp.innerHTML = ''; pp.dataset.loaded = ''; pp.style.display = 'none'; }
   switchTeamDetailTab('schedule');
 
   modal.style.display = 'flex';
+  // Load both tabs in parallel — players in background so it's ready when user switches
   loadTeamScheduleDetail(team);
+  loadTeamPlayersDetail(team);
 }
 
 function closeTeamDetail() {
@@ -11737,7 +11739,8 @@ async function loadTeamPlayersDetail(team) {
   try {
     const snap = await db.ref(`teamPlayersCache/${team.teamId}`).get();
     const cached = snap.val();
-    if (cached?.players?.length) {
+    // v2: require avgBoard field (invalidates old cache that lacked board data)
+    if (cached?.players?.length && cached.players[0]?.avgBoard !== undefined) {
       el.innerHTML = renderPlayerStatsHTML(cached.players, cached.rounds);
       el.dataset.loaded = team.teamId.toString();
       return;
@@ -11787,30 +11790,32 @@ async function fetchAndCacheTeamPlayers(teamId) {
 }
 
 function renderPlayerStatsHTML(players, totalRounds) {
-  const maxPoints = Math.max(...players.map(p => p.points), 1);
   const rows = players.map((p, i) => {
-    const pct = (p.points / maxPoints) * 100;
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+    const pts = p.points % 1 === 0 ? p.points : p.points.toFixed(1);
+    const pct = (p.points / p.games) * 100;
+    const boardLabel = p.avgBoard && p.avgBoard < 99
+      ? `<span style="background:#edf2f7;color:#718096;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700;margin-right:6px">לוח ${Math.round(p.avgBoard)}</span>`
+      : '';
     return `
       <div style="background:white;border-radius:12px;padding:14px 16px;margin-bottom:8px;border:1.5px solid #e2e8f0">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-          <div style="font-size:20px;min-width:28px;text-align:center">${medal || `<span style="font-size:13px;color:#a0aec0;font-weight:700">${i+1}</span>`}</div>
-          <div style="flex:1">
-            <div style="font-size:15px;font-weight:700;color:#1a202c">${p.name}</div>
-            <div style="font-size:12px;color:#718096;margin-top:1px">${p.games} משחקים</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="width:32px;height:32px;border-radius:8px;background:#1a2744;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:white;flex-shrink:0">${Math.round(p.avgBoard) < 99 ? Math.round(p.avgBoard) : i+1}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:700;color:#1a202c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+            <div style="font-size:12px;color:#718096;margin-top:2px">${p.games} משחקים</div>
           </div>
-          <div style="text-align:left">
-            <div style="font-size:20px;font-weight:900;color:#2b6cb0">${p.points % 1 === 0 ? p.points : p.points.toFixed(1)}</div>
-            <div style="font-size:10px;color:#a0aec0;text-align:center">נקודות</div>
+          <div style="text-align:center;flex-shrink:0">
+            <div style="font-size:18px;font-weight:900;color:#2b6cb0">${pts}</div>
+            <div style="font-size:10px;color:#a0aec0">מתוך ${p.games}</div>
           </div>
         </div>
-        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-          <span style="background:#f0fff4;color:#276749;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700">✓ ${p.wins}</span>
-          <span style="background:#f3f0ff;color:#6b46c1;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700">½ ${p.draws}</span>
-          <span style="background:#fff5f5;color:#c53030;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700">✗ ${p.losses}</span>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <span style="flex:1;text-align:center;background:#f0fff4;color:#276749;border-radius:7px;padding:4px 0;font-size:13px;font-weight:700">✓ ${p.wins}</span>
+          <span style="flex:1;text-align:center;background:#f3f0ff;color:#6b46c1;border-radius:7px;padding:4px 0;font-size:13px;font-weight:700">½ ${p.draws}</span>
+          <span style="flex:1;text-align:center;background:#fff5f5;color:#c53030;border-radius:7px;padding:4px 0;font-size:13px;font-weight:700">✗ ${p.losses}</span>
         </div>
-        <div style="background:#edf2f7;border-radius:4px;height:6px;overflow:hidden">
-          <div style="background:linear-gradient(90deg,#3b82f6,#2b6cb0);height:100%;width:${pct.toFixed(1)}%;border-radius:4px;transition:width .4s"></div>
+        <div style="background:#edf2f7;border-radius:4px;height:5px;overflow:hidden">
+          <div style="background:linear-gradient(90deg,#3b82f6,#2b6cb0);height:100%;width:${pct.toFixed(1)}%;border-radius:4px"></div>
         </div>
       </div>`;
   }).join('');

@@ -262,7 +262,7 @@ def parse_team_matches(html: str, team: dict) -> list:
 
 
 def aggregate_players(rounds: list, team_name: str) -> list:
-    """Aggregate per-player stats from all rounds for a given team."""
+    """Aggregate per-player stats from all rounds for a given team, sorted by typical board."""
     players: dict = {}
     for r in rounds:
         if not r.get("isPlayed"):
@@ -271,17 +271,27 @@ def aggregate_players(rounds: list, team_name: str) -> list:
         for g in r.get("games", []):
             name = g["homePlayer"] if is_home else g["awayPlayer"]
             result = g["homeResult"] if is_home else g["awayResult"]
+            board = g.get("board")
             if not name or result is None:
                 continue
             if name not in players:
-                players[name] = {"name": name, "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}
+                players[name] = {"name": name, "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0, "boards": []}
             p = players[name]
             p["games"] += 1
             p["points"] += result
+            if board is not None:
+                p["boards"].append(board)
             if result == 1.0:   p["wins"] += 1
             elif result == 0.5: p["draws"] += 1
             else:               p["losses"] += 1
-    return sorted(players.values(), key=lambda x: (-x["points"], -x["games"]))
+
+    result_list = []
+    for p in players.values():
+        boards = p.pop("boards")
+        p["avgBoard"] = round(sum(boards) / len(boards), 1) if boards else 99
+        result_list.append(p)
+
+    return sorted(result_list, key=lambda x: (x["avgBoard"], -x["games"]))
 
 
 def fetch_team(team: dict, fed_date: str) -> tuple:
