@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Query, HTTPException
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from curl_cffi import requests as cf_requests
@@ -12,7 +13,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -181,28 +182,22 @@ def fetch_team(team: dict, fed_date: str) -> tuple:
         return team["name"], "fail", []
 
 
-@app.get("/api/team-matches")
-def team_matches(
-    teamIds: str = Query(..., description="Comma-separated team IDs"),
-    teamData: str = Query(..., description="JSON array of team objects"),
-    date: str = Query(..., description="Date in YYYY-MM-DD format"),
-):
-    import json as _json
-    try:
-        teams = _json.loads(teamData)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid teamData JSON")
+class TeamMatchRequest(BaseModel):
+    teams: list
+    date: str  # YYYY-MM-DD
 
-    # date: YYYY-MM-DD → DD/MM/YYYY
+
+@app.post("/api/team-matches")
+async def team_matches(body: TeamMatchRequest):
     try:
-        y, mo, d = date.split("-")
+        y, mo, d = body.date.split("-")
         fed_date = f"{d}/{mo}/{y}"
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD")
 
     loop = asyncio.get_event_loop()
-    futures = [loop.run_in_executor(executor, fetch_team, team, fed_date) for team in teams]
-    results_raw = loop.run_until_complete(asyncio.gather(*futures))
+    tasks = [loop.run_in_executor(executor, fetch_team, team, fed_date) for team in body.teams]
+    results_raw = await asyncio.gather(*tasks)
 
     all_matches = []
     statuses = {}

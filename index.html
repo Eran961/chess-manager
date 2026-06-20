@@ -10819,8 +10819,13 @@ async function syncSatDate() {
   let data;
   try {
     if (btn) btn.textContent = '⏳ שולח בקשה...';
-    const apiUrl = `https://chess-manager-7wkr.onrender.com/api/team-matches?teamIds=${teamsWithId.map(t=>t.teamId).join(',')}&teamData=${encodeURIComponent(JSON.stringify(teamsWithId))}&date=${targetDate}`;
-    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(60000) });
+    const apiUrl = `https://chess-manager-7wkr.onrender.com/api/team-matches`;
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teams: teamsWithId, date: targetDate }),
+      signal: AbortSignal.timeout(60000),
+    });
     if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
     data = await res.json();
   } catch(e) {
