@@ -291,31 +291,45 @@ def parse_team_matches(html: str, team: dict) -> list:
     return results
 
 
+def flip_name(name: str) -> str:
+    """Swap first and last name: 'גלפנד בוריס' → 'בוריס גלפנד'."""
+    parts = name.strip().split()
+    return " ".join(reversed(parts)) if len(parts) >= 2 else name
+
+
 def aggregate_players(rounds: list, team_name: str, roster: list) -> list:
     """Aggregate per-player stats. Includes all roster members, sorted by roster position."""
     players: dict = {}
 
-    # Seed all registered players (including those who never played)
+    # Seed all registered players, build lookup by both name and flipped name
+    lookup: dict = {}  # normalized name → canonical roster name
     for r in roster:
-        players[r["name"]] = {
-            "name": r["name"], "position": r["position"],
-            "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0,
-        }
+        entry = {"name": r["name"], "position": r["position"],
+                 "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}
+        players[r["name"]] = entry
+        lookup[r["name"]] = r["name"]
+        lookup[flip_name(r["name"])] = r["name"]
 
-    # Merge in game results
+    # Merge in game results, resolving name mismatches via lookup
     for r in rounds:
         if not r.get("isPlayed"):
             continue
         is_home = r.get("homeTeam") == team_name
         for g in r.get("games", []):
-            name = g["homePlayer"] if is_home else g["awayPlayer"]
+            raw_name = g["homePlayer"] if is_home else g["awayPlayer"]
             result = g["homeResult"] if is_home else g["awayResult"]
-            if not name or result is None:
+            if not raw_name or result is None:
                 continue
-            if name not in players:
-                # Played but not on roster (substitute etc.)
-                players[name] = {"name": name, "position": 999, "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}
-            p = players[name]
+            # Resolve to roster canonical name, or flipped, or treat as substitute
+            canonical = lookup.get(raw_name) or lookup.get(flip_name(raw_name))
+            if canonical:
+                p = players[canonical]
+            else:
+                # Not on roster — add as substitute at end
+                if raw_name not in players:
+                    players[raw_name] = {"name": raw_name, "position": 999,
+                                         "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}
+                p = players[raw_name]
             p["games"] += 1
             p["points"] += result
             if result == 1.0:   p["wins"] += 1
