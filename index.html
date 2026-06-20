@@ -6625,17 +6625,17 @@ if (currentUser?.role === 'admin') {
   leagueAdultsBtn.onclick = () => { switchTab('league-adults'); loadClubTeams().then(renderLeagueTypePanels); };
   tabsBar.appendChild(leagueAdultsBtn);
   const leagueAdultsPanel = document.createElement('div');
-  const syncAllBtnHTML = `
-    <div id="sync-all-bar" style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <button id="btn-sync-all-teams" onclick="syncAllTeamsData()"
+  const makeSyncBar = (type, suffix) => `
+    <div id="sync-bar-${suffix}" style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button id="btn-sync-${suffix}" onclick="syncAllTeamsData('${type}')"
         style="background:#2b6cb0;color:white;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-        🔄 סנכרן כל הקבוצות מהאיגוד
+        🔄 סנכרן קבוצות ${type} מהאיגוד
       </button>
-      <span id="sync-all-status" style="font-size:12px;color:#718096"></span>
+      <span id="sync-status-${suffix}" style="font-size:12px;color:#718096"></span>
     </div>`;
 
   leagueAdultsPanel.className = 'tab-panel'; leagueAdultsPanel.id = 'panel-league-adults';
-  leagueAdultsPanel.innerHTML = `<div style="padding:20px">${syncAllBtnHTML}<div id="lteams-בוגרים"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div></div>`;
+  leagueAdultsPanel.innerHTML = `<div style="padding:20px">${makeSyncBar('בוגרים','adults')}<div id="lteams-בוגרים"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div></div>`;
   content.appendChild(leagueAdultsPanel);
 
   const leagueWomenBtn = document.createElement('button');
@@ -6644,7 +6644,7 @@ if (currentUser?.role === 'admin') {
   tabsBar.appendChild(leagueWomenBtn);
   const leagueWomenPanel = document.createElement('div');
   leagueWomenPanel.className = 'tab-panel'; leagueWomenPanel.id = 'panel-league-women';
-  leagueWomenPanel.innerHTML = `<div style="padding:20px">${syncAllBtnHTML.replace('sync-all-bar','sync-all-bar-w').replace('btn-sync-all-teams','btn-sync-all-teams-w').replace('sync-all-status','sync-all-status-w').replace('onclick="syncAllTeamsData()"','onclick="syncAllTeamsData()"')}<div id="lteams-נשים"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div></div>`;
+  leagueWomenPanel.innerHTML = `<div style="padding:20px">${makeSyncBar('נשים','women')}<div id="lteams-נשים"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div></div>`;
   content.appendChild(leagueWomenPanel);
 
   const leagueYouthBtn = document.createElement('button');
@@ -6653,7 +6653,7 @@ if (currentUser?.role === 'admin') {
   tabsBar.appendChild(leagueYouthBtn);
   const leagueYouthPanel = document.createElement('div');
   leagueYouthPanel.className = 'tab-panel'; leagueYouthPanel.id = 'panel-league-youth';
-  leagueYouthPanel.innerHTML = `<div style="padding:20px">${syncAllBtnHTML.replace('sync-all-bar','sync-all-bar-y').replace('btn-sync-all-teams','btn-sync-all-teams-y').replace('sync-all-status','sync-all-status-y').replace('onclick="syncAllTeamsData()"','onclick="syncAllTeamsData()"')}<div id="lteams-נוער"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div></div>`;
+  leagueYouthPanel.innerHTML = `<div style="padding:20px">${makeSyncBar('נוער','youth')}<div id="lteams-נוער"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div></div>`;
   content.appendChild(leagueYouthPanel);
 
   const satBtn = document.createElement('button');
@@ -11836,24 +11836,25 @@ function renderPlayerStatsHTML(players, totalRounds) {
 let _syncAbort = false;
 let _syncRunning = false;
 
-async function syncAllTeamsData() {
-  const btns = document.querySelectorAll('[id^="btn-sync-all-teams"]');
-  const statuses = document.querySelectorAll('[id^="sync-all-status"]');
-  const setStatus = (text, color='#718096') => statuses.forEach(s => { s.textContent = text; s.style.color = color; });
+async function syncAllTeamsData(type) {
+  const suffix = type === 'בוגרים' ? 'adults' : type === 'נשים' ? 'women' : 'youth';
+  const btn = document.getElementById(`btn-sync-${suffix}`);
+  const statusEl = document.getElementById(`sync-status-${suffix}`);
+  const setStatus = (text, color='#718096') => { if (statusEl) { statusEl.textContent = text; statusEl.style.color = color; } };
 
   // If running — cancel
   if (_syncRunning) {
     _syncAbort = true;
-    btns.forEach(b => { b.textContent = '⏳ מבטל...'; b.disabled = true; });
+    if (btn) { btn.textContent = '⏳ מבטל...'; btn.disabled = true; }
     return;
   }
 
-  const teams = _clubTeams.filter(t => t.teamId);
+  const teams = _clubTeams.filter(t => t.teamId && t.type === type);
   if (!teams.length) { showToast('אין קבוצות — סנכרן קבוצות מהאיגוד תחילה'); return; }
 
   _syncAbort = false;
   _syncRunning = true;
-  btns.forEach(b => { b.textContent = '⏹ עצור סנכרון'; b.style.background = '#c53030'; b.disabled = false; });
+  if (btn) { btn.textContent = '⏹ עצור סנכרון'; btn.style.background = '#c53030'; btn.disabled = false; }
 
   let done = 0, failed = 0;
   const total = teams.length;
@@ -11897,7 +11898,7 @@ async function syncAllTeamsData() {
 
   _syncRunning = false;
   const cancelled = _syncAbort;
-  btns.forEach(b => { b.textContent = '🔄 סנכרן כל הקבוצות מהאיגוד'; b.style.background = ''; b.disabled = false; });
+  if (btn) { btn.textContent = `🔄 סנכרן קבוצות ${type} מהאיגוד`; btn.style.background = ''; btn.disabled = false; }
   if (cancelled) {
     setStatus(`⚠️ בוטל — ${done} קבוצות סונכרנו`, '#d69e2e');
   } else {
