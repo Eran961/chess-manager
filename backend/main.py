@@ -133,23 +133,43 @@ def club_teams(clubId: int = Query(...)):
 
 # ── Team matches (parallel fetch for all teams) ────────────────────────────────
 
+def find_date_near_table(table) -> str | None:
+    """Search for DD/MM/YYYY date in table, its parent, and sibling elements."""
+    DATE_PAT = re.compile(r"(\d{1,2}/\d{1,2}/\d{4})")
+
+    def normalize(raw: str) -> str:
+        parts = raw.split("/")
+        return f"{parts[0].zfill(2)}/{parts[1].zfill(2)}/{parts[2]}"
+
+    # 1. Inside the table itself
+    m = DATE_PAT.search(clean_text(table))
+    if m:
+        return normalize(m.group(1))
+
+    # 2. Sibling elements and parent (repeater item container)
+    parent = table.parent
+    if parent:
+        m = DATE_PAT.search(clean_text(parent))
+        if m:
+            return normalize(m.group(1))
+
+    # 3. Walk up two more levels (some ASP.NET repeaters nest deeper)
+    grandparent = parent.parent if parent else None
+    if grandparent:
+        m = DATE_PAT.search(clean_text(grandparent))
+        if m:
+            return normalize(m.group(1))
+
+    return None
+
+
 def parse_team_matches(html: str, team: dict) -> list:
     """Return all rounds for a team, each with its own date field (DD/MM/YYYY)."""
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for table in soup.find_all("table", id=re.compile(r"RoundsRepeter_ctl\d+_GamesGridView", re.I)):
-        # Find date: look in thead first (for future/scheduled rounds), then tbody (for played rounds)
-        thead = table.find("thead")
-        tbody = table.find("tbody")
-        match_date = None
-        # Search entire table text for a DD/MM/YYYY date pattern
-        table_text = clean_text(table)
-        date_m = re.search(r"(\d{2}/\d{2}/\d{4})", table_text)
-        if date_m:
-            match_date = date_m.group(1)
+        match_date = find_date_near_table(table)
         if not match_date:
-            continue
-        if not thead:
             continue
         thead = table.find("thead")
         if not thead:
@@ -331,6 +351,29 @@ async def team_matches_stream(body: TeamMatchRequest):
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/debug-team")
+def debug_team(teamId: int = Query(...)):
+    """Return raw repeater HTML for a team page to inspect date location."""
+    url = f"https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId={teamId}"
+    try:
+        html = fetch_url(url)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    soup = BeautifulSoup(html, "html.parser")
+    tables = soup.find_all("table", id=re.compile(r"RoundsRepeter_ctl\d+_GamesGridView", re.I))
+    snippets = []
+    for t in tables[:3]:  # first 3 rounds only
+        parent = t.parent
+        snippets.append({
+            "tableId": t.get("id"),
+            "tableText": clean_text(t)[:300],
+            "parentTag": parent.name if parent else None,
+            "parentId": parent.get("id") if parent else None,
+            "parentText": clean_text(parent)[:300] if parent else None,
+        })
+    return JSONResponse(content={"rounds": snippets, "totalTables": len(tables)})
+
 
 @app.get("/health")
 def health():
