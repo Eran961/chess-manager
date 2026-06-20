@@ -6248,11 +6248,15 @@ function toFirebaseEmail(input) {
   if (!input) return '';
   return input.includes('@') ? input : input + CLUB_EMAIL_DOMAIN;
 }
+function loginKey(u) { return (u||'').replace(/\./g,',').replace(/#/g,'-').replace(/\$/g,'_').replace(/\[/g,'(').replace(/\]/g,')'); }
 
 async function doLogin() {
   const raw   = document.getElementById('login-email').value.trim();
-  const email = toFirebaseEmail(raw);
   const pass  = document.getElementById('login-password').value;
+  let email = toFirebaseEmail(raw);
+  if (!raw.includes('@')) {
+    try { const snap = await db.ref('loginIndex/' + loginKey(raw)).get(); if (snap.exists()) email = snap.val(); } catch(e) {}
+  }
   const errEl = document.getElementById('login-error');
   const btn   = document.getElementById('btn-login-submit');
   if (!raw || !pass) { errEl.textContent = 'יש למלא שם משתמש וסיסמה'; return; }
@@ -9527,6 +9531,10 @@ window.removeInstructor = removeInstructor;
 async function loadAllUsersList() {
   const el = document.getElementById('all-users-list');
   if (!el || !db) return;
+  el.onclick = e => {
+    const btn = e.target.closest('[data-edit-uid]');
+    if (btn) openSaEditModal(btn.dataset.editUid).catch(err => showToast('שגיאה: ' + err.message, 'error'));
+  };
   el.innerHTML = '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">טוען...</div>';
   try {
     const snap = await db.ref('roles').get();
@@ -9606,6 +9614,7 @@ async function submitAddAdmin() {
     await secondaryAuth.signOut();
     await secondaryApp.delete();
     await db.ref(`roles/${newUid}`).set({ name, username, email, role: 'admin', groups: {}, teams: {}, tempPassword: pass });
+    await db.ref(`loginIndex/${loginKey(username)}`).set(email);
     document.querySelector('.friday-modal')?.remove();
     showToast(`המנהל "${name}" נוצר ✅`);
     loadAllUsersList();
@@ -9618,37 +9627,42 @@ async function submitAddAdmin() {
 }
 window.submitAddAdmin = submitAddAdmin;
 
+const _userEditCache = {};
+
 function buildUserCredRow(u) {
   const roleLabel = u.role === 'admin' ? '👑 מנהל' : '👤 מדריך';
   const username  = u.username || u.email?.replace(CLUB_EMAIL_DOMAIN,'') || '—';
   const pass      = u.tempPassword || null;
+  _userEditCache[u.uid] = { ...u, _username: username };
+  const safeName = (u.name||username).replace(/'/g,"\\'");
   return `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:#f7fafc;margin-bottom:6px;flex-wrap:wrap">
-      <div style="min-width:70px">
-        <span style="font-size:11px;font-weight:700;color:#718096">${roleLabel}</span>
-      </div>
-      <div style="flex:1;min-width:120px">
-        <div style="font-size:14px;font-weight:700;color:#2d3748">${u.name || '—'}</div>
-      </div>
-      <div style="flex:1;min-width:120px">
-        <div style="font-size:11px;color:#a0aec0;margin-bottom:2px">שם משתמש</div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span id="sa-user-${u.uid}" style="font-size:13px;direction:ltr">${username}</span>
-          <button onclick="openSaEditModal('${u.uid}','${u.name||''}','${u.email||''}','${username}','${pass||''}')"
-            style="background:none;border:1px solid #e2e8f0;border-radius:5px;padding:1px 7px;font-size:11px;cursor:pointer;font-family:inherit;color:#2b6cb0">✏️</button>
+    <div style="border:1px solid #e2e8f0;border-radius:10px;background:#f7fafc;margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:white;border-bottom:1px solid #e2e8f0;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;font-weight:700;background:${u.role==='admin'?'#faf5ff':'#f0fff4'};color:${u.role==='admin'?'#553c9a':'#276749'};border:1px solid ${u.role==='admin'?'#d6bcfa':'#9ae6b4'};border-radius:6px;padding:3px 9px">${roleLabel}</span>
+          <span style="font-size:15px;font-weight:700;color:#2d3748">${u.name || '—'}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button data-edit-uid="${u.uid}"
+            style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:7px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:#2b6cb0;font-weight:600">✏️ ערוך</button>
           ${u.uid !== currentUser?.uid ? `
-            <button onclick="changeUserRole('${u.uid}','${u.role}','${(u.name||username).replace(/'/g,"\\\'")}')"
-              style="background:none;border:1px solid #d6bcfa;border-radius:5px;padding:1px 7px;font-size:11px;cursor:pointer;font-family:inherit;color:#553c9a"
-              title="שנה ל${u.role==='admin'?'מדריך':'מנהל'}">${u.role==='admin'?'👤':'👑'}</button>
-            <button onclick="deleteUser('${u.uid}','${u.name||username}')"
-              style="background:none;border:1px solid #fed7d7;border-radius:5px;padding:1px 7px;font-size:11px;cursor:pointer;font-family:inherit;color:#c53030">🗑</button>` : ''}
+            <button onclick="changeUserRole('${u.uid}','${u.role}','${safeName}')"
+              style="background:${u.role==='admin'?'#f0fff4':'#faf5ff'};border:1px solid ${u.role==='admin'?'#9ae6b4':'#d6bcfa'};border-radius:7px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:${u.role==='admin'?'#276749':'#553c9a'};font-weight:600">${u.role==='admin'?'👤 למדריך':'👑 למנהל'}</button>
+            <button onclick="deleteUser('${u.uid}','${safeName}')"
+              style="background:#fff5f5;border:1px solid #fed7d7;border-radius:7px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:#c53030;font-weight:600">🗑 מחק</button>` : ''}
         </div>
       </div>
-      <div style="flex:1;min-width:120px">
-        <div style="font-size:11px;color:#a0aec0;margin-bottom:2px">סיסמה</div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span id="sa-pass-${u.uid}" style="font-size:13px;letter-spacing:2px;direction:ltr">${pass ? '••••••••' : '<span style="color:#a0aec0;letter-spacing:0">לא שמורה</span>'}</span>
-          ${pass ? `<button onclick="toggleSaPass('${u.uid}','${pass}')" style="background:none;border:1px solid #e2e8f0;border-radius:5px;padding:1px 7px;font-size:11px;cursor:pointer;font-family:inherit;color:#718096">👁</button>` : ''}
+      <div style="display:flex;gap:0;padding:10px 14px">
+        <div style="flex:1;min-width:0;padding-left:16px;border-left:1px solid #e2e8f0">
+          <div style="font-size:11px;color:#a0aec0;margin-bottom:4px">שם משתמש</div>
+          <span id="sa-user-${u.uid}" style="font-size:14px;direction:ltr;color:#2d3748;word-break:break-all">${username}</span>
+        </div>
+        <div style="flex:1;min-width:0;padding-right:16px">
+          <div style="font-size:11px;color:#a0aec0;margin-bottom:4px">סיסמה</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span id="sa-pass-${u.uid}" style="font-size:14px;letter-spacing:2px;direction:ltr;color:#2d3748">${pass ? '••••••••' : '<span style="color:#a0aec0;font-size:13px;letter-spacing:0">לא שמורה</span>'}</span>
+            ${pass ? `<button onclick="toggleSaPass('${u.uid}','${pass}')" style="background:none;border:1px solid #e2e8f0;border-radius:5px;padding:2px 8px;font-size:12px;cursor:pointer;font-family:inherit;color:#718096">👁</button>` : ''}
+          </div>
         </div>
       </div>
     </div>`;
@@ -9667,7 +9681,15 @@ function toggleSaPass(uid, pass) {
 }
 window.toggleSaPass = toggleSaPass;
 
-function openSaEditModal(uid, name, currentEmail, currentUsername, currentPass) {
+async function openSaEditModal(uid) {
+  let u = _userEditCache[uid] || {};
+  if (!u.email && db) {
+    try { const s = await db.ref('roles/' + uid).get(); u = s.val() || {}; } catch(e) {}
+  }
+  const name = u.name || '';
+  const currentEmail = u.email || '';
+  const currentUsername = u.username || u.email?.replace(CLUB_EMAIL_DOMAIN,'') || '';
+  const currentPass = u.tempPassword || '';
   const hasStored = !!currentPass;
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
@@ -9723,15 +9745,13 @@ async function submitSaEdit(uid, currentEmail, oldUsername) {
   if (btn) { btn.disabled=true; btn.textContent='⏳ שומר...'; }
   try {
     const authEmail = currentEmail.includes('@') ? currentEmail : toFirebaseEmail(oldUsername);
-    const authPass  = currentPass;
     const secApp  = firebase.initializeApp(FIREBASE_CONFIG, 'sa-edit-' + Date.now());
     const secAuth = secApp.auth();
-    const cred    = await secAuth.signInWithEmailAndPassword(authEmail, authPass);
+    const cred    = await secAuth.signInWithEmailAndPassword(authEmail, currentPass);
     if (newUsername && newUsername !== oldUsername) {
-      const newEmail = toFirebaseEmail(newUsername);
-      await cred.user.updateEmail(newEmail);
       await db.ref(`roles/${uid}/username`).set(newUsername);
-      await db.ref(`roles/${uid}/email`).set(newEmail);
+      await db.ref(`loginIndex/${loginKey(newUsername)}`).set(authEmail);
+      if (oldUsername) await db.ref(`loginIndex/${loginKey(oldUsername)}`).remove();
     }
     if (newPass) {
       await cred.user.updatePassword(newPass);
@@ -10799,86 +10819,91 @@ async function syncSatDate() {
   const [y, mo, d] = targetDate.split('-');
   const fedDate = `${d}/${mo}/${y}`;
 
-  const matches = [];
-  for (let i = 0; i < teamsWithId.length; i++) {
-    const team = teamsWithId[i];
-    if (btn) btn.textContent = `⏳ ${i+1}/${teamsWithId.length}`;
-    try {
-      const url = `https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId=${team.teamId}`;
-      let html = '';
-      const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-      ];
-      for (const proxy of proxies) {
-        try {
-          const res = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
-          if (res.ok) { html = await res.text(); if (html.length > 500) break; }
-        } catch(e2) { /* try next */ }
-      }
-      if (!html || html.length < 200) continue;
+  let completed = 0;
+  const teamStatuses = {};
+  if (btn) btn.textContent = `⏳ 0/${teamsWithId.length}`;
 
-      const roundTables = [...html.matchAll(/RoundsRepeter_ctl\d+_GamesGridView[^>]*>([\s\S]*?)<\/table>/gi)];
-      for (const tbl of roundTables) {
-        const tableHtml = tbl[1];
-
-        // Check if this round is on our target date
-        const firstTd = tableHtml.match(/<tbody>[\s\S]*?<td[^>]*>\s*([^<]+?)\s*<\/td>/i);
-        const dateRaw = firstTd?.[1]?.trim() || '';
-        if (!dateRaw.includes(fedDate)) continue;
-
-        // Parse thead: round, teams, scores
-        const thead = tableHtml.match(/<thead>([\s\S]*?)<\/thead>/i)?.[1] || '';
-        const thCells = [...thead.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m =>
-          m[1].replace(/<[^>]+>/g,' ').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
-               .replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim()
-        );
-        const roundMatch = thCells[0]?.match(/סיבוב\s*(\d+)/);
-        const roundNumber = roundMatch ? parseInt(roundMatch[1]) : null;
-
-        const hostLink = thead.match(/HostTeamHL[^>]*>([^<]+)<\/a>/i);
-        const awayLink = thead.match(/AwayTeamHL[^>]*>([^<]+)<\/a>/i);
-        const homeTeam = hostLink ? hostLink[1].trim() : thCells[1] || '';
-        const awayTeam = awayLink ? awayLink[1].trim() : thCells[5] || '';
-
-        const homeScoreRaw = thCells[2];
-        const awayScoreRaw = thCells[4];
-        const homeScore = homeScoreRaw && /[\d.]/.test(homeScoreRaw) ? parseFloat(homeScoreRaw) : null;
-        const awayScore = awayScoreRaw && /[\d.]/.test(awayScoreRaw) ? parseFloat(awayScoreRaw) : null;
-
-        if (!homeTeam && !awayTeam) continue;
-        const div = team.division || '';
-        const defaultTime = (div === 'ג' || div.includes('ג')) ? '15:00' : '10:00';
-        matches.push({
-          teamId: team.teamId, teamName: team.name,
-          type: team.type || 'בוגרים', division: div,
-          roundNumber, homeTeam, awayTeam,
-          homeScore, awayScore, isPlayed: homeScore !== null && awayScore !== null,
-          timeSlot: defaultTime,
-        });
-      }
-    } catch(e) { console.warn(`team ${team.teamId}:`, e.message); }
+  async function fetchTeamMatches(team) {
+    const url = `https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId=${team.teamId}`;
+    let html = '';
+    const proxies = [
+      `https://RENDER_URL_HERE/proxy?url=${encodeURIComponent(url)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    ];
+    for (const proxy of proxies) {
+      try {
+        const res = await fetch(proxy, { signal: AbortSignal.timeout(20000) });
+        if (res.ok) { html = await res.text(); if (html.length > 500) break; }
+      } catch(e2) { /* try next */ }
+    }
+    if (!html || html.length < 200) {
+      teamStatuses[team.name] = 'fail'; completed++;
+      if (btn) btn.textContent = `⏳ ${completed}/${teamsWithId.length}`;
+      return [];
+    }
+    const result = [];
+    const roundTables = [...html.matchAll(/RoundsRepeter_ctl\d+_GamesGridView[^>]*>([\s\S]*?)<\/table>/gi)];
+    for (const tbl of roundTables) {
+      const tableHtml = tbl[1];
+      const firstTd = tableHtml.match(/<tbody>[\s\S]*?<td[^>]*>\s*([^<]+?)\s*<\/td>/i);
+      if (!(firstTd?.[1]?.trim()||'').includes(fedDate)) continue;
+      const thead = tableHtml.match(/<thead>([\s\S]*?)<\/thead>/i)?.[1] || '';
+      const thCells = [...thead.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m =>
+        m[1].replace(/<[^>]+>/g,' ').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+             .replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim());
+      const roundNumber = parseInt(thCells[0]?.match(/סיבוב\s*(\d+)/)?.[1]) || null;
+      const homeTeam = thead.match(/HostTeamHL[^>]*>([^<]+)<\/a>/i)?.[1]?.trim() || thCells[1] || '';
+      const awayTeam = thead.match(/AwayTeamHL[^>]*>([^<]+)<\/a>/i)?.[1]?.trim() || thCells[5] || '';
+      const homeScore = /[\d.]/.test(thCells[2]) ? parseFloat(thCells[2]) : null;
+      const awayScore = /[\d.]/.test(thCells[4]) ? parseFloat(thCells[4]) : null;
+      if (!homeTeam && !awayTeam) continue;
+      const div = team.division || '';
+      result.push({ teamId: team.teamId, teamName: team.name, type: team.type||'בוגרים', division: div,
+        roundNumber, homeTeam, awayTeam, homeScore, awayScore,
+        isPlayed: homeScore!==null && awayScore!==null,
+        timeSlot: (div==='ג'||div.includes('ג')) ? '15:00' : '10:00' });
+    }
+    teamStatuses[team.name] = result.length > 0 ? 'ok' : 'nodate';
+    completed++; if (btn) btn.textContent = `⏳ ${completed}/${teamsWithId.length}`;
+    return result;
   }
+
+  const BATCH = 2;
+  const allResults = [];
+  for (let i = 0; i < teamsWithId.length; i += BATCH) {
+    const batch = teamsWithId.slice(i, i + BATCH);
+    const res = await Promise.all(batch.map(t => fetchTeamMatches(t).catch(() => {
+      teamStatuses[t.name]='fail'; completed++; if(btn) btn.textContent=`⏳ ${completed}/${teamsWithId.length}`; return [];
+    })));
+    allResults.push(...res);
+    if (i + BATCH < teamsWithId.length) await new Promise(r => setTimeout(r, 1500));
+  }
+  const matches = allResults.flat();
 
   if (btn) { btn.disabled = false; btn.textContent = '📥 טען'; }
 
-  if (matches.length === 0) {
-    showToast(`לא נמצאו משחקים בתאריך ${fedDate}`, 'error');
-    return;
-  }
-
-  // Deduplicate: same match can appear from both teams' pages
   const seen = new Set();
   const deduped = matches.filter(m => {
     const key = `${m.homeTeam}|${m.awayTeam}|${m.roundNumber}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+    if (seen.has(key)) return false; seen.add(key); return true;
   });
+
+  const ok     = Object.entries(teamStatuses).filter(([,v])=>v==='ok').map(([k])=>k);
+  const noDate = Object.entries(teamStatuses).filter(([,v])=>v==='nodate').map(([k])=>k);
+  const failed = Object.entries(teamStatuses).filter(([,v])=>v==='fail').map(([k])=>k);
+  const lines = [];
+  if (ok.length)     lines.push(`✅ נטענו: ${ok.join(', ')}`);
+  if (noDate.length) lines.push(`📅 אין משחק: ${noDate.join(', ')}`);
+  if (failed.length) lines.push(`❌ נכשל: ${failed.join(', ')}`);
 
   const dateDisplay = new Date(targetDate + 'T12:00:00')
     .toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  if (deduped.length > 0) { _satDates[targetDate] = { dateDisplay, matches: deduped }; }
+  lines.unshift(deduped.length > 0 ? `📋 נמצאו ${deduped.length} משחקים` : '📋 לא נמצאו משחקים');
+  showToast(lines.join('\n'), deduped.length > 0 ? 'success' : 'error');
+  if (deduped.length === 0) { if(btn){btn.disabled=false;btn.textContent='📥 טען';} return; }
+
   _satDates[targetDate] = { dateDisplay, matches: deduped };
   await db.ref(`satDates/${targetDate}`).set({ dateDisplay, matches: deduped });
   showToast(`נטענו ${deduped.length} משחקים לתאריך ${dateDisplay}`, 'success');
@@ -11352,9 +11377,8 @@ async function syncClubTeamsFromSite() {
     const url = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=LeagueTeams';
     let html = '';
     const proxies = [
+      `https://RENDER_URL_HERE/proxy?url=${encodeURIComponent(url)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      `https://corsproxy.io/?${encodeURIComponent(url)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
     ];
     for (const proxy of proxies) {
       try {
@@ -11791,11 +11815,6 @@ async function loadFedPlayers() {
     const snap = await db.ref('fedPlayers').get();
     _fedPlayers = snap.val() || {};
     renderFedPlayersPanel();
-    // Auto-sync if empty or stale (> 24h)
-    if (Object.keys(_fedPlayers).length === 0 ||
-        !_fedPlayersLastSync || Date.now() - parseInt(_fedPlayersLastSync) > 86400000) {
-      syncFedPlayersFromSite(true);
-    }
   } catch(e) { console.error('loadFedPlayers:', e); }
 }
 
@@ -11808,9 +11827,8 @@ async function syncFedPlayersFromSite(silent = false) {
     const url = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=Players';
     let html = '';
     const proxies = [
+      `https://RENDER_URL_HERE/proxy?url=${encodeURIComponent(url)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      `https://corsproxy.io/?${encodeURIComponent(url)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
     ];
     for (const proxy of proxies) {
       try {
