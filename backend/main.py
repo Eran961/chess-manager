@@ -291,26 +291,24 @@ def parse_team_matches(html: str, team: dict) -> list:
     return results
 
 
-def flip_name(name: str) -> str:
-    """Swap first and last name: 'גלפנד בוריס' → 'בוריס גלפנד'."""
-    parts = name.strip().split()
-    return " ".join(reversed(parts)) if len(parts) >= 2 else name
+def name_key(name: str) -> frozenset:
+    """Order-independent key: {'בוריס','גלפנד'} matches regardless of word order."""
+    return frozenset(name.strip().split())
 
 
 def aggregate_players(rounds: list, team_name: str, roster: list) -> list:
     """Aggregate per-player stats. Includes all roster members, sorted by roster position."""
     players: dict = {}
 
-    # Seed all registered players, build lookup by both name and flipped name
-    lookup: dict = {}  # normalized name → canonical roster name
+    # Seed all registered players; build lookup by word-set so order doesn't matter
+    lookup: dict = {}  # frozenset of name words → canonical roster name
     for r in roster:
         entry = {"name": r["name"], "position": r["position"],
                  "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}
         players[r["name"]] = entry
-        lookup[r["name"]] = r["name"]
-        lookup[flip_name(r["name"])] = r["name"]
+        lookup[name_key(r["name"])] = r["name"]
 
-    # Merge in game results, resolving name mismatches via lookup
+    # Merge in game results
     for r in rounds:
         if not r.get("isPlayed"):
             continue
@@ -320,12 +318,10 @@ def aggregate_players(rounds: list, team_name: str, roster: list) -> list:
             result = g["homeResult"] if is_home else g["awayResult"]
             if not raw_name or result is None:
                 continue
-            # Resolve to roster canonical name, or flipped, or treat as substitute
-            canonical = lookup.get(raw_name) or lookup.get(flip_name(raw_name))
+            canonical = lookup.get(name_key(raw_name))
             if canonical:
                 p = players[canonical]
             else:
-                # Not on roster — add as substitute at end
                 if raw_name not in players:
                     players[raw_name] = {"name": raw_name, "position": 999,
                                          "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}

@@ -11739,8 +11739,9 @@ async function loadTeamPlayersDetail(team) {
   try {
     const snap = await db.ref(`teamPlayersCache/${team.teamId}`).get();
     const cached = snap.val();
-    // v3: require position field from official roster (invalidates old avgBoard-based cache)
-    if (cached?.players?.length && cached.players[0]?.position !== undefined) {
+    // v4: require at least one player with games>0 to reject broken all-"לא שיחק" caches
+    const hasPlayedData = cached?.players?.some(p => p.games > 0);
+    if (cached?.players?.length && cached.players[0]?.position !== undefined && hasPlayedData) {
       el.innerHTML = renderPlayerStatsHTML(cached.players, cached.rounds);
       el.dataset.loaded = team.teamId.toString();
       return;
