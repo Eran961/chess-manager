@@ -10827,7 +10827,7 @@ async function syncSatDate() {
     const url = `https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId=${team.teamId}`;
     let html = '';
     const proxies = [
-      `https://RENDER_URL_HERE/proxy?url=${encodeURIComponent(url)}`,
+      `https://chess-manager-7wkr.onrender.com/proxy?url=${encodeURIComponent(url)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     ];
     for (const proxy of proxies) {
@@ -11377,7 +11377,7 @@ async function syncClubTeamsFromSite() {
     const url = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=LeagueTeams';
     let html = '';
     const proxies = [
-      `https://RENDER_URL_HERE/proxy?url=${encodeURIComponent(url)}`,
+      `https://chess-manager-7wkr.onrender.com/proxy?url=${encodeURIComponent(url)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     ];
     for (const proxy of proxies) {
@@ -11827,7 +11827,7 @@ async function syncFedPlayersFromSite(silent = false) {
     const url = 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=Players';
     let html = '';
     const proxies = [
-      `https://RENDER_URL_HERE/proxy?url=${encodeURIComponent(url)}`,
+      `https://chess-manager-7wkr.onrender.com/proxy?url=${encodeURIComponent(url)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     ];
     for (const proxy of proxies) {
@@ -12527,3 +12527,4 @@ window.previewAdminCal = previewAdminCal;
 </div>
 </body>
 </html>
+
