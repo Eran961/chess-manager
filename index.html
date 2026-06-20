@@ -11833,26 +11833,35 @@ function renderPlayerStatsHTML(players, totalRounds) {
     ${rows}`;
 }
 
+let _syncAbort = false;
+let _syncRunning = false;
+
 async function syncAllTeamsData() {
+  const btns = document.querySelectorAll('[id^="btn-sync-all-teams"]');
+  const statuses = document.querySelectorAll('[id^="sync-all-status"]');
+  const setStatus = (text, color='#718096') => statuses.forEach(s => { s.textContent = text; s.style.color = color; });
+
+  // If running — cancel
+  if (_syncRunning) {
+    _syncAbort = true;
+    btns.forEach(b => { b.textContent = '⏳ מבטל...'; b.disabled = true; });
+    return;
+  }
+
   const teams = _clubTeams.filter(t => t.teamId);
   if (!teams.length) { showToast('אין קבוצות — סנכרן קבוצות מהאיגוד תחילה'); return; }
 
-  const btns = document.querySelectorAll('[id^="btn-sync-all-teams"]');
-  const statuses = document.querySelectorAll('[id^="sync-all-status"]');
-  const setUI = (text, color='#718096') => {
-    btns.forEach(b => { b.disabled = true; b.textContent = text; });
-    statuses.forEach(s => { s.textContent = ''; s.style.color = color; });
-  };
-  const setStatus = (text, color='#718096') => statuses.forEach(s => { s.textContent = text; s.style.color = color; });
+  _syncAbort = false;
+  _syncRunning = true;
+  btns.forEach(b => { b.textContent = '⏹ עצור סנכרון'; b.style.background = '#c53030'; b.disabled = false; });
 
-  setUI('⏳ מסנכרן...');
   let done = 0, failed = 0;
   const total = teams.length;
+  setStatus(`0/${total} קבוצות...`);
 
-  for (const team of teams) {
-    setStatus(`${done}/${total} קבוצות...`);
+  async function syncOne(team) {
+    if (_syncAbort) return;
     try {
-      // ── שחקנים ──
       const pr = await fetch('https://chess-manager-7wkr.onrender.com/api/team-players', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({teamId: team.teamId, teamName: team.name, type: team.type||'בוגרים', division: team.division||''})
@@ -11861,8 +11870,7 @@ async function syncAllTeamsData() {
         const pd = await pr.json();
         await db.ref(`teamPlayersCache/${team.teamId}`).set({players: pd.players, rounds: pd.rounds, ts: Date.now()});
       }
-
-      // ── לוח משחקים ──
+      if (_syncAbort) return;
       const sr = await fetch('https://chess-manager-7wkr.onrender.com/api/team-rounds-stream', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({teams: [team]})
@@ -11876,14 +11884,26 @@ async function syncAllTeamsData() {
         }
       }
       if (rounds.length) await db.ref(`teamRoundsCache/${team.teamId}`).set({rounds, ts: Date.now()});
-
       done++;
     } catch(e) { failed++; done++; }
+    setStatus(`${done}/${total} קבוצות...`);
   }
 
-  btns.forEach(b => { b.disabled = false; b.textContent = '🔄 סנכרן כל הקבוצות מהאיגוד'; b.style.background = '#276749'; });
-  setStatus(`✅ הושלם — ${total - failed} קבוצות${failed ? ` (${failed} נכשלו)` : ''}`, '#276749');
-  setTimeout(() => { btns.forEach(b => b.style.background = ''); setStatus(''); }, 4000);
+  const CONCURRENCY = 4;
+  for (let i = 0; i < teams.length; i += CONCURRENCY) {
+    if (_syncAbort) break;
+    await Promise.all(teams.slice(i, i + CONCURRENCY).map(syncOne));
+  }
+
+  _syncRunning = false;
+  const cancelled = _syncAbort;
+  btns.forEach(b => { b.textContent = '🔄 סנכרן כל הקבוצות מהאיגוד'; b.style.background = ''; b.disabled = false; });
+  if (cancelled) {
+    setStatus(`⚠️ בוטל — ${done} קבוצות סונכרנו`, '#d69e2e');
+  } else {
+    setStatus(`✅ הושלם — ${total - failed} קבוצות${failed ? ` (${failed} נכשלו)` : ''}`, '#276749');
+  }
+  setTimeout(() => setStatus(''), 5000);
 }
 
 window.syncAllTeamsData = syncAllTeamsData;
