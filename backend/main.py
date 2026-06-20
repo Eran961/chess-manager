@@ -220,10 +220,8 @@ def parse_board_games(table) -> list:
 def parse_team_roster(html: str) -> list:
     """Extract the official ordered player roster from the team page."""
     soup = BeautifulSoup(html, "html.parser")
-    # Try known table ID patterns for the registered players table
-    roster_table = (
-        soup.find("table", id=re.compile(r"PlayersList|PlayersGridView|TeamPlayers|PlayersRepeater", re.I))
-    )
+    # The real table ID on chess.org.il team pages
+    roster_table = soup.find("table", id=re.compile(r"TeamPlayersGridView", re.I))
     if not roster_table:
         return []
     players = []
@@ -231,18 +229,13 @@ def parse_team_roster(html: str) -> list:
     for tr in roster_table.find_all("tr"):
         cells = tr.find_all("td")
         if not cells:
-            continue  # header row
-        pos += 1
-        # Name is in a link, or first non-numeric text cell
-        a = tr.find("a")
-        name = clean_text(a) if a else None
-        if not name:
-            for c in cells:
-                t = clean_text(c)
-                if t and not re.match(r"^\d+$", t):
-                    name = t
-                    break
+            continue
+        a = tr.find("a", href=re.compile(r"Player", re.I))
+        if not a:
+            continue
+        name = clean_text(a)
         if name:
+            pos += 1
             players.append({"position": pos, "name": name})
     return players
 
@@ -496,9 +489,9 @@ def team_players(body: TeamPlayersRequest):
     try:
         now = time.time()
         cached = _team_cache.get(body.teamId)
-        if cached and now - cached["ts"] < CACHE_TTL:
+        if cached and now - cached["ts"] < CACHE_TTL and cached.get("roster") is not None:
             rounds = cached["rounds"]
-            roster = cached.get("roster", [])
+            roster = cached["roster"]
         else:
             html = fetch_url(url)
             rounds = parse_team_matches(html, team)
