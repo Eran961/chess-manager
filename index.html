@@ -11739,9 +11739,10 @@ async function loadTeamPlayersDetail(team) {
   try {
     const snap = await db.ref(`teamPlayersCache/${team.teamId}`).get();
     const cached = snap.val();
-    // v4: require at least one player with games>0 to reject broken all-"לא שיחק" caches
+    // v5: also reject caches where any player has position 999 (unmatched names from old bug)
     const hasPlayedData = cached?.players?.some(p => p.games > 0);
-    if (cached?.players?.length && cached.players[0]?.position !== undefined && hasPlayedData) {
+    const hasUnmatched = cached?.players?.some(p => p.position === 999);
+    if (cached?.players?.length && cached.players[0]?.position !== undefined && hasPlayedData && !hasUnmatched) {
       el.innerHTML = renderPlayerStatsHTML(cached.players, cached.rounds);
       el.dataset.loaded = team.teamId.toString();
       return;
