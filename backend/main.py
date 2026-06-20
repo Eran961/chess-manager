@@ -128,7 +128,8 @@ def club_teams(clubId: int = Query(...)):
 
 # ── Team matches (parallel fetch for all teams) ────────────────────────────────
 
-def parse_team_matches(html: str, team: dict, fed_date: str) -> list:
+def parse_team_matches(html: str, team: dict) -> list:
+    """Return all rounds for a team, each with its own date field (DD/MM/YYYY)."""
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for table in soup.find_all("table", id=re.compile(r"RoundsRepeter_ctl\d+_GamesGridView", re.I)):
@@ -136,8 +137,13 @@ def parse_team_matches(html: str, team: dict, fed_date: str) -> list:
         if not tbody:
             continue
         first_td = tbody.find("td")
-        if not first_td or fed_date not in clean_text(first_td):
+        if not first_td:
             continue
+        first_td_text = clean_text(first_td)
+        date_m = re.search(r"(\d{2}/\d{2}/\d{4})", first_td_text)
+        if not date_m:
+            continue
+        match_date = date_m.group(1)  # DD/MM/YYYY
         thead = table.find("thead")
         if not thead:
             continue
@@ -150,8 +156,8 @@ def parse_team_matches(html: str, team: dict, fed_date: str) -> list:
         away_team = clean_text(away_a) if away_a else (ths[5] if len(ths) > 5 else "")
         home_score_raw = ths[2] if len(ths) > 2 else ""
         away_score_raw = ths[4] if len(ths) > 4 else ""
-        home_score = float(home_score_raw) if re.search(r"[\d.]", home_score_raw) else None
-        away_score = float(away_score_raw) if re.search(r"[\d.]", away_score_raw) else None
+        home_score = float(home_score_raw) if re.search(r"\d", home_score_raw) else None
+        away_score = float(away_score_raw) if re.search(r"\d", away_score_raw) else None
         if not home_team and not away_team:
             continue
         div = team.get("division", "")
@@ -162,6 +168,7 @@ def parse_team_matches(html: str, team: dict, fed_date: str) -> list:
             "type": team.get("type", "בוגרים"),
             "division": div,
             "roundNumber": round_num,
+            "matchDate": match_date,
             "homeTeam": home_team,
             "awayTeam": away_team,
             "homeScore": home_score,
@@ -176,7 +183,9 @@ def fetch_team(team: dict, fed_date: str) -> tuple:
     url = f"https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId={team['teamId']}"
     try:
         html = fetch_url(url)
-        matches = parse_team_matches(html, team, fed_date)
+        all_rounds = parse_team_matches(html, team)
+        # filter to requested date
+        matches = [m for m in all_rounds if m.get("matchDate") == fed_date]
         status = "ok" if matches else "nodate"
         return team["name"], status, matches
     except Exception as e:
