@@ -172,6 +172,51 @@ def find_date_near_table(table) -> str | None:
     return None
 
 
+def parse_score(raw: str) -> float | None:
+    s = raw.strip()
+    if s in ("1", "1.0"): return 1.0
+    if s in ("0", "0.0"): return 0.0
+    if s in ("½", "0.5", "1/2"): return 0.5
+    if s == "+": return 1.0
+    if s == "-": return 0.0
+    try: return float(s)
+    except: return None
+
+
+def parse_board_games(table) -> list:
+    """Extract individual board results from a round table's tbody."""
+    games = []
+    tbody = table.find("tbody")
+    if not tbody:
+        return games
+    for tr in tbody.find_all("tr"):
+        cells = [clean_text(td) for td in tr.find_all("td")]
+        # 6-col: [board, home_player, home_score, "–"/"-", away_score, away_player]
+        # 5-col: [board, home_player, home_score, away_score, away_player]
+        if len(cells) >= 6:
+            board_raw, home_p, h_raw, _, a_raw, away_p = cells[0], cells[1], cells[2], cells[3], cells[4], cells[5]
+        elif len(cells) == 5:
+            board_raw, home_p, h_raw, a_raw, away_p = cells
+        else:
+            continue
+        if not home_p and not away_p:
+            continue
+        try:
+            board_num = int(re.search(r"\d+", board_raw).group())
+        except Exception:
+            board_num = None
+        h_score = parse_score(h_raw)
+        a_score = parse_score(a_raw)
+        games.append({
+            "board": board_num,
+            "homePlayer": home_p,
+            "homeResult": h_score,
+            "awayPlayer": away_p,
+            "awayResult": a_score,
+        })
+    return games
+
+
 def parse_team_matches(html: str, team: dict) -> list:
     """Return all rounds for a team, each with its own date field (DD/MM/YYYY)."""
     soup = BeautifulSoup(html, "html.parser")
@@ -211,8 +256,32 @@ def parse_team_matches(html: str, team: dict) -> list:
             "awayScore": away_score,
             "isPlayed": home_score is not None and away_score is not None,
             "timeSlot": time_slot,
+            "games": parse_board_games(table),
         })
     return results
+
+
+def aggregate_players(rounds: list, team_name: str) -> list:
+    """Aggregate per-player stats from all rounds for a given team."""
+    players: dict = {}
+    for r in rounds:
+        if not r.get("isPlayed"):
+            continue
+        is_home = r.get("homeTeam") == team_name
+        for g in r.get("games", []):
+            name = g["homePlayer"] if is_home else g["awayPlayer"]
+            result = g["homeResult"] if is_home else g["awayResult"]
+            if not name or result is None:
+                continue
+            if name not in players:
+                players[name] = {"name": name, "games": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0.0}
+            p = players[name]
+            p["games"] += 1
+            p["points"] += result
+            if result == 1.0:   p["wins"] += 1
+            elif result == 0.5: p["draws"] += 1
+            else:               p["losses"] += 1
+    return sorted(players.values(), key=lambda x: (-x["points"], -x["games"]))
 
 
 def fetch_team(team: dict, fed_date: str) -> tuple:
@@ -357,6 +426,36 @@ async def team_matches_stream(body: TeamMatchRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── Team players ──────────────────────────────────────────────────────────────
+
+class TeamPlayersRequest(BaseModel):
+    teamId: int
+    teamName: str
+    type: str = "בוגרים"
+    division: str = ""
+
+
+@app.post("/api/team-players")
+def team_players(body: TeamPlayersRequest):
+    """Fetch all rounds for a team and return aggregated per-player stats."""
+    team = {"teamId": body.teamId, "name": body.teamName, "type": body.type, "division": body.division}
+    url = f"https://www.chess.org.il/Tournaments/TeamInTournament.aspx?TeamId={body.teamId}"
+    try:
+        now = time.time()
+        cached = _team_cache.get(body.teamId)
+        if cached and now - cached["ts"] < CACHE_TTL:
+            rounds = cached["rounds"]
+        else:
+            html = fetch_url(url)
+            rounds = parse_team_matches(html, team)
+            _team_cache[body.teamId] = {"rounds": rounds, "ts": now}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    players = aggregate_players(rounds, body.teamName)
+    return JSONResponse(content={"players": players, "rounds": len(rounds)})
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
