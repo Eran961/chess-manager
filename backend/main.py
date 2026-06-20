@@ -141,19 +141,28 @@ def find_date_near_table(table) -> str | None:
         parts = raw.split("/")
         return f"{parts[0].zfill(2)}/{parts[1].zfill(2)}/{parts[2]}"
 
-    # 1. Inside the table itself
+    # 1. Inside the table itself (covers played matches where date is in tbody rows)
     m = DATE_PAT.search(clean_text(table))
     if m:
         return normalize(m.group(1))
 
-    # 2. Sibling elements and parent (repeater item container)
+    # 2. Sibling elements in the same repeater container
     parent = table.parent
     if parent:
+        # Check each sibling element (labels/spans next to the table)
+        for sibling in parent.children:
+            if sibling == table:
+                continue
+            text = clean_text(sibling) if hasattr(sibling, 'get_text') else str(sibling).strip()
+            m = DATE_PAT.search(text)
+            if m:
+                return normalize(m.group(1))
+        # Also check the full parent text
         m = DATE_PAT.search(clean_text(parent))
         if m:
             return normalize(m.group(1))
 
-    # 3. Walk up two more levels (some ASP.NET repeaters nest deeper)
+    # 3. Walk up two more levels
     grandparent = parent.parent if parent else None
     if grandparent:
         m = DATE_PAT.search(clean_text(grandparent))

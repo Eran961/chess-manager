@@ -11246,9 +11246,18 @@ function buildSatLeaguesHTML() {
     const rows = sorted.map((m, i) => {
       const c = SAT_DIV_COLORS[m.division] || { bg: '#f7fafc', border: '#a0aec0', text: '#4a5568' };
       const typeIcon = { 'בוגרים':'♟', 'נשים':'♛', 'נוער':'🎓' }[m.type] || '🏅';
-      const scoreCell = m.isPlayed
-        ? `<strong style="font-size:16px;color:#1a2744;letter-spacing:.5px">${m.homeScore}–${m.awayScore}</strong>`
-        : `<span style="color:#cbd5e0;font-size:12px">טרם</span>`;
+      let scoreCell;
+      if (m.isPlayed) {
+        scoreCell = `<strong style="font-size:16px;color:#1a2744;letter-spacing:.5px">${m.homeScore}–${m.awayScore}</strong>`;
+      } else {
+        // Determine if match date is in the future or past
+        const [dd, mm, yyyy] = (m.matchDate || '').split('/');
+        const matchIso = yyyy ? `${yyyy}-${mm}-${dd}` : '';
+        const isPast = matchIso && matchIso < new Date().toISOString().split('T')[0];
+        scoreCell = isPast
+          ? `<span style="background:#fff5f5;color:#c53030;border:1px solid #fed7d7;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:700;white-space:nowrap">טרם הוזנה תוצאה</span>`
+          : `<span style="background:#fffff0;color:#b7791f;border:1px solid #fefcbf;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:700;white-space:nowrap">טרם שוחק</span>`;
+      }
       const globalIdx = allMatches.findIndex(x => x === m);
       const boardNum  = m.boardNumber ?? (i + 1);
       return `<tr style="background:${i%2===0?'white':'#fafbfc'};cursor:pointer"
