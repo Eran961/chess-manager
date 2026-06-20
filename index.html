@@ -6656,6 +6656,15 @@ if (currentUser?.role === 'admin') {
   leagueYouthPanel.innerHTML = `<div style="padding:20px">${makeSyncBar('נוער','youth')}<div id="lteams-נוער"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div></div>`;
   content.appendChild(leagueYouthPanel);
 
+
+  const leagueStarsBtn = document.createElement('button');
+  leagueStarsBtn.className = 'tab-btn'; leagueStarsBtn.dataset.tab = 'league-stars'; leagueStarsBtn.textContent = '⭐ מצטייני הליגות';
+  leagueStarsBtn.onclick = () => { switchTab('league-stars'); loadLeagueStars(); };
+  tabsBar.appendChild(leagueStarsBtn);
+  const leagueStarsPanel = document.createElement('div');
+  leagueStarsPanel.className = 'tab-panel'; leagueStarsPanel.id = 'panel-league-stars';
+  leagueStarsPanel.innerHTML = <div style="padding:20px" id="league-stars-content"><div style="color:#a0aec0;font-size:13px;padding:8px 0">טוען...</div></div>;
+  content.appendChild(leagueStarsPanel);
   const satBtn = document.createElement('button');
   satBtn.className = 'tab-btn'; satBtn.dataset.tab = 'saturday'; satBtn.textContent = '🏅 מפגשי ליגה';
   satBtn.onclick = () => { switchTab('saturday'); loadClubTeams().then(renderLeagueTypePanels); loadSatSchedule(); };
@@ -11424,7 +11433,9 @@ function buildSingleTypeSection(type) {
     if (!byDiv[d]) byDiv[d] = [];
     byDiv[d].push({ ...t, idx: _clubTeams.indexOf(t) });
   });
-  const divOrder = [...DIV_ORDER, ...Object.keys(byDiv).filter(k => !DIV_ORDER.includes(k))];
+  const TYPE_DIV_ORDER = { 'בוגרים': ['לאומית','ארצית','א','ב','ג'], 'נוער': ['עילית','ארצית','מחוזית'], 'נשים': ['עילית','ארצית'] };
+  const baseDivOrder = TYPE_DIV_ORDER[type] || DIV_ORDER;
+  const divOrder = [...baseDivOrder, ...Object.keys(byDiv).filter(k => !baseDivOrder.includes(k))];
 
   if (teams.length === 0) {
     return `
@@ -11913,7 +11924,77 @@ async function syncAllTeamsData(type) {
   setTimeout(() => setStatus(''), 5000);
 }
 
+async function loadLeagueStars() {
+  const el = document.getElementById('league-stars-content');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#718096">⏳ טוען...</div>';
+  try {
+    const snap = await db.ref('teamPlayersCache').get();
+    const allCache = snap.val() || {};
+    const TYPE_DIV_ORDER = { 'בוגרים': ['לאומית','ארצית','א','ב','ג'], 'נוער': ['עילית','ארצית','מחוזית'], 'נשים': ['עילית','ארצית'] };
+    const TYPE_ORDER = ['בוגרים', 'נוער', 'נשים'];
+    const grouped = {};
+    TYPE_ORDER.forEach(t => { grouped[t] = {}; });
+    _clubTeams.forEach(team => {
+      if (!team.teamId) return;
+      const cached = allCache[team.teamId];
+      if (!cached?.players?.length) return;
+      const type = team.type || 'בוגרים';
+      const div = team.division || 'אחר';
+      if (!grouped[type]) grouped[type] = {};
+      if (!grouped[type][div]) grouped[type][div] = [];
+      cached.players.forEach(p => {
+        if (p.games >= 6 && p.points / p.games >= 0.6)
+          grouped[type][div].push({ ...p, teamName: team.name, division: div, type });
+      });
+    });
+    let html = '';
+    const TYPE_ICONS = { 'בוגרים': '♟', 'נוער': '🎓', 'נשים': '♛' };
+    for (const type of TYPE_ORDER) {
+      const baseDivs = TYPE_DIV_ORDER[type] || [];
+      const allDivs = Object.keys(grouped[type] || {});
+      const orderedDivs = [...baseDivs.filter(d => allDivs.includes(d)), ...allDivs.filter(d => !baseDivs.includes(d))];
+      const anyStars = orderedDivs.some(d => grouped[type][d]?.length);
+      if (!anyStars) continue;
+      html += `<div style="margin-bottom:32px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:10px;border-bottom:2px solid #e2e8f0">
+          <span style="font-size:22px">${TYPE_ICONS[type]}</span>
+          <span style="font-size:20px;font-weight:800;color:#1a202c">${type}</span>
+        </div>`;
+      for (const div of orderedDivs) {
+        const stars = grouped[type][div];
+        if (!stars?.length) continue;
+        stars.sort((a, b) => (b.points / b.games) - (a.points / a.games) || b.points - a.points);
+        html += `<div style="margin-bottom:20px">
+          <div style="font-size:12px;font-weight:700;color:#718096;margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase">ליגה ${div}</div>`;
+        stars.forEach((p, i) => {
+          const pct = Math.round((p.points / p.games) * 100);
+          const pts = p.points % 1 === 0 ? p.points : p.points.toFixed(1);
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<span style="font-size:12px;color:#a0aec0;font-weight:700;min-width:22px;text-align:center">${i+1}</span>`;
+          html += `<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:white;border-radius:11px;margin-bottom:7px;border:1.5px solid #e2e8f0">
+            <div style="font-size:20px;min-width:28px;text-align:center">${medal}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:700;color:#1a202c">${p.name}</div>
+              <div style="font-size:11px;color:#718096;margin-top:2px">${p.teamName}</div>
+            </div>
+            <div style="text-align:center;background:#ebf8ff;border:1.5px solid #bee3f8;border-radius:9px;padding:5px 12px;flex-shrink:0">
+              <div style="font-size:17px;font-weight:900;color:#1a4a8a;line-height:1">${pts}</div>
+              <div style="font-size:10px;color:#4a90d9;font-weight:600">מתוך ${p.games}</div>
+            </div>
+            <div style="background:${pct>=75?'#f0fff4':pct>=60?'#fffff0':'#fff5f5'};color:${pct>=75?'#276749':pct>=60?'#744210':'#c53030'};border-radius:8px;padding:5px 10px;font-size:13px;font-weight:800;flex-shrink:0;min-width:42px;text-align:center">${pct}%</div>
+          </div>`;
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    el.innerHTML = html || '<div style="text-align:center;padding:60px 20px;color:#a0aec0"><div style="font-size:48px;margin-bottom:12px">⭐</div><div style="font-size:15px;font-weight:700">לא נמצאו מצטיינים</div><div style="font-size:13px;margin-top:6px">יש לסנכרן קבוצות תחילה</div></div>';
+  } catch(e) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:#c53030">שגיאה: ${e.message}</div>`;
+  }
+}
 window.syncAllTeamsData = syncAllTeamsData;
+window.loadLeagueStars = loadLeagueStars;
 window.addClubTeamManualTyped = addClubTeamManualTyped;
 window.renderLeagueTypePanels = renderLeagueTypePanels;
 window.openTeamDetail = openTeamDetail;
