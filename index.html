@@ -10815,14 +10815,6 @@ async function syncSatDate() {
   const btn = document.getElementById('btn-sync-date');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ טוען...'; }
 
-  // targetDate is YYYY-MM-DD, federation uses DD/MM/YYYY
-  const [y, mo, d] = targetDate.split('-');
-  const fedDate = `${d}/${mo}/${y}`;
-
-  let completed = 0;
-  const teamStatuses = {};
-  if (btn) btn.textContent = `⏳ 0/${teamsWithId.length}`;
-
   // Single request to backend — server fetches all teams in parallel and returns JSON
   let data;
   try {
