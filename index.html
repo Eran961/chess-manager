@@ -4606,7 +4606,7 @@ function onTeamRepChange(val) {
   _teamRepState.teamIdx = parseInt(val);
   _teamRepState.subTeamIdx = 0;
   const panel = document.getElementById('panel-reports');
-  if (panel) panel.innerHTML = renderReportsPanel();
+  if (panel) { panel.innerHTML = renderReportsPanel(); window.switchRepTab('teams'); }
   loadTeamReportsData();
 }
 window.onTeamRepChange = onTeamRepChange;
