@@ -258,9 +258,7 @@ def parse_team_matches(html: str, team: dict) -> list:
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for table in soup.find_all("table", id=re.compile(r"RoundsRepeter_ctl\d+_GamesGridView", re.I)):
-        match_date = find_date_near_table(table)
-        if not match_date:
-            continue
+        match_date = find_date_near_table(table)  # may be None for future rounds
         thead = table.find("thead")
         if not thead:
             continue
@@ -563,6 +561,17 @@ def debug_team(teamId: int = Query(...)):
         "nonRoundTables": non_round_tables,
         "gameNamesRound1": game_names,
     })
+
+
+@app.post("/api/clear-team-cache")
+def clear_team_cache(teamId: int = Query(None)):
+    if teamId is not None:
+        _team_cache.pop(teamId, None)
+        return {"cleared": [teamId]}
+    else:
+        keys = list(_team_cache.keys())
+        _team_cache.clear()
+        return {"cleared": keys}
 
 
 @app.get("/health")
