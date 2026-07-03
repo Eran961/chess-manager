@@ -604,7 +604,10 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
     # ── Name from H2 heading ────────────────────────────────────────────────────
     h2 = soup.find("h2")
     if h2:
-        profile["name"] = clean_text(h2)
+        raw_h2 = clean_text(h2)
+        # H2 may read "פרטי שחקן ליאו לוחם" — strip the prefix
+        m = re.search(r"פרטי שחקן\s+(.+)", raw_h2)
+        profile["name"] = m.group(1).strip() if m else raw_h2
 
     # ── Basic info from the FormView text blob ──────────────────────────────────
     form_table = soup.find("table", id=re.compile(r"PlayerFormView$", re.I))
