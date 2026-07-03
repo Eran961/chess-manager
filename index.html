@@ -883,7 +883,7 @@
       font-family: inherit;
     }
 
-    /* ===== DASHBOARD ===== */
+    /* ===== —BOARD ===== */
     .dash-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px; max-width:1100px; }
     .dash-card { background:white; border-radius:14px; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; }
     .dash-card-title { font-size:13px; font-weight:700; color:#718096; padding:14px 18px 0; text-transform:uppercase; letter-spacing:.5px; }
@@ -972,7 +972,7 @@
     .weekly-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .weekly-grid { display: flex; min-height: 320px; min-width: 480px; }
 
-    /* ===== DASHBOARD ALERT SPLIT ===== */
+    /* ===== —BOARD ALERT SPLIT ===== */
     .dash-alert-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
 
     /* ===== CALENDAR PANEL ===== */
@@ -5826,7 +5826,7 @@ async function loadWeeklyAttendanceAlerts() {
   return { groups: missingGroups, teams: missingTeams };
 }
 
-// ===== DASHBOARD =====
+// ===== —BOARD =====
 function renderDashboard(missingAtt = { groups: [], teams: [] }) {
   // backward compat: if array passed (old callers), wrap it
   if (Array.isArray(missingAtt)) missingAtt = { groups: missingAtt, teams: [] };
@@ -11994,52 +11994,154 @@ async function loadLeagueStars() {
 const YOUTH_CUTOFF = new Date().toISOString().split('T')[0]; // today
 const YOUTH_FROM   = '2025-06-01';
 const CUR_YEAR     = 2026;
-let _youthPlayers  = {};
-let _activeYouthAge = 12;
+let _youthPlayers       = {};
+let _youthView          = 'age-select';
+let _activeYouthAge     = null;
+let _selectedYouthFedId = null;
+
+const YOUTH_AGE_GROUPS = [
+  { label: 'עד 6', max: 6, min: 0 },
+  { label: 'עד 8', max: 8, min: 7 },
+  { label: 'עד 10', max: 10, min: 9 },
+  { label: 'עד 12', max: 12, min: 11 },
+];
 
 function buildYouthPlayersHTML() {
-  const tabBtn = (age, active) =>
-    `<button onclick="window.switchYouthAge(${age},this)"
-      style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:700;cursor:pointer;
-             font-family:inherit;border-bottom:3px solid ${active?'#553c9a':'transparent'};
-             color:${active?'#553c9a':'#718096'};margin-bottom:-2px">
-      עד ${age}
-     </button>`;
-  return `
-    <div style="padding:20px">
-      <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:20px;flex-wrap:wrap" id="youth-age-tabs">
-        ${tabBtn(12,true)}${tabBtn(10,false)}${tabBtn(8,false)}${tabBtn(6,false)}
-      </div>
-      <div id="youth-players-list">
-        <div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div>
-      </div>
-    </div>`;
+  return '<div style="padding:20px" id="youth-players-root"><div id="youth-players-main"><div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div></div></div>';
 }
 window.buildYouthPlayersHTML = buildYouthPlayersHTML;
-
-function switchYouthAge(age, btn) {
-  _activeYouthAge = age;
-  document.querySelectorAll('#youth-age-tabs button').forEach(b => {
-    b.style.borderBottom = '3px solid transparent';
-    b.style.color = '#718096';
-  });
-  if (btn) { btn.style.borderBottom = '3px solid #553c9a'; btn.style.color = '#553c9a'; }
-  renderYouthList();
-}
-window.switchYouthAge = switchYouthAge;
 
 function getPlayerAge(birthYear) {
   if (!birthYear) return null;
   return CUR_YEAR - birthYear;
 }
 
+function playersForGroup(max) {
+  const group = YOUTH_AGE_GROUPS.find(g => g.max === max);
+  if (!group) return [];
+  return Object.values(_youthPlayers)
+    .filter(p => { const a = getPlayerAge(p.birthYear); return a !== null && a >= group.min && a <= group.max; })
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+}
+
+function renderYouthPlayers() {
+  const el = document.getElementById('youth-players-main');
+  if (!el) return;
+  if (_youthView === 'age-select')    el.innerHTML = renderAgeSelect();
+  else if (_youthView === 'player-list')   el.innerHTML = renderYouthPlayerList();
+  else if (_youthView === 'player-detail') el.innerHTML = renderYouthPlayerDetail();
+}
+
+function renderAgeSelect() {
+  const rows = YOUTH_AGE_GROUPS.map(g => {
+    const count = playersForGroup(g.max).length;
+    return `<button onclick="window.selectYouthAgeGroup(${g.max})"
+      style="background:white;border:2px solid #e2e8f0;border-radius:16px;padding:28px 20px;
+             text-align:center;cursor:pointer;font-family:inherit"
+      onmouseover="this.style.borderColor='#553c9a'" onmouseout="this.style.borderColor='#e2e8f0'">
+      <div style="font-size:26px;font-weight:900;color:#553c9a">${g.label}</div>
+      <div style="font-size:13px;color:#718096;margin-top:6px;font-weight:600">${count ? count + ' שחקנ' + (count===1?'':'ים') : ''}</div>
+    </button>`;
+  }).join('');
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:18px;font-weight:800;color:#1a202c">CHILDICONשחקני נוער</div>
+      <button onclick="window.refreshYouthData()"
+        style="font-size:12px;padding:6px 14px;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;color:#553c9a;font-weight:700">
+        🔄 רענן נתונים
+      </button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${rows}</div>`;
+}
+
+function renderYouthPlayerList() {
+  const group = YOUTH_AGE_GROUPS.find(g => g.max === _activeYouthAge);
+  const players = playersForGroup(_activeYouthAge);
+  const rows = players.map(p => {
+    const age = getPlayerAge(p.birthYear);
+    const isFemale = p.gender === 'נקבה' || p.gender === 'F';
+    return `<div onclick="window.selectYouthPlayer(${p.fedId})"
+      style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:white;
+             border:1.5px solid #e2e8f0;border-radius:12px;margin-bottom:10px;cursor:pointer"
+      onmouseover="this.style.borderColor='#553c9a'" onmouseout="this.style.borderColor='#e2e8f0'">
+      <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#553c9a,#805ad5);
+                  display:flex;align-items:center;justify-content:center;font-size:18px;color:white;flex-shrink:0">
+        ${isFemale ? '♛' : '♟'}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:700;color:#1a202c">${p.name || '—'}</div>
+        <div style="font-size:12px;color:#718096;margin-top:2px">👦 גיל ${age ?? '?'}</div>
+      </div>
+      <div style="text-align:center;min-width:48px">
+        <div style="font-size:18px;font-weight:800;color:#553c9a">${p.rating || '—'}</div>
+        <div style="font-size:10px;color:#a0aec0">מד כושר</div>
+      </div>
+      <div style="color:#c0c0c0;font-size:18px">»</div>
+    </div>`;
+  }).join('') || `<div style="text-align:center;padding:60px 20px;color:#a0aec0">
+    <div style="font-size:48px;margin-bottom:12px">👦</div>
+    <div style="font-size:15px;font-weight:700">אין שחקנים בקבוצה זו עדיין</div>
+  </div>`;
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <button onclick="window.backToYouthAgeSelect()"
+        style="background:none;border:none;cursor:pointer;font-size:22px;color:#553c9a;padding:0;line-height:1">BACK»</button>
+      <div style="font-size:18px;font-weight:800;color:#1a202c">${group ? group.label : ''}</div>
+      <div style="font-size:12px;color:#a0aec0;margin-right:auto">${players.length} שחקנ${players.length===1?'':'ים'}</div>
+    </div>${rows}`;
+}
+
+function renderYouthPlayerDetail() {
+  const p = _youthPlayers[String(_selectedYouthFedId)];
+  const group = _activeYouthAge ? YOUTH_AGE_GROUPS.find(g => g.max === _activeYouthAge) : null;
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <button onclick="window.backToYouthList()"
+        style="background:none;border:none;cursor:pointer;font-size:22px;color:#553c9a;padding:0;line-height:1">BACK»</button>
+      <div style="font-size:14px;color:#718096">חזרה לרשימה${group ? ' — ' + group.label : ''}</div>
+    </div>
+    ${p ? renderYouthCard(p) : '<div style="text-align:center;padding:40px;color:#a0aec0">שחקן לא נמצא</div>'}`;
+}
+
+function selectYouthAgeGroup(max) {
+  _activeYouthAge = max;
+  _youthView = 'player-list';
+  renderYouthPlayers();
+}
+window.selectYouthAgeGroup = selectYouthAgeGroup;
+
+function selectYouthPlayer(fedId) {
+  _selectedYouthFedId = fedId;
+  _youthView = 'player-detail';
+  renderYouthPlayers();
+}
+window.selectYouthPlayer = selectYouthPlayer;
+
+function backToYouthAgeSelect() {
+  _youthView = 'age-select';
+  renderYouthPlayers();
+}
+window.backToYouthAgeSelect = backToYouthAgeSelect;
+
+function backToYouthList() {
+  _youthView = 'player-list';
+  renderYouthPlayers();
+}
+window.backToYouthList = backToYouthList;
+
+async function refreshYouthData() {
+  for (const p of Object.values(_youthPlayers)) {
+    _youthPlayers[String(p.fedId)].profileTs = null;
+    await db.ref(`youthPlayers/${p.fedId}/profileTs`).remove();
+  }
+  await loadYouthPlayers();
+}
+window.refreshYouthData = refreshYouthData;
+
 async function loadYouthPlayers() {
-  const listEl = document.getElementById('youth-players-list');
-  if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div>';
+  const mainEl = document.getElementById('youth-players-main');
+  if (mainEl && _youthView !== 'player-list' && _youthView !== 'player-detail')
+    mainEl.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div>';
   try {
     const snap = await db.ref('youthPlayers').get();
     _youthPlayers = snap.val() || {};
-    // Seed ליאו לוחם with full known profile if missing or incomplete
     if (!_youthPlayers['203562']?.birthYear) {
       const leo = {
         fedId: 203562, name: 'ליאו לוחם', birthYear: 2017, rating: 1528,
@@ -12054,13 +12156,12 @@ async function loadYouthPlayers() {
       await db.ref('youthPlayers/203562').set(leo);
       _youthPlayers['203562'] = leo;
     }
-    // Fetch stale profiles (no profile or older than 24h)
     const now = Date.now();
     const stale = Object.values(_youthPlayers).filter(p => !p.profileTs || (now - p.profileTs) > 86400000 || !p.birthYear);
     for (const p of stale) await fetchYouthPlayerProfile(p.fedId);
-    renderYouthList();
+    renderYouthPlayers();
   } catch(e) {
-    if (listEl) listEl.innerHTML = `<div style="text-align:center;padding:40px;color:#c53030">שגיאה: ${e.message}</div>`;
+    if (mainEl) mainEl.innerHTML = `<div style="text-align:center;padding:40px;color:#c53030">שגיאה: ${e.message}</div>`;
   }
 }
 window.loadYouthPlayers = loadYouthPlayers;
@@ -12074,27 +12175,6 @@ async function fetchYouthPlayerProfile(fedId) {
     await db.ref(`youthPlayers/${fedId}`).update(update);
     _youthPlayers[String(fedId)] = { ..._youthPlayers[String(fedId)], ...update };
   } catch(e) { console.error('fetchYouthPlayerProfile', fedId, e); }
-}
-
-function renderYouthList() {
-  const el = document.getElementById('youth-players-list');
-  if (!el) return;
-  const players = Object.values(_youthPlayers)
-    .filter(p => { const a = getPlayerAge(p.birthYear); return a !== null && a <= _activeYouthAge; })
-    .sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  if (!players.length) {
-    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#a0aec0">
-      <div style="font-size:48px;margin-bottom:12px">👦</div>
-      <div style="font-size:15px;font-weight:700">אין שחקנים עד גיל ${_activeYouthAge}</div>
-      ${Object.keys(_youthPlayers).length?'<div style="font-size:12px;margin-top:6px">נסה לשנות את קבוצת הגיל</div>':''}
-    </div>`;
-    return;
-  }
-  el.innerHTML = `
-    <div style="font-size:12px;font-weight:700;color:#718096;margin-bottom:12px;letter-spacing:.5px">
-      ${players.length} שחקנ${players.length===1?'':'ים'} עד גיל ${_activeYouthAge}
-    </div>
-    ${players.map(renderYouthCard).join('')}`;
 }
 
 function switchYouthCardTab(btn, showId, hideId) {
