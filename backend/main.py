@@ -685,7 +685,95 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
     else:
         profile["leagues"] = []
 
+    # ── Rating history via ShowRatingButton postback ────────────────────────────
+    if url:
+        try:
+            form_state = get_form_state(soup)
+            rating_html = fetch_post(url, {
+                **form_state,
+                "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowRatingButton",
+                "__EVENTARGUMENT": "",
+            })
+            rating_soup = BeautifulSoup(rating_html, "html.parser")
+            rating_entries, max_r_page, rating_table_uid = _parse_rating_rows(rating_soup)
+            # Paginate if needed (older entries on page 2+)
+            if max_r_page > 1 and rating_table_uid:
+                r_form_state = get_form_state(rating_soup)
+                for rp in range(2, max_r_page + 1):
+                    try:
+                        rp_html = fetch_post(url, {**r_form_state,
+                                                   "__EVENTTARGET": rating_table_uid,
+                                                   "__EVENTARGUMENT": f"Page${rp}"})
+                        rp_soup = BeautifulSoup(rp_html, "html.parser")
+                        rp_entries, _, _ = _parse_rating_rows(rp_soup)
+                        rating_entries.extend(rp_entries)
+                        r_form_state = get_form_state(rp_soup)
+                    except Exception as exc:
+                        print(f"[player-profile] rating page {rp} failed: {exc}")
+                        break
+            profile["ratingHistory"] = rating_entries
+        except Exception as exc:
+            print(f"[player-profile] rating history fetch failed: {exc}")
+            profile["ratingHistory"] = []
+    else:
+        profile["ratingHistory"] = []
+
     return profile
+
+
+def _parse_rating_rows(soup) -> tuple:
+    """Parse rating history rows from ShowRatingButton postback response.
+
+    Returns (entries, max_page, table_unique_id).
+    Rows look like: ["עדכון 01/07/2026", "1528", "+71", "1614", "21", "פרטים נוספים"]
+    """
+    DATE_PAT = re.compile(r"עדכון\s+(\d{1,2}/\d{1,2}/\d{4})")
+    entries = []
+    max_page = 1
+    table_uid = None
+
+    for tr in soup.find_all("tr"):
+        cells = [clean_text(td) for td in tr.find_all("td", recursive=False)]
+        if not cells:
+            continue
+        # Pager row — single TD, find page links
+        if len(cells) == 1:
+            for a in tr.find_all("a"):
+                txt = a.get_text(strip=True)
+                if txt.isdigit():
+                    max_page = max(max_page, int(txt))
+                    # Extract table unique ID from onclick e.g. __doPostBack('...GridView','Page$2')
+                    if not table_uid:
+                        onclick = a.get("href", "")
+                        m = re.search(r"__doPostBack\('([^']+)','Page\$\d+'", onclick)
+                        if m:
+                            table_uid = m.group(1)
+            continue
+        m = DATE_PAT.search(cells[0])
+        if not m:
+            continue
+        date_str = m.group(1)
+        pts = date_str.split("/")
+        if len(pts) != 3:
+            continue
+        iso_date = f"{pts[2]}-{pts[1].zfill(2)}-{pts[0].zfill(2)}"
+        try:
+            rating = int(cells[1])
+        except (ValueError, IndexError):
+            continue
+        change_raw = cells[2] if len(cells) > 2 else "0"
+        try:
+            change = int(re.sub(r"[^\d+\-]", "", change_raw) or "0")
+        except ValueError:
+            change = 0
+        perf_raw = cells[3] if len(cells) > 3 else ""
+        perf = int(perf_raw) if perf_raw.lstrip("+-").isdigit() else None
+        games_raw = cells[4] if len(cells) > 4 else ""
+        games = int(games_raw) if games_raw.isdigit() else None
+        entries.append({"date": iso_date, "rating": rating, "change": change,
+                        "performance": perf, "games": games})
+
+    return entries, max_page, table_uid
 
 
 def _parse_league_rows(soup) -> list:
@@ -798,30 +886,6 @@ def debug_player_links(fedId: int = Query(...)):
     links = [{"text": a.get_text(strip=True), "href": a.get("href",""), "onclick": a.get("onclick","")}
              for a in soup.find_all("a") if a.get_text(strip=True)]
     return JSONResponse(content={"links": links})
-
-
-@app.get("/api/debug-rating-table")
-def debug_rating_table(fedId: int = Query(...)):
-    """Show raw rating table after ShowRatingButton postback."""
-    url = f"https://www.chess.org.il/Players/Player.aspx?Id={fedId}"
-    try:
-        html = fetch_url(url)
-        soup = BeautifulSoup(html, "html.parser")
-        form_state = get_form_state(soup)
-        rating_html = fetch_post(url, {
-            **form_state,
-            "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowRatingButton",
-            "__EVENTARGUMENT": "",
-        })
-        rsoup = BeautifulSoup(rating_html, "html.parser")
-        tables = []
-        for t in rsoup.find_all("table"):
-            headers = [clean_text(th) for th in t.find_all("th")]
-            rows = [[clean_text(td) for td in tr.find_all("td", recursive=False)] for tr in t.find_all("tr") if tr.find("td")]
-            tables.append({"id": t.get("id",""), "headers": headers, "rows": rows[:10]})
-        return JSONResponse(content={"tables": tables})
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.get("/health")
