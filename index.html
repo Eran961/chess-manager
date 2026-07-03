@@ -12084,21 +12084,24 @@ function renderYouthPlayerList() {
     <div style="font-size:48px;margin-bottom:12px">👦</div>
     <div style="font-size:15px;font-weight:700">אין שחקנים בקבוצה זו עדיין</div>
   </div>`;
-  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:15px;font-weight:800;color:white">${group ? group.label : ''} — ${players.length} שחקנ${players.length===1?'':'ים'}</div>
       <button onclick="window.backToYouthAgeSelect()"
-        style="background:none;border:none;cursor:pointer;font-size:22px;color:#553c9a;padding:0;line-height:1">BACK»</button>
-      <div style="font-size:18px;font-weight:800;color:#1a202c">${group ? group.label : ''}</div>
-      <div style="font-size:12px;color:#a0aec0;margin-right:auto">${players.length} שחקנ${players.length===1?'':'ים'}</div>
+        style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;color:white;padding:6px 14px">
+        → חזרה
+      </button>
     </div>${rows}`;
 }
 
 function renderYouthPlayerDetail() {
   const p = _youthPlayers[String(_selectedYouthFedId)];
   const group = _activeYouthAge ? YOUTH_AGE_GROUPS.find(g => g.max === _activeYouthAge) : null;
-  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      ${group ? `<div style="font-size:14px;font-weight:700;color:white">${group.label}</div>` : '<div></div>'}
       <button onclick="window.backToYouthList()"
-        style="background:none;border:none;cursor:pointer;font-size:22px;color:#553c9a;padding:0;line-height:1">BACK»</button>
-      <div style="font-size:14px;color:#718096">חזרה לרשימה${group ? ' — ' + group.label : ''}</div>
+        style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;color:white;padding:6px 14px">
+        → חזרה לרשימה
+      </button>
     </div>
     ${p ? renderYouthCard(p) : '<div style="text-align:center;padding:40px;color:#a0aec0">שחקן לא נמצא</div>'}`;
 }
