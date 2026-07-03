@@ -12281,7 +12281,7 @@ async function confirmAddPlayer() {
   const statusEl = document.getElementById('confirm-add-status');
   if (statusEl) statusEl.innerHTML = '<span style="color:#553c9a;font-weight:600">⏳ שומר...</span>';
   try {
-    const playerData = {
+    const raw = {
       fedId: d.fedId, name: d.name, birthYear: d.birthYear,
       rating: d.rating, ratingExpected: d.ratingExpected,
       gender: d.gender, cardExpiry: d.cardExpiry,
@@ -12289,6 +12289,8 @@ async function confirmAddPlayer() {
       tournaments: d.tournaments || [], leagues: d.leagues || [],
       ratingHistory: d.ratingHistory || [], profileTs: Date.now(),
     };
+    // Firebase rejects undefined values — replace with null
+    const playerData = JSON.parse(JSON.stringify(raw, (k, v) => v === undefined ? null : v));
     await db.ref(`youthPlayers/${d.fedId}`).set(playerData);
     _youthPlayers[String(d.fedId)] = playerData;
     _confirmPlayerData = null;
