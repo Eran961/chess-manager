@@ -12285,85 +12285,96 @@ function renderYouthCard(p) {
   const renderRatingTab = (ratingHistory) => {
     const history = (ratingHistory || []).filter(r => r.date >= YOUTH_FROM && r.date <= today);
     if (!history.length) {
-      return `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${p.profileTs ? 'לא נמצאו נתוני מד כושר' : '⏳ טוען...'}</div>`;
+      return `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:14px">${p.profileTs ? 'לא נמצאו נתוני מד כושר' : '⏳ טוען...'}</div>`;
     }
+    const monthHe = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    const monthShort = ['ינו','פבר','מרץ','אפר','מאי','יוני','יול','אוג','ספט','אוק','נוב','דצמ'];
     const chrono = [...history].sort((a, b) => a.date.localeCompare(b.date));
     const ratings = chrono.map(r => r.rating);
-    const pad = 20;
+    const pad = 25;
     const minR = Math.min(...ratings) - pad;
     const maxR = Math.max(...ratings) + pad;
-    const W = 280, H = 120, PL = 38, PR = 8, PT = 10, PB = 26;
+    // Chart dimensions — bigger, with room for outside Y labels and rotated X labels
+    const W = 320, H = 170, PL = 54, PR = 10, PT = 14, PB = 48;
     const cW = W - PL - PR, cH = H - PT - PB;
     const n = chrono.length;
     const xPos = i => PL + (n < 2 ? cW / 2 : (i / (n - 1)) * cW);
     const yPos = r => PT + (1 - (r - minR) / (maxR - minR)) * cH;
     const pts = chrono.map((r, i) => [xPos(i), yPos(r.rating)]);
-    let linePath = `M${pts[0][0]},${pts[0][1]}`;
+    // Smooth cubic bezier line
+    let linePath = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
     for (let i = 0; i < pts.length - 1; i++) {
       const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
       const cx = (x1 - x0) * 0.4;
-      linePath += ` C${x0+cx},${y0} ${x1-cx},${y1} ${x1},${y1}`;
+      linePath += ` C${(x0+cx).toFixed(1)},${y0.toFixed(1)} ${(x1-cx).toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
     }
-    const areaPath = linePath + ` L${pts[n-1][0]},${PT+cH} L${PL},${PT+cH} Z`;
+    const areaPath = linePath + ` L${pts[n-1][0].toFixed(1)},${(PT+cH).toFixed(1)} L${PL},${(PT+cH).toFixed(1)} Z`;
+    // Y grid lines + labels OUTSIDE chart (left of PL)
     const rRange = maxR - minR;
     const gStep = rRange > 150 ? 50 : rRange > 60 ? 25 : 20;
     const firstG = Math.ceil(minR / gStep) * gStep;
-    let grids = '';
+    let grids = `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT+cH}" stroke="#e9d8fd" stroke-width="1"/>`;
     for (let g = firstG; g <= maxR; g += gStep) {
       const gy = yPos(g);
-      grids += `<line x1="${PL}" y1="${gy}" x2="${W-PR}" y2="${gy}" stroke="#ede9ff" stroke-width="0.8"/>`;
-      grids += `<text x="${PL-3}" y="${gy+3.5}" font-size="7.5" fill="#b0a8d0" text-anchor="end">${g}</text>`;
+      if (gy < PT - 2 || gy > PT + cH + 2) continue;
+      grids += `<line x1="${PL}" y1="${gy.toFixed(1)}" x2="${W-PR}" y2="${gy.toFixed(1)}" stroke="#ede9ff" stroke-width="0.8"/>`;
+      // Y label outside — to the LEFT of PL
+      grids += `<text x="${PL-8}" y="${(gy+4).toFixed(1)}" font-size="10" fill="#9f7aea" text-anchor="end" font-weight="700">${g}</text>`;
     }
-    const lEvery = Math.max(1, Math.ceil(n / 5));
+    // ALL X labels — rotated -38° so they don't overlap
     let xLabels = '';
-    const monthHe = ['ינו','פבר','מרץ','אפר','מאי','יוני','יול','אוג','ספט','אוק','נוב','דצמ'];
     chrono.forEach((r, i) => {
-      if (i % lEvery === 0 || i === n - 1) {
-        const [yr, mo] = r.date.split('-');
-        xLabels += `<text x="${xPos(i)}" y="${H-5}" font-size="7.5" fill="#b0a8d0" text-anchor="middle">${monthHe[+mo-1]} ${yr.slice(2)}</text>`;
-      }
+      const [yr, mo] = r.date.split('-');
+      const label = `${monthShort[+mo-1]} ${yr.slice(2)}`;
+      const x = xPos(i).toFixed(1);
+      const y = (PT + cH + 8).toFixed(1);
+      xLabels += `<text x="${x}" y="${y}" font-size="9.5" fill="#9f7aea" text-anchor="end" font-weight="600" transform="rotate(-40,${x},${y})">${label}</text>`;
     });
-    const latestRating = ratings[ratings.length - 1];
+    // Data point dots with hover tooltip
     let dots = '';
     pts.forEach(([x, y], i) => {
       const r = chrono[i];
       const isLatest = i === n - 1;
       const chgStr = r.change > 0 ? `+${r.change}` : `${r.change}`;
-      dots += `<circle cx="${x}" cy="${y}" r="${isLatest ? 5 : 3.5}" fill="${isLatest ? '#553c9a' : '#9f7aea'}" stroke="white" stroke-width="1.5"><title>${r.date}: ${r.rating} (${chgStr})</title></circle>`;
+      const dotColor = isLatest ? '#553c9a' : (r.change > 0 ? '#6b46c1' : r.change < 0 ? '#9f7aea' : '#b794f4');
+      dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLatest ? 6 : 4.5}" fill="${dotColor}" stroke="white" stroke-width="2"><title>${r.date}: מד כושר ${r.rating} (${chgStr})</title></circle>`;
     });
-    const svgChart = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+    const svgChart = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible;padding-bottom:4px">
       <defs><linearGradient id="rg-${p.fedId}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#805ad5" stop-opacity="0.3"/><stop offset="100%" stop-color="#805ad5" stop-opacity="0.02"/>
+        <stop offset="0%" stop-color="#805ad5" stop-opacity="0.32"/>
+        <stop offset="100%" stop-color="#805ad5" stop-opacity="0.02"/>
       </linearGradient></defs>
       ${grids}
       <path d="${areaPath}" fill="url(#rg-${p.fedId})" stroke="none"/>
-      <path d="${linePath}" fill="none" stroke="#6b46c1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${linePath}" fill="none" stroke="#6b46c1" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
       ${dots}${xLabels}
     </svg>`;
     const totalChange = history.reduce((s, r) => s + (r.change || 0), 0);
     const tcStr = totalChange > 0 ? `+${totalChange}` : `${totalChange}`;
     const tcColor = totalChange > 0 ? '#276749' : totalChange < 0 ? '#c53030' : '#718096';
-    const listItems = [...history].sort((a, b) => b.date.localeCompare(a.date)).map(r => {
+    // Numbered list — newest first
+    const listItems = [...history].sort((a, b) => b.date.localeCompare(a.date)).map((r, idx) => {
       const [yr, mo] = r.date.split('-');
       const label = `${monthHe[+mo-1]} ${yr}`;
       const chgStr = r.change > 0 ? `+${r.change}` : `${r.change}`;
       const chgColor = r.change > 0 ? '#276749' : r.change < 0 ? '#c53030' : '#718096';
-      return `<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid #f7fafc;font-size:12px">
+      return `<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #f0ebff;font-size:13px">
+        <div style="font-size:11px;font-weight:700;color:#c0bcd4;min-width:20px;text-align:center;flex-shrink:0">${idx + 1}</div>
         <div style="flex:1;color:#4a5568;font-weight:600">${label}</div>
-        <div style="font-weight:800;color:#553c9a;min-width:34px;text-align:center">${r.rating}</div>
-        <div style="font-weight:800;color:${chgColor};min-width:32px;text-align:right">${chgStr}</div>
-        ${r.games != null ? `<div style="font-size:10px;color:#a0aec0;min-width:22px;text-align:center">${r.games}m</div>` : ''}
+        <div style="font-weight:800;color:#553c9a;min-width:40px;text-align:center">${r.rating}</div>
+        <div style="font-weight:800;color:${chgColor};min-width:38px;text-align:right">${chgStr}</div>
+        ${r.games != null ? `<div style="font-size:11px;color:#a0aec0;min-width:26px;text-align:center">${r.games}m</div>` : ''}
       </div>`;
     }).join('');
-    return `<div style="padding:2px 0">
-      <div style="background:linear-gradient(160deg,#f3f0ff 0%,#faf5ff 100%);border-radius:10px;padding:10px 12px 6px;margin-bottom:10px;border:1px solid #e9d8fd">
+    return `<div style="padding:4px 0">
+      <div style="background:linear-gradient(160deg,#f3f0ff 0%,#faf5ff 100%);border-radius:12px;padding:14px 14px 10px;margin-bottom:14px;border:1px solid #e9d8fd">
         ${svgChart}
-        <div style="display:flex;justify-content:space-between;padding-top:4px">
-          <div style="font-size:10px;color:#a0aec0">${chrono[0].date.slice(0,7)} → היום</div>
-          <div style="font-size:10px;font-weight:700;color:${tcColor}">${tcStr} סה"כ</div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #e9d8fd">
+          <div style="font-size:12px;color:#a0aec0;font-weight:600">${chrono[0].date.slice(0,7).replace('-','/')} → היום</div>
+          <div style="font-size:13px;font-weight:800;color:${tcColor}">${tcStr} סה"כ</div>
         </div>
       </div>
-      <div style="max-height:160px;overflow-y:auto">${listItems}</div>
+      <div style="max-height:220px;overflow-y:auto">${listItems}</div>
     </div>`;
   };
 
@@ -12403,30 +12414,45 @@ function renderYouthCard(p) {
       </div>
     </div>` : (!p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>' : '');
 
+  const genderLabel = isFemale ? 'נקבה' : 'זכר';
+  const dryRows = [
+    ['שם', p.name || '—'],
+    p.birthYear ? ['שנת לידה', `${p.birthYear}${age != null ? ` (גיל ${age})` : ''}`] : null,
+    ['מין', genderLabel],
+    ['מספר שחקן', `<a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#553c9a;text-decoration:none;font-weight:700">${p.fedId}</a>`],
+    p.cardExpiry ? ['תוקף פנקס שחמטאי', `<span style="color:${cardExpired?'#c53030':'#276749'};font-weight:700">${p.cardExpiry}${cardExpired?' ✗':' ✓'}</span>`] : null,
+    p.parentName ? ['שם הורה', p.parentName] : null,
+    p.parentPhone ? ['טלפון הורה', `<a href="tel:${p.parentPhone}" style="color:#553c9a;text-decoration:none">${p.parentPhone}</a>`] : null,
+    p.parentEmail ? ['אימייל הורה', `<a href="mailto:${p.parentEmail}" style="color:#553c9a;text-decoration:none">${p.parentEmail}</a>`] : null,
+  ].filter(Boolean);
+  const dryDataHtml = `
+    <div style="margin-top:14px;background:#f8fafc;border-radius:10px;padding:12px 16px;border:1px solid #e2e8f0">
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:7px 18px;align-items:center;font-size:13px">
+        ${dryRows.map(([label, value]) => `
+          <span style="color:#718096;font-weight:600;white-space:nowrap">${label}</span>
+          <span style="color:#1a202c;font-weight:600">${value}</span>
+        `).join('')}
+      </div>
+    </div>`;
+
   return `
     <div style="background:white;border:1.5px solid #e2e8f0;border-radius:14px;margin-bottom:14px;overflow:hidden">
       <div style="padding:16px 18px">
         <div style="display:flex;align-items:flex-start;gap:14px">
-          <div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#553c9a,#805ad5);
-                      display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;color:white">
+          <div style="width:50px;height:50px;border-radius:12px;background:linear-gradient(135deg,#553c9a,#805ad5);
+                      display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;color:white">
             ${isFemale ? '♛' : '♟'}
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:16px;font-weight:800;color:#1a202c">${p.name || '—'}</div>
-            <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
-              <span style="font-size:12px;color:#718096">${isFemale ? 'FE♂' : '♂'} גיל ${age ?? '?'}</span>
-              <span style="color:#d0d0d0">·</span>
-              <span style="font-size:12px;color:#718096">מס׳ <a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#553c9a">${p.fedId}</a></span>
-              ${p.cardExpiry ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;
-                background:${cardExpired?'#fff5f5':'#f0fff4'};color:${cardExpired?'#c53030':'#276749'}">
-                כרטיס ${cardExpired?'פג 🔴':'בתוקף ✓'} — ${p.cardExpiry}</span>` : ''}
-            </div>
+            <div style="font-size:18px;font-weight:800;color:#1a202c">${p.name || '—'}</div>
+            <div style="font-size:12px;color:#a0aec0;margin-top:3px">${genderLabel} · גיל ${age ?? '?'} · פד ${p.fedId}</div>
           </div>
-          <div style="text-align:center;background:#f3f0ff;border:2px solid #d6bcfa;border-radius:12px;padding:8px 14px;flex-shrink:0;min-width:60px">
-            <div style="font-size:22px;font-weight:900;color:#553c9a;line-height:1">${p.rating || '—'}</div>
-            <div style="font-size:10px;color:#805ad5;font-weight:700;margin-top:2px">מד כושר</div>
+          <div style="text-align:center;background:#f3f0ff;border:2px solid #d6bcfa;border-radius:12px;padding:10px 16px;flex-shrink:0;min-width:66px">
+            <div style="font-size:24px;font-weight:900;color:#553c9a;line-height:1">${p.rating || '—'}</div>
+            <div style="font-size:10px;color:#805ad5;font-weight:700;margin-top:3px">מד כושר</div>
           </div>
         </div>
+        ${dryDataHtml}
         ${statsRow}
         ${tabsSection}
       </div>
