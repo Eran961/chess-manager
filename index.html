@@ -11998,6 +11998,8 @@ let _youthPlayers       = {};
 let _youthView          = 'age-select';
 let _activeYouthAge     = null;
 let _selectedYouthFedId = null;
+let _addPlayerTargetAge = null;
+let _confirmPlayerData  = null;
 
 const YOUTH_AGE_GROUPS = [
   { label: 'עד 6', max: 6, min: 0 },
@@ -12030,9 +12032,11 @@ function playersForGroup(max) {
 function renderYouthPlayers() {
   const el = document.getElementById('youth-players-main');
   if (!el) return;
-  if (_youthView === 'age-select')    el.innerHTML = renderAgeSelect();
+  if (_youthView === 'age-select')      el.innerHTML = renderAgeSelect();
   else if (_youthView === 'player-list')   el.innerHTML = renderYouthPlayerList();
   else if (_youthView === 'player-detail') el.innerHTML = renderYouthPlayerDetail();
+  else if (_youthView === 'add-player')    el.innerHTML = renderAddPlayerForm();
+  else if (_youthView === 'confirm-add')   el.innerHTML = renderConfirmPlayer();
 }
 
 function renderAgeSelect() {
@@ -12043,15 +12047,21 @@ function renderAgeSelect() {
              text-align:center;cursor:pointer;font-family:inherit"
       onmouseover="this.style.borderColor='#553c9a'" onmouseout="this.style.borderColor='#e2e8f0'">
       <div style="font-size:26px;font-weight:900;color:#553c9a">${g.label}</div>
-      <div style="font-size:13px;color:#718096;margin-top:6px;font-weight:600">${count ? count + ' שחקנ' + (count===1?'':'ים') : ''}</div>
+      <div style="font-size:13px;color:#718096;margin-top:6px;font-weight:600">${count ? count + ' שחקנים' : ''}</div>
     </button>`;
   }).join('');
   return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-      <div style="font-size:18px;font-weight:800;color:#1a202c">CHILDICONשחקני נוער</div>
-      <button onclick="window.refreshYouthData()"
-        style="font-size:12px;padding:6px 14px;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;color:#553c9a;font-weight:700">
-        🔄 רענן נתונים
-      </button>
+      <div style="font-size:18px;font-weight:800;color:white">שחקני נוער</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="window.openAddPlayer(null)"
+          style="font-size:12px;padding:6px 14px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.12);cursor:pointer;color:white;font-weight:700">
+          + הוסף שחקן
+        </button>
+        <button onclick="window.refreshYouthData()"
+          style="font-size:12px;padding:6px 14px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.12);cursor:pointer;color:white;font-weight:700">
+          🔄 רענן
+        </button>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${rows}</div>`;
 }
@@ -12085,12 +12095,16 @@ function renderYouthPlayerList() {
     <div style="font-size:15px;font-weight:700">אין שחקנים בקבוצה זו עדיין</div>
   </div>`;
   return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-      <div style="font-size:15px;font-weight:800;color:white">${group ? group.label : ''} — ${players.length} ${players.length===1?'שחקנ':'שחקנים'}</div>
+      <div style="font-size:15px;font-weight:800;color:white">${group ? group.label : ''} — ${players.length} שחקנים</div>
       <button onclick="window.backToYouthAgeSelect()"
         style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;color:white;padding:6px 14px">
         → חזרה
       </button>
-    </div>${rows}`;
+    </div>${rows}
+    <button onclick="window.openAddPlayer(${_activeYouthAge})"
+      style="width:100%;margin-top:10px;padding:12px;background:rgba(255,255,255,0.1);border:2px dashed rgba(255,255,255,0.3);border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;color:rgba(255,255,255,0.8);text-align:center">
+      + הוסף שחקן לקבוצה זו
+    </button>`;
 }
 
 function renderYouthPlayerDetail() {
@@ -12140,6 +12154,152 @@ async function refreshYouthData() {
   await loadYouthPlayers();
 }
 window.refreshYouthData = refreshYouthData;
+
+function openAddPlayer(maxAge) {
+  _addPlayerTargetAge = maxAge;
+  _confirmPlayerData = null;
+  _youthView = 'add-player';
+  renderYouthPlayers();
+}
+window.openAddPlayer = openAddPlayer;
+
+function renderAddPlayerForm() {
+  const group = _addPlayerTargetAge ? YOUTH_AGE_GROUPS.find(g => g.max === _addPlayerTargetAge) : null;
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700;color:white">הוספת שחקן${group ? ' — ' + group.label : ''}</div>
+      <button onclick="window.backToYouthAgeSelect()"
+        style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;color:white;padding:6px 14px">
+        → חזרה
+      </button>
+    </div>
+    <div style="background:white;border-radius:14px;padding:28px 24px;text-align:center">
+      <div style="font-size:32px;margin-bottom:12px">🔍</div>
+      <div style="font-size:16px;font-weight:800;color:#1a202c;margin-bottom:6px">חיפוש שחקן לפי מספר</div>
+      <div style="font-size:13px;color:#718096;margin-bottom:24px">הזן את מספר השחקן באיגוד השחמט הישראלי</div>
+      <div style="display:flex;gap:10px;max-width:320px;margin:0 auto">
+        <input id="add-player-fedid" type="number" placeholder="מספר שחקן (לדוג׳ 203562)"
+          style="flex:1;padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit;text-align:center;outline:none"
+          onfocus="this.style.borderColor='#553c9a'" onblur="this.style.borderColor='#e2e8f0'"
+          onkeydown="if(event.key==='Enter') window.submitAddPlayer()"/>
+        <button onclick="window.submitAddPlayer()"
+          style="padding:12px 20px;background:#553c9a;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap">
+          שלוף ◄
+        </button>
+      </div>
+      <div id="add-player-status" style="margin-top:16px;font-size:13px;min-height:20px"></div>
+    </div>`;
+}
+
+async function submitAddPlayer() {
+  const input = document.getElementById('add-player-fedid');
+  if (!input) return;
+  const fedId = parseInt(input.value.trim());
+  if (isNaN(fedId) || fedId < 1000) {
+    document.getElementById('add-player-status').innerHTML =
+      '<span style="color:#c53030;font-weight:600">מספר שחקן לא תקין</span>';
+    return;
+  }
+  if (_youthPlayers[String(fedId)]) {
+    document.getElementById('add-player-status').innerHTML =
+      `<span style="color:#c53030;font-weight:600">שחקן ${_youthPlayers[String(fedId)].name} כבר קיים במערכת</span>`;
+    return;
+  }
+  const statusEl = document.getElementById('add-player-status');
+  statusEl.innerHTML = '<span style="color:#553c9a;font-weight:600">⏳ שולף נתונים מהאיגוד... (השרת עלול להתעורר כדקה)</span>';
+  try {
+    const res = await fetch(`https://chess-manager-7wkr.onrender.com/api/player-profile?fedId=${fedId}`);
+    if (!res.ok) { statusEl.innerHTML = `<span style="color:#c53030;font-weight:600">❌ שגיאה: HTTP ${res.status}</span>`; return; }
+    const data = await res.json();
+    if (!data.name || data.name === 'פרטי שחקן') {
+      statusEl.innerHTML = '<span style="color:#c53030;font-weight:600">❌ שחקן לא נמצא באיגוד</span>';
+      return;
+    }
+    _confirmPlayerData = { ...data, fedId };
+    _youthView = 'confirm-add';
+    renderYouthPlayers();
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:#c53030;font-weight:600">❌ שגיאת רשת: ${e.message}</span>`;
+  }
+}
+window.submitAddPlayer = submitAddPlayer;
+
+function renderConfirmPlayer() {
+  const d = _confirmPlayerData;
+  if (!d) { backToYouthAgeSelect(); return ''; }
+  const age = d.birthYear ? (CUR_YEAR - d.birthYear) : null;
+  const isFemale = d.gender === 'נקבה' || d.gender === 'F';
+  const group = _addPlayerTargetAge ? YOUTH_AGE_GROUPS.find(g => g.max === _addPlayerTargetAge) : null;
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700;color:white">אישור הוספה</div>
+      <button onclick="window.openAddPlayer(${_addPlayerTargetAge})"
+        style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;color:white;padding:6px 14px">
+        → חזרה לחיפוש
+      </button>
+    </div>
+    <div style="background:white;border-radius:14px;padding:24px;text-align:center">
+      <div style="font-size:14px;color:#718096;font-weight:600;margin-bottom:16px">מצאנו את השחקן הבא. האם התכוונת אליו?</div>
+      <div style="display:flex;align-items:center;gap:16px;background:#f8fafc;border-radius:12px;padding:18px;margin-bottom:20px;text-align:right">
+        <div style="width:54px;height:54px;border-radius:12px;background:linear-gradient(135deg,#553c9a,#805ad5);
+                    display:flex;align-items:center;justify-content:center;font-size:26px;color:white;flex-shrink:0">
+          ${isFemale ? '♛' : '♟'}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:18px;font-weight:800;color:#1a202c">${d.name}</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:8px;font-size:13px">
+            <span style="color:#718096;font-weight:600">שנת לידה</span><span style="color:#2d3748;font-weight:700">${d.birthYear || '—'}${age != null ? ' (גיל ' + age + ')' : ''}</span>
+            <span style="color:#718096;font-weight:600">מין</span><span style="color:#2d3748;font-weight:700">${isFemale ? 'נקבה' : 'זכר'}</span>
+            <span style="color:#718096;font-weight:600">מד כושר</span><span style="color:#553c9a;font-weight:800">${d.rating || '—'}</span>
+            <span style="color:#718096;font-weight:600">מספר שחקן</span><span style="color:#2d3748;font-weight:700">${d.fedId}</span>
+            ${d.cardExpiry ? `<span style="color:#718096;font-weight:600">תוקף פנקס</span><span style="color:#276749;font-weight:700">${d.cardExpiry}</span>` : ''}
+          </div>
+        </div>
+        <div style="text-align:center;background:#f3f0ff;border:2px solid #d6bcfa;border-radius:12px;padding:10px 14px;flex-shrink:0">
+          <div style="font-size:22px;font-weight:900;color:#553c9a">${d.rating || '—'}</div>
+          <div style="font-size:10px;color:#805ad5;font-weight:700;margin-top:2px">מד כושר</div>
+        </div>
+      </div>
+      ${group ? `<div style="font-size:13px;color:#718096;margin-bottom:16px">יתווסף לקבוצת <strong style="color:#553c9a">${group.label}</strong></div>` : ''}
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button onclick="window.confirmAddPlayer()"
+          style="padding:12px 28px;background:#553c9a;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">
+          כן, הוסף ✓
+        </button>
+        <button onclick="window.backToYouthAgeSelect()"
+          style="padding:12px 28px;background:#f7fafc;color:#4a5568;border:1px solid #e2e8f0;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">
+          ביטול
+        </button>
+      </div>
+      <div id="confirm-add-status" style="margin-top:14px;font-size:13px;min-height:20px"></div>
+    </div>`;
+}
+
+async function confirmAddPlayer() {
+  const d = _confirmPlayerData;
+  if (!d) return;
+  const statusEl = document.getElementById('confirm-add-status');
+  if (statusEl) statusEl.innerHTML = '<span style="color:#553c9a;font-weight:600">⏳ שומר...</span>';
+  try {
+    const playerData = {
+      fedId: d.fedId, name: d.name, birthYear: d.birthYear,
+      rating: d.rating, ratingExpected: d.ratingExpected,
+      gender: d.gender, cardExpiry: d.cardExpiry,
+      fide: d.fide, grade: d.grade,
+      tournaments: d.tournaments || [], leagues: d.leagues || [],
+      ratingHistory: d.ratingHistory || [], profileTs: Date.now(),
+    };
+    await db.ref(`youthPlayers/${d.fedId}`).set(playerData);
+    _youthPlayers[String(d.fedId)] = playerData;
+    _confirmPlayerData = null;
+    _youthView = _addPlayerTargetAge ? 'player-list' : 'age-select';
+    renderYouthPlayers();
+    _youthSetStatus(`✅ ${playerData.name} נוסף בהצלחה!`, false);
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:#c53030;font-weight:600">❌ שגיאה: ${e.message}</span>`;
+  }
+}
+window.confirmAddPlayer = confirmAddPlayer;
 
 function _youthSetStatus(msg, isError) {
   const el = document.getElementById('youth-status-bar');
