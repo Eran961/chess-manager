@@ -12085,7 +12085,7 @@ function renderYouthPlayerList() {
     <div style="font-size:15px;font-weight:700">אין שחקנים בקבוצה זו עדיין</div>
   </div>`;
   return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-      <div style="font-size:15px;font-weight:800;color:white">${group ? group.label : ''} — ${players.length} שחקנ${players.length===1?'':'ים'}</div>
+      <div style="font-size:15px;font-weight:800;color:white">${group ? group.label : ''} — ${players.length} ${players.length===1?'שחקנ':'שחקנים'}</div>
       <button onclick="window.backToYouthAgeSelect()"
         style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;color:white;padding:6px 14px">
         → חזרה
