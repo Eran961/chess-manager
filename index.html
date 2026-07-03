@@ -12039,10 +12039,20 @@ async function loadYouthPlayers() {
   try {
     const snap = await db.ref('youthPlayers').get();
     _youthPlayers = snap.val() || {};
-    // Seed example player if empty
-    if (Object.keys(_youthPlayers).length === 0) {
-      await db.ref('youthPlayers/203562').set({ fedId: 203562, name: 'ליאו לוחם', addedAt: Date.now() });
-      _youthPlayers = { '203562': { fedId: 203562, name: 'ליאו לוחם', addedAt: Date.now() } };
+    // Seed ליאו לוחם with full known profile if missing or incomplete
+    if (!_youthPlayers['203562']?.birthYear) {
+      const leo = {
+        fedId: 203562, name: 'ליאו לוחם', birthYear: 2017, rating: 1528,
+        ratingExpected: 1566, cardExpiry: '31/12/2026', fide: 1483, grade: 'חמישית',
+        profileTs: Date.now(), addedAt: _youthPlayers['203562']?.addedAt || Date.now(),
+        tournaments: [
+          { date: '12/07/2025', name: 'אליפות ראשון לציון לילדים עד גיל 8', games: '5', points: '4.0', performance: '1483', result: '+4-1=0', ratingChange: 3.2, ratingChangeRaw: '3.2+' },
+          { date: '27/06/2025', name: 'שישי מהיר בראשון לציון 27.6 1350-1500', games: '4', points: '2.0', performance: '1411', result: '+2-2=0', ratingChange: -3.2, ratingChangeRaw: '3.2-' },
+          { date: '06/06/2025', name: 'שישי מהיר בראשון לציון 6.6 1350-1500', games: '4', points: '3.0', performance: '1592', result: '+3-1=0', ratingChange: 11.3, ratingChangeRaw: '11.3+' },
+        ]
+      };
+      await db.ref('youthPlayers/203562').set(leo);
+      _youthPlayers['203562'] = leo;
     }
     // Fetch stale profiles (no profile or older than 24h)
     const now = Date.now();
@@ -12115,14 +12125,12 @@ function renderYouthCard(p) {
       <div style="font-size:11px;font-weight:700;color:#718096;margin-bottom:8px">תחרויות — יולי 2024 עד יולי 2025</div>
       <div style="max-height:220px;overflow-y:auto">
         ${tourns.map(t => {
-          const nameKey = Object.keys(t).find(k => !k.includes('תארי') && !k.includes('+') && !k.includes('שינ') && !k.includes('ניקוד') && !k.toLowerCase().includes('date'));
-          const name  = t['שם תחרות'] || t['תחרות'] || t.name || (nameKey ? t[nameKey] : '') || '—';
+          const name  = t.name || t['תחרות'] || t['שם תחרות'] || '—';
           const date  = t.date || t['תאריך'] || '—';
-          const score = t.score || t['ניקוד'] || t['תוצאה'] || '—';
-          const rcRaw = t.ratingChange || t['+/-'] || t[Object.keys(t).find(k => k.includes('שינ')) || ''] || '';
-          const rcNum = parseInt(rcRaw);
+          const score = (t.points != null && t.games != null) ? `${t.points}/${t.games}` : (t.score || t['ניקוד'] || t.result || t['תוצאה'] || '—');
+          const rcNum = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChangeRaw || t.ratingChange);
           const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
-          const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : rcRaw;
+          const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
           return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
             <div style="flex:1;font-weight:600;color:#2d3748;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
             <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0">${date}</div>
