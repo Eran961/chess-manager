@@ -12102,7 +12102,7 @@ function renderYouthCard(p) {
   const isFemale = p.gender === 'נקבה' || p.gender === 'F';
   const genderIcon = isFemale ? '♀' : '♂';
   const today = new Date().toISOString().split('T')[0];
-  const parseCardDate = d => { if (!d) return ''; const pts = d.split('/'); return pts.length===3 ? ${pts[2]}-- : d; };
+  const parseCardDate = d => { if (!d) return ''; const pts = d.split('/'); return pts.length===3 ? `${pts[2]}-${pts[1]}-${pts[0]}` : d; };
   const cardExpired = p.cardExpiry && parseCardDate(p.cardExpiry) < today;
 
   const allTourns = p.tournaments || [];
