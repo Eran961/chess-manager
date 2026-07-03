@@ -800,6 +800,30 @@ def debug_player_links(fedId: int = Query(...)):
     return JSONResponse(content={"links": links})
 
 
+@app.get("/api/debug-rating-table")
+def debug_rating_table(fedId: int = Query(...)):
+    """Show raw rating table after ShowRatingButton postback."""
+    url = f"https://www.chess.org.il/Players/Player.aspx?Id={fedId}"
+    try:
+        html = fetch_url(url)
+        soup = BeautifulSoup(html, "html.parser")
+        form_state = get_form_state(soup)
+        rating_html = fetch_post(url, {
+            **form_state,
+            "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowRatingButton",
+            "__EVENTARGUMENT": "",
+        })
+        rsoup = BeautifulSoup(rating_html, "html.parser")
+        tables = []
+        for t in rsoup.find_all("table"):
+            headers = [clean_text(th) for th in t.find_all("th")]
+            rows = [[clean_text(td) for td in tr.find_all("td", recursive=False)] for tr in t.find_all("tr") if tr.find("td")]
+            tables.append({"id": t.get("id",""), "headers": headers, "rows": rows[:10]})
+        return JSONResponse(content={"tables": tables})
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
