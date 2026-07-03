@@ -667,7 +667,52 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
                 break
 
     profile["tournaments"] = tournaments
+
+    # ── League history via ShowLeaguePanelButton postback ──────────────────────
+    if url:
+        try:
+            form_state = get_form_state(soup)
+            league_html = fetch_post(url, {
+                **form_state,
+                "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowLeaguePanelButton",
+                "__EVENTARGUMENT": "",
+            })
+            league_soup = BeautifulSoup(league_html, "html.parser")
+            profile["leagues"] = _parse_league_rows(league_soup)
+        except Exception as exc:
+            print(f"[player-profile] leagues fetch failed: {exc}")
+            profile["leagues"] = []
+    else:
+        profile["leagues"] = []
+
     return profile
+
+
+def _parse_league_rows(soup) -> list:
+    """Parse the leagues panel that appears after ShowLeaguePanelButton postback."""
+    # After the postback, look for any table that appeared with league data.
+    # Common IDs: LeaguesGridView, LeagueGamesGridView, or similar.
+    LEAGUE_RE = re.compile(r"League|Leagu|ליג", re.I)
+    table = soup.find("table", id=LEAGUE_RE)
+    if not table:
+        # Fallback: any table whose headers contain league-like columns
+        for t in soup.find_all("table"):
+            headers = [clean_text(th) for th in t.find_all("th")]
+            if any("ליגה" in h or "מחזור" in h or "קבוצה" in h for h in headers):
+                table = t
+                break
+    if not table:
+        return []
+    leagues = []
+    headers = [clean_text(th) for th in table.find_all("th")]
+    for tr in table.find_all("tr")[1:]:
+        cells = [clean_text(td) for td in tr.find_all("td", recursive=False)]
+        if not cells or len(cells) < 2:
+            continue
+        row = {headers[i]: cells[i] for i in range(min(len(headers), len(cells)))} if headers else {}
+        row["_raw"] = cells
+        leagues.append(row)
+    return leagues
 
 
 def _parse_tourn_rows(tourn_table) -> tuple:
