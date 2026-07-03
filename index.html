@@ -12229,15 +12229,16 @@ function renderYouthCard(p) {
     return iso >= YOUTH_FROM && iso <= today;
   });
 
-  const leagueTourns  = allTourns.filter(t => (t.name || '').includes('ליגה'));
-  const regularTourns = allTourns.filter(t => !(t.name || '').includes('ליגה'));
+  const isLeague = name => /ליג[הת]/.test(name || '');
+  const leagueTourns  = allTourns.filter(t => isLeague(t.name));
+  const regularTourns = allTourns.filter(t => !isLeague(t.name));
 
   const totalRc = allTourns.reduce((s, t) => {
     const v = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChange) || 0;
     return s + (isNaN(v) ? 0 : v);
   }, 0);
 
-  const renderRow = t => {
+  const renderRow = (t, idx) => {
     const name  = t.name || t['תחרות'] || '—';
     const date  = t.date || '—';
     const score = (t.points != null && t.games != null) ? `${t.points}/${t.games}` : (t.result || '—');
@@ -12245,6 +12246,7 @@ function renderYouthCard(p) {
     const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
     const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
     return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
+      <div style="font-size:10px;font-weight:700;color:#c0bcd4;min-width:18px;text-align:center;flex-shrink:0">${idx + 1}</div>
       <div style="flex:1;font-weight:600;color:#2d3748;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
       <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0">${date}</div>
       <div style="font-weight:700;color:#1a4a8a;min-width:32px;text-align:center;flex-shrink:0">${score}</div>
@@ -12253,7 +12255,7 @@ function renderYouthCard(p) {
   };
 
   const renderTabList = (items, emptyMsg) => items.length
-    ? `<div style="max-height:220px;overflow-y:auto">${items.map(renderRow).join('')}</div>`
+    ? `<div style="max-height:220px;overflow-y:auto">${items.map((t, i) => renderRow(t, i)).join('')}</div>`
     : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${emptyMsg}</div>`;
 
   const statsRow = allTourns.length ? `

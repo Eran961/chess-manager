@@ -677,10 +677,11 @@ def _parse_tourn_rows(tourn_table) -> tuple:
     if not tourn_table:
         return tournaments, max_page
     for tr in tourn_table.find_all("tr")[1:]:
-        cells = [clean_text(td) for td in tr.find_all("td")]
+        # Use recursive=False to avoid picking up TDs from nested pager tables
+        cells = [clean_text(td) for td in tr.find_all("td", recursive=False)]
         if not cells:
             continue
-        # Pager row — single wide cell containing page links
+        # Pager row has exactly 1 direct TD (colspan spanning all columns)
         if len(cells) == 1:
             for a in tr.find_all("a"):
                 txt = a.get_text(strip=True)
