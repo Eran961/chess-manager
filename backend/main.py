@@ -601,13 +601,21 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     profile: dict = {"fedId": fed_id}
 
-    # ── Name from H2 heading ────────────────────────────────────────────────────
-    h2 = soup.find("h2")
-    if h2:
-        raw_h2 = clean_text(h2)
-        # H2 may read "פרטי שחקן ליאו לוחם" — strip the prefix
-        m = re.search(r"פרטי שחקן\s+(.+)", raw_h2)
-        profile["name"] = m.group(1).strip() if m else raw_h2
+    # ── Name from headings — H2 is the section title ("פרטי שחקן"), H3 is the player name ──
+    for tag in ["h3", "h2", "h4"]:
+        el = soup.find(tag)
+        if el:
+            txt = clean_text(el)
+            if txt and "פרטי שחקן" not in txt:
+                profile["name"] = txt
+                break
+    # Fallback: extract from text blob
+    if "name" not in profile:
+        blob_td = soup.find("td")
+        if blob_td:
+            m = re.search(r"פרטי שחקן\s+(.+?)\s+(?:דרגה|מספר שחקן)", clean_text(blob_td))
+            if m:
+                profile["name"] = m.group(1).strip()
 
     # ── Basic info from the FormView text blob ──────────────────────────────────
     form_table = soup.find("table", id=re.compile(r"PlayerFormView$", re.I))
