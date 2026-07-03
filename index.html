@@ -12229,9 +12229,7 @@ function renderYouthCard(p) {
     return iso >= YOUTH_FROM && iso <= today;
   });
 
-  const isLeague = name => /ליג[הת]/.test(name || '');
-  const leagueTourns  = allTourns.filter(t => isLeague(t.name));
-  const regularTourns = allTourns.filter(t => !isLeague(t.name));
+  const leagues = p.leagues || [];
 
   const totalRc = allTourns.reduce((s, t) => {
     const v = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChange) || 0;
@@ -12258,6 +12256,29 @@ function renderYouthCard(p) {
     ? `<div style="max-height:220px;overflow-y:auto">${items.map((t, i) => renderRow(t, i)).join('')}</div>`
     : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${emptyMsg}</div>`;
 
+  const renderLeagueRow = (l, idx) => {
+    const lName  = l['ליגה'] || '—';
+    const team   = l['קבוצה'] || '';
+    const score  = l['תוצאה'] || (l['נקודות'] ? `${l['נקודות']}/${l['משחקים']}` : '—');
+    const rcRaw  = l['שינוי מד כושר'] || '';
+    const rcNum  = parseFloat(rcRaw);
+    const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
+    const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
+    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #f7fafc;font-size:12px">
+      <div style="font-size:10px;font-weight:700;color:#c0bcd4;min-width:18px;text-align:center;flex-shrink:0;padding-top:3px">${idx + 1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;color:#2d3748;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${lName}">${lName}</div>
+        ${team ? `<div style="font-size:10px;color:#718096;margin-top:1px">${team}</div>` : ''}
+      </div>
+      <div style="font-weight:700;color:#1a4a8a;min-width:42px;text-align:center;flex-shrink:0;white-space:nowrap">${score}</div>
+      ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:36px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:36px"></div>'}
+    </div>`;
+  };
+
+  const renderLeagueList = items => items.length
+    ? `<div style="max-height:220px;overflow-y:auto">${items.map((l, i) => renderLeagueRow(l, i)).join('')}</div>`
+    : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">לא נמצאו משחקי ליגה</div>`;
+
   const statsRow = allTourns.length ? `
     <div style="display:flex;gap:8px;margin-top:12px">
       <div style="flex:1;background:#f7fafc;border-radius:8px;padding:8px;text-align:center">
@@ -12270,20 +12291,20 @@ function renderYouthCard(p) {
       </div>` : ''}
     </div>` : '';
 
-  const tabsSection = (allTourns.length || p.profileTs) ? `
+  const tabsSection = (allTourns.length || leagues.length || p.profileTs) ? `
     <div style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:12px">
       <div style="display:flex;gap:6px;margin-bottom:10px">
         <button onclick="switchYouthCardTab(this,'yct-${p.fedId}','ycl-${p.fedId}')"
           style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#553c9a;color:white;cursor:pointer">
-          🏆 תחרויות (${regularTourns.length})
+          🏆 תחרויות (${allTourns.length})
         </button>
         <button onclick="switchYouthCardTab(this,'ycl-${p.fedId}','yct-${p.fedId}')"
           style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
-          🏅 ליגות (${leagueTourns.length})
+          🏅 ליגות (${leagues.length})
         </button>
       </div>
-      <div id="yct-${p.fedId}">${renderTabList(regularTourns, 'לא נמצאו תחרויות')}</div>
-      <div id="ycl-${p.fedId}" style="display:none">${renderTabList(leagueTourns, 'לא נמצאו משחקי ליגה')}</div>
+      <div id="yct-${p.fedId}">${renderTabList(allTourns, 'לא נמצאו תחרויות')}</div>
+      <div id="ycl-${p.fedId}" style="display:none">${renderLeagueList(leagues)}</div>
     </div>` : (!p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>' : '');
 
   return `
