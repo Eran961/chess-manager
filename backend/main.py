@@ -574,6 +574,103 @@ def clear_team_cache(teamId: int = Query(None)):
         return {"cleared": keys}
 
 
+def parse_player_profile(html: str, fed_id: int) -> dict:
+    """Parse individual player profile from chess.org.il Player.aspx page."""
+    soup = BeautifulSoup(html, "html.parser")
+    profile: dict = {"fedId": fed_id}
+
+    # ── Basic info ──────────────────────────────────────────────────────────────
+    # Name: usually in an H1 or labelled cell
+    h1 = soup.find("h1")
+    if h1:
+        profile["name"] = clean_text(h1)
+
+    # Walk all label→value pairs in info tables
+    for tr in soup.find_all("tr"):
+        cells = [clean_text(td) for td in tr.find_all(["td", "th"])]
+        if len(cells) < 2:
+            continue
+        label, value = cells[0], cells[1]
+        if re.search(r"מד.?כושר|דירוג", label) and not re.search(r"fide|elo", label, re.I):
+            m = re.search(r"\d{3,4}", value)
+            if m:
+                profile["rating"] = int(m.group())
+        elif re.search(r"fide|elo", label, re.I):
+            m = re.search(r"\d{3,4}", value)
+            if m:
+                profile["fide"] = int(m.group())
+        elif re.search(r"שנת.?לידה|גיל|birth", label, re.I):
+            m = re.search(r"(19|20)\d{2}", value)
+            if m:
+                profile["birthYear"] = int(m.group())
+        elif re.search(r"מגדר|מין|gender|sex", label, re.I):
+            profile["gender"] = value
+        elif re.search(r"תוקף|expir|card", label, re.I):
+            profile["cardExpiry"] = value
+        elif re.search(r"שם", label) and "name" not in profile and value:
+            profile["name"] = value
+
+    # ── Tournament history ──────────────────────────────────────────────────────
+    tournaments = []
+    # The main tournament grid on chess.org.il uses an id containing "Grid" or "Tourn"
+    tourn_table = soup.find("table", id=re.compile(r"(Tournament|Tourn|Grid)", re.I))
+    if tourn_table:
+        headers = [clean_text(th) for th in tourn_table.find_all("th")]
+        for tr in tourn_table.find_all("tr")[1:]:
+            cells = [clean_text(td) for td in tr.find_all("td")]
+            if not any(cells):
+                continue
+            row: dict = {}
+            for i, h in enumerate(headers):
+                if i < len(cells):
+                    row[h] = cells[i]
+            if not row:
+                row = {f"col{i}": v for i, v in enumerate(cells)}
+            # Try to extract key fields by scanning values
+            for v in cells:
+                if re.fullmatch(r"\d{2}/\d{2}/\d{4}", v):
+                    row["date"] = v
+                elif re.fullmatch(r"[+-]?\d+", v) and abs(int(v)) < 200:
+                    row.setdefault("ratingChange", v)
+                elif re.search(r"\d+[./]\d+", v) and "/" in v:
+                    row.setdefault("score", v)
+            tournaments.append(row)
+
+    profile["tournaments"] = tournaments
+    return profile
+
+
+@app.get("/api/player-profile")
+def player_profile(fedId: int = Query(...)):
+    """Fetch and parse a player profile from chess.org.il."""
+    url = f"https://www.chess.org.il/Players/Player.aspx?Id={fedId}"
+    try:
+        html = fetch_url(url)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    data = parse_player_profile(html, fedId)
+    return JSONResponse(content=data)
+
+
+@app.get("/api/debug-player")
+def debug_player(fedId: int = Query(...)):
+    """Return raw table/heading structure for a player page — for development."""
+    url = f"https://www.chess.org.il/Players/Player.aspx?Id={fedId}"
+    try:
+        html = fetch_url(url)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    soup = BeautifulSoup(html, "html.parser")
+    headings = [clean_text(h) for h in soup.find_all(["h1", "h2", "h3"]) if clean_text(h)]
+    tables = []
+    for t in soup.find_all("table"):
+        tid = t.get("id", "")
+        headers = [clean_text(th) for th in t.find_all("th")]
+        rows = [[clean_text(td) for td in tr.find_all("td")] for tr in t.find_all("tr") if tr.find("td")]
+        tables.append({"id": tid, "headers": headers, "rows": rows[:5]})
+    return JSONResponse(content={"headings": headings, "tables": tables})
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

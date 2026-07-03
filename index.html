@@ -5879,7 +5879,7 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
       if (!p.cardExpiry || p.cardExpiry <= todayIso) return false;
       return Math.floor((new Date(p.cardExpiry) - today) / 86400000) <= 30;
     });
-    if (expiredCards.length > 0) generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${expiredCards.length}</strong> כרטיסי שחמטאי פגי תוקף — <a href="#" onclick="switchTab('fed-players');return false" style="color:#2b6cb0">למאגר</a></span></div>`);
+    if (expiredCards.length > 0) generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${expiredCards.length}</strong> כרטיסי שחמטאי פגי תוקף — <a href="#" onclick="switchTab('youth-players');return false" style="color:#2b6cb0">למאגר</a></span></div>`);
     if (soonCards.length > 0)    generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🟡</span><span><strong>${soonCards.length}</strong> כרטיסי שחמטאי יפקעו תוך 30 יום</span></div>`);
   }
 
@@ -6692,24 +6692,8 @@ if (currentUser?.role === 'admin') {
   tournPanel.className = 'tab-panel'; tournPanel.id = 'panel-club-tournaments'; tournPanel.innerHTML = buildTournamentsHTML();
   content.appendChild(tournPanel);
 
-  // ── שחקנים ──────────────────────────────────────
-  addSidebarLabel('שחקנים');
-
-  const searchBtn = document.createElement('button');
-  searchBtn.className = 'tab-btn'; searchBtn.dataset.tab = 'search'; searchBtn.textContent = '🔍 חיפוש';
-  searchBtn.onclick = () => { switchTab('search'); setTimeout(() => document.getElementById('searchInput')?.focus(), 50); };
-  tabsBar.appendChild(searchBtn);
-  const searchPanel = document.createElement('div');
-  searchPanel.className = 'tab-panel'; searchPanel.id = 'panel-search'; searchPanel.innerHTML = renderSearchPanel();
-  content.appendChild(searchPanel);
-
-  const fedPlayersBtn = document.createElement('button');
-  fedPlayersBtn.className = 'tab-btn'; fedPlayersBtn.dataset.tab = 'fed-players'; fedPlayersBtn.textContent = '👥 שחקני מועדון';
-  fedPlayersBtn.onclick = () => { switchTab('fed-players'); loadFedPlayers(); };
-  tabsBar.appendChild(fedPlayersBtn);
-  const fedPlayersPanel = document.createElement('div');
-  fedPlayersPanel.className = 'tab-panel'; fedPlayersPanel.id = 'panel-fed-players'; fedPlayersPanel.innerHTML = buildFedPlayersHTML();
-  content.appendChild(fedPlayersPanel);
+  // ── גנים ──────────────────────────────────────
+  addSidebarLabel('גנים');
 
   const prospectsBtn = document.createElement('button');
   prospectsBtn.className = 'tab-btn'; prospectsBtn.dataset.tab = 'prospects'; prospectsBtn.textContent = '🌟 מצטייני גנים';
@@ -6718,6 +6702,18 @@ if (currentUser?.role === 'admin') {
   const prospectsPanel = document.createElement('div');
   prospectsPanel.className = 'tab-panel'; prospectsPanel.id = 'panel-prospects'; prospectsPanel.innerHTML = buildProspectsHTML();
   content.appendChild(prospectsPanel);
+
+  // ── שחקנים ──────────────────────────────────────
+  addSidebarLabel('שחקנים');
+
+  const youthBtn = document.createElement('button');
+  youthBtn.className = 'tab-btn'; youthBtn.dataset.tab = 'youth-players'; youthBtn.textContent = '👦 שחקני נוער';
+  youthBtn.onclick = () => { switchTab('youth-players'); loadYouthPlayers(); };
+  tabsBar.appendChild(youthBtn);
+  const youthPanel = document.createElement('div');
+  youthPanel.className = 'tab-panel'; youthPanel.id = 'panel-youth-players';
+  youthPanel.innerHTML = buildYouthPlayersHTML();
+  content.appendChild(youthPanel);
 }
 
 if (currentUser?.role === 'admin') {
@@ -11992,6 +11988,190 @@ async function loadLeagueStars() {
   } catch(e) {
     el.innerHTML = `<div style="text-align:center;padding:40px;color:#c53030">שגיאה: ${e.message}</div>`;
   }
+}
+// ── Youth Players ─────────────────────────────────────────────────────────
+
+const YOUTH_CUTOFF = '2025-07-31';
+const YOUTH_FROM   = '2024-07-01';
+const CUR_YEAR     = 2026;
+let _youthPlayers  = {};
+let _activeYouthAge = 12;
+
+function buildYouthPlayersHTML() {
+  const tabBtn = (age, active) =>
+    `<button onclick="window.switchYouthAge(${age},this)"
+      style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:700;cursor:pointer;
+             font-family:inherit;border-bottom:3px solid ${active?'#553c9a':'transparent'};
+             color:${active?'#553c9a':'#718096'};margin-bottom:-2px">
+      עד ${age}
+     </button>`;
+  return `
+    <div style="padding:20px">
+      <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:20px;flex-wrap:wrap" id="youth-age-tabs">
+        ${tabBtn(12,true)}${tabBtn(10,false)}${tabBtn(8,false)}${tabBtn(6,false)}
+      </div>
+      <div id="youth-players-list">
+        <div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div>
+      </div>
+    </div>`;
+}
+window.buildYouthPlayersHTML = buildYouthPlayersHTML;
+
+function switchYouthAge(age, btn) {
+  _activeYouthAge = age;
+  document.querySelectorAll('#youth-age-tabs button').forEach(b => {
+    b.style.borderBottom = '3px solid transparent';
+    b.style.color = '#718096';
+  });
+  if (btn) { btn.style.borderBottom = '3px solid #553c9a'; btn.style.color = '#553c9a'; }
+  renderYouthList();
+}
+window.switchYouthAge = switchYouthAge;
+
+function getPlayerAge(birthYear) {
+  if (!birthYear) return null;
+  return CUR_YEAR - birthYear;
+}
+
+async function loadYouthPlayers() {
+  const listEl = document.getElementById('youth-players-list');
+  if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div>';
+  try {
+    const snap = await db.ref('youthPlayers').get();
+    _youthPlayers = snap.val() || {};
+    // Seed example player if empty
+    if (Object.keys(_youthPlayers).length === 0) {
+      await db.ref('youthPlayers/203562').set({ fedId: 203562, name: 'ליאו לוחם', addedAt: Date.now() });
+      _youthPlayers = { '203562': { fedId: 203562, name: 'ליאו לוחם', addedAt: Date.now() } };
+    }
+    // Fetch stale profiles (no profile or older than 24h)
+    const now = Date.now();
+    const stale = Object.values(_youthPlayers).filter(p => !p.profileTs || (now - p.profileTs) > 86400000);
+    for (const p of stale) await fetchYouthPlayerProfile(p.fedId);
+    renderYouthList();
+  } catch(e) {
+    if (listEl) listEl.innerHTML = `<div style="text-align:center;padding:40px;color:#c53030">שגיאה: ${e.message}</div>`;
+  }
+}
+window.loadYouthPlayers = loadYouthPlayers;
+
+async function fetchYouthPlayerProfile(fedId) {
+  try {
+    const res = await fetch(`https://chess-manager-7wkr.onrender.com/api/player-profile?fedId=${fedId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const update = { ...data, profileTs: Date.now() };
+    await db.ref(`youthPlayers/${fedId}`).update(update);
+    _youthPlayers[String(fedId)] = { ..._youthPlayers[String(fedId)], ...update };
+  } catch(e) { console.error('fetchYouthPlayerProfile', fedId, e); }
+}
+
+function renderYouthList() {
+  const el = document.getElementById('youth-players-list');
+  if (!el) return;
+  const players = Object.values(_youthPlayers)
+    .filter(p => { const a = getPlayerAge(p.birthYear); return a !== null && a <= _activeYouthAge; })
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  if (!players.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#a0aec0">
+      <div style="font-size:48px;margin-bottom:12px">👦</div>
+      <div style="font-size:15px;font-weight:700">אין שחקנים עד גיל ${_activeYouthAge}</div>
+      ${Object.keys(_youthPlayers).length?'<div style="font-size:12px;margin-top:6px">נסה לשנות את קבוצת הגיל</div>':''}
+    </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:#718096;margin-bottom:12px;letter-spacing:.5px">
+      ${players.length} שחקנ${players.length===1?'':'ים'} עד גיל ${_activeYouthAge}
+    </div>
+    ${players.map(renderYouthCard).join('')}`;
+}
+
+function renderYouthCard(p) {
+  const age = getPlayerAge(p.birthYear);
+  const isFemale = p.gender === 'נקבה' || p.gender === 'F';
+  const genderIcon = isFemale ? '♀' : '♂';
+  const today = new Date().toISOString().split('T')[0];
+  const cardExpired = p.cardExpiry && p.cardExpiry < today;
+
+  const allTourns = p.tournaments || [];
+  const tourns = allTourns.filter(t => {
+    const d = t.date || t[Object.keys(t).find(k => k.includes('תארי') || k.toLowerCase().includes('date')) || ''] || '';
+    if (!d) return false;
+    const pts = d.split('/');
+    if (pts.length < 3) return false;
+    const iso = `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`;
+    return iso >= YOUTH_FROM && iso <= YOUTH_CUTOFF;
+  });
+
+  const totalRcChange = tourns.reduce((s, t) => {
+    const v = parseInt(t.ratingChange || t['+/-'] || t[Object.keys(t).find(k => k.includes('שינ')) || ''] || 0);
+    return s + (isNaN(v) ? 0 : v);
+  }, 0);
+
+  const tournsHTML = tourns.length ? `
+    <div style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:12px">
+      <div style="font-size:11px;font-weight:700;color:#718096;margin-bottom:8px">תחרויות — יולי 2024 עד יולי 2025</div>
+      <div style="max-height:220px;overflow-y:auto">
+        ${tourns.map(t => {
+          const nameKey = Object.keys(t).find(k => !k.includes('תארי') && !k.includes('+') && !k.includes('שינ') && !k.includes('ניקוד') && !k.toLowerCase().includes('date'));
+          const name  = t['שם תחרות'] || t['תחרות'] || t.name || (nameKey ? t[nameKey] : '') || '—';
+          const date  = t.date || t['תאריך'] || '—';
+          const score = t.score || t['ניקוד'] || t['תוצאה'] || '—';
+          const rcRaw = t.ratingChange || t['+/-'] || t[Object.keys(t).find(k => k.includes('שינ')) || ''] || '';
+          const rcNum = parseInt(rcRaw);
+          const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
+          const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : rcRaw;
+          return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
+            <div style="flex:1;font-weight:600;color:#2d3748;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
+            <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0">${date}</div>
+            <div style="font-weight:700;color:#1a4a8a;min-width:32px;text-align:center;flex-shrink:0">${score}</div>
+            ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:32px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:32px"></div>'}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : (p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">לא נמצאו תחרויות בתקופה זו</div>' : '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>');
+
+  const statsRow = tourns.length ? `
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <div style="flex:1;background:#f7fafc;border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:16px;font-weight:800;color:#2d3748">${tourns.length}</div>
+        <div style="font-size:10px;color:#718096;font-weight:600">תחרויות</div>
+      </div>
+      ${totalRcChange !== 0 ? `<div style="flex:1;background:${totalRcChange>0?'#f0fff4':'#fff5f5'};border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:16px;font-weight:800;color:${totalRcChange>0?'#276749':'#c53030'}">${totalRcChange>0?'+':''}${totalRcChange}</div>
+        <div style="font-size:10px;color:#718096;font-weight:600">שינוי מד כושר</div>
+      </div>` : ''}
+    </div>` : '';
+
+  return `
+    <div style="background:white;border:1.5px solid #e2e8f0;border-radius:14px;margin-bottom:14px;overflow:hidden">
+      <div style="padding:16px 18px">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#553c9a,#805ad5);
+                      display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;color:white">
+            ${isFemale ? '♛' : '♟'}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:16px;font-weight:800;color:#1a202c">${p.name || '—'}</div>
+            <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:12px;color:#718096">${genderIcon} גיל ${age ?? '?'}</span>
+              <span style="color:#d0d0d0">·</span>
+              <span style="font-size:12px;color:#718096">מס׳ <a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#553c9a">${p.fedId}</a></span>
+              ${p.cardExpiry ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;
+                background:${cardExpired?'#fff5f5':'#f0fff4'};color:${cardExpired?'#c53030':'#276749'}">
+                כרטיס ${cardExpired?'פג 🔴':'בתוקף ✓'} — ${p.cardExpiry}</span>` : ''}
+            </div>
+          </div>
+          <div style="text-align:center;background:#f3f0ff;border:2px solid #d6bcfa;border-radius:12px;padding:8px 14px;flex-shrink:0;min-width:60px">
+            <div style="font-size:22px;font-weight:900;color:#553c9a;line-height:1">${p.rating || '—'}</div>
+            <div style="font-size:10px;color:#805ad5;font-weight:700;margin-top:2px">מד כושר</div>
+          </div>
+        </div>
+        ${statsRow}
+        ${tournsHTML}
+      </div>
+    </div>`;
 }
 window.syncAllTeamsData = syncAllTeamsData;
 window.loadLeagueStars = loadLeagueStars;
