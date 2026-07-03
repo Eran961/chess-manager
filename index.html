@@ -11991,8 +11991,8 @@ async function loadLeagueStars() {
 }
 // ── Youth Players ─────────────────────────────────────────────────────────
 
-const YOUTH_CUTOFF = '2025-07-31';
-const YOUTH_FROM   = '2024-07-01';
+const YOUTH_CUTOFF = new Date().toISOString().split('T')[0]; // today
+const YOUTH_FROM   = '2025-06-01';
 const CUR_YEAR     = 2026;
 let _youthPlayers  = {};
 let _activeYouthAge = 12;
@@ -12044,7 +12044,7 @@ async function loadYouthPlayers() {
       const leo = {
         fedId: 203562, name: 'ליאו לוחם', birthYear: 2017, rating: 1528,
         ratingExpected: 1566, cardExpiry: '31/12/2026', fide: 1483, grade: 'חמישית',
-        profileTs: Date.now(), addedAt: _youthPlayers['203562']?.addedAt || Date.now(),
+        addedAt: _youthPlayers['203562']?.addedAt || Date.now(),
         tournaments: [
           { date: '12/07/2025', name: 'אליפות ראשון לציון לילדים עד גיל 8', games: '5', points: '4.0', performance: '1483', result: '+4-1=0', ratingChange: 3.2, ratingChangeRaw: '3.2+' },
           { date: '27/06/2025', name: 'שישי מהיר בראשון לציון 27.6 1350-1500', games: '4', points: '2.0', performance: '1411', result: '+2-2=0', ratingChange: -3.2, ratingChangeRaw: '3.2-' },
@@ -12097,61 +12097,84 @@ function renderYouthList() {
     ${players.map(renderYouthCard).join('')}`;
 }
 
+function switchYouthCardTab(btn, showId, hideId) {
+  document.getElementById(showId).style.display = '';
+  document.getElementById(hideId).style.display = 'none';
+  btn.parentElement.querySelectorAll('button').forEach(b => { b.style.background = '#f7fafc'; b.style.color = '#4a5568'; });
+  btn.style.background = '#553c9a'; btn.style.color = 'white';
+}
+window.switchYouthCardTab = switchYouthCardTab;
+
 function renderYouthCard(p) {
   const age = getPlayerAge(p.birthYear);
   const isFemale = p.gender === 'נקבה' || p.gender === 'F';
-  const genderIcon = isFemale ? '♀' : '♂';
   const today = new Date().toISOString().split('T')[0];
   const parseCardDate = d => { if (!d) return ''; const pts = d.split('/'); return pts.length===3 ? `${pts[2]}-${pts[1]}-${pts[0]}` : d; };
   const cardExpired = p.cardExpiry && parseCardDate(p.cardExpiry) < today;
 
-  const allTourns = p.tournaments || [];
-  const tourns = allTourns.filter(t => {
-    const d = t.date || t[Object.keys(t).find(k => k.includes('תארי') || k.toLowerCase().includes('date')) || ''] || '';
+  const allTourns = (p.tournaments || []).filter(t => {
+    const d = t.date || '';
     if (!d) return false;
     const pts = d.split('/');
     if (pts.length < 3) return false;
     const iso = `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`;
-    return iso >= YOUTH_FROM && iso <= YOUTH_CUTOFF;
+    return iso >= YOUTH_FROM && iso <= today;
   });
 
-  const totalRcChange = tourns.reduce((s, t) => {
+  const leagueTourns  = allTourns.filter(t => (t.name || '').includes('ליגה'));
+  const regularTourns = allTourns.filter(t => !(t.name || '').includes('ליגה'));
+
+  const totalRc = allTourns.reduce((s, t) => {
     const v = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChange) || 0;
     return s + (isNaN(v) ? 0 : v);
   }, 0);
 
-  const tournsHTML = tourns.length ? `
-    <div style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:12px">
-      <div style="font-size:11px;font-weight:700;color:#718096;margin-bottom:8px">תחרויות — יולי 2024 עד יולי 2025</div>
-      <div style="max-height:220px;overflow-y:auto">
-        ${tourns.map(t => {
-          const name  = t.name || t['תחרות'] || t['שם תחרות'] || '—';
-          const date  = t.date || t['תאריך'] || '—';
-          const score = (t.points != null && t.games != null) ? `${t.points}/${t.games}` : (t.score || t['ניקוד'] || t.result || t['תוצאה'] || '—');
-          const rcNum = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChangeRaw || t.ratingChange);
-          const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
-          const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
-          return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
-            <div style="flex:1;font-weight:600;color:#2d3748;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
-            <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0">${date}</div>
-            <div style="font-weight:700;color:#1a4a8a;min-width:32px;text-align:center;flex-shrink:0">${score}</div>
-            ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:32px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:32px"></div>'}
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : (p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">לא נמצאו תחרויות בתקופה זו</div>' : '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>');
+  const renderRow = t => {
+    const name  = t.name || t['תחרות'] || '—';
+    const date  = t.date || '—';
+    const score = (t.points != null && t.games != null) ? `${t.points}/${t.games}` : (t.result || '—');
+    const rcNum = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChangeRaw || t.ratingChange);
+    const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
+    const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
+    return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
+      <div style="flex:1;font-weight:600;color:#2d3748;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
+      <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0">${date}</div>
+      <div style="font-weight:700;color:#1a4a8a;min-width:32px;text-align:center;flex-shrink:0">${score}</div>
+      ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:32px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:32px"></div>'}
+    </div>`;
+  };
 
-  const statsRow = tourns.length ? `
+  const renderTabList = (items, emptyMsg) => items.length
+    ? `<div style="max-height:220px;overflow-y:auto">${items.map(renderRow).join('')}</div>`
+    : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${emptyMsg}</div>`;
+
+  const statsRow = allTourns.length ? `
     <div style="display:flex;gap:8px;margin-top:12px">
       <div style="flex:1;background:#f7fafc;border-radius:8px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:800;color:#2d3748">${tourns.length}</div>
-        <div style="font-size:10px;color:#718096;font-weight:600">תחרויות</div>
+        <div style="font-size:16px;font-weight:800;color:#2d3748">${allTourns.length}</div>
+        <div style="font-size:10px;color:#718096;font-weight:600">פעילויות</div>
       </div>
-      ${totalRcChange !== 0 ? `<div style="flex:1;background:${totalRcChange>0?'#f0fff4':'#fff5f5'};border-radius:8px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:800;color:${totalRcChange>0?'#276749':'#c53030'}">${totalRcChange>0?'+':''}${totalRcChange}</div>
+      ${totalRc !== 0 ? `<div style="flex:1;background:${totalRc>0?'#f0fff4':'#fff5f5'};border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:16px;font-weight:800;color:${totalRc>0?'#276749':'#c53030'}">${totalRc>0?'+':''}${totalRc.toFixed(1)}</div>
         <div style="font-size:10px;color:#718096;font-weight:600">שינוי מד כושר</div>
       </div>` : ''}
     </div>` : '';
+
+  const tabsSection = (allTourns.length || p.profileTs) ? `
+    <div style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:12px">
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button onclick="switchYouthCardTab(this,'yct-${p.fedId}','ycl-${p.fedId}')"
+          style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#553c9a;color:white;cursor:pointer">
+          🏆 תחרויות (${regularTourns.length})
+        </button>
+        <button onclick="switchYouthCardTab(this,'ycl-${p.fedId}','yct-${p.fedId}')"
+          style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
+          🏅 ליגות (${leagueTourns.length})
+        </button>
+      </div>
+      <div id="yct-${p.fedId}">${renderTabList(regularTourns, 'לא נמצאו תחרויות')}</div>
+      <div id="ycl-${p.fedId}" style="display:none">${renderTabList(leagueTourns, 'לא נמצאו משחקי ליגה')}</div>
+    </div>` : (!p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>' : '');
 
   return `
     <div style="background:white;border:1.5px solid #e2e8f0;border-radius:14px;margin-bottom:14px;overflow:hidden">
@@ -12164,7 +12187,7 @@ function renderYouthCard(p) {
           <div style="flex:1;min-width:0">
             <div style="font-size:16px;font-weight:800;color:#1a202c">${p.name || '—'}</div>
             <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
-              <span style="font-size:12px;color:#718096">${genderIcon} גיל ${age ?? '?'}</span>
+              <span style="font-size:12px;color:#718096">${isFemale ? 'FE♂' : '♂'} גיל ${age ?? '?'}</span>
               <span style="color:#d0d0d0">·</span>
               <span style="font-size:12px;color:#718096">מס׳ <a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#553c9a">${p.fedId}</a></span>
               ${p.cardExpiry ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;
@@ -12178,7 +12201,7 @@ function renderYouthCard(p) {
           </div>
         </div>
         ${statsRow}
-        ${tournsHTML}
+        ${tabsSection}
       </div>
     </div>`;
 }
