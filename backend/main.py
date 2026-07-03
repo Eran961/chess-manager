@@ -575,66 +575,79 @@ def clear_team_cache(teamId: int = Query(None)):
 
 
 def parse_player_profile(html: str, fed_id: int) -> dict:
-    """Parse individual player profile from chess.org.il Player.aspx page."""
+    """Parse individual player profile from chess.org.il Player.aspx page.
+
+    The page puts all personal info in one large text blob inside PlayerFormView,
+    and tournament history in a child TournamentsGridView table.
+    """
     soup = BeautifulSoup(html, "html.parser")
     profile: dict = {"fedId": fed_id}
 
-    # ── Basic info ──────────────────────────────────────────────────────────────
-    # Name: usually in an H1 or labelled cell
-    h1 = soup.find("h1")
-    if h1:
-        profile["name"] = clean_text(h1)
+    # ── Name from H2 heading ────────────────────────────────────────────────────
+    h2 = soup.find("h2")
+    if h2:
+        profile["name"] = clean_text(h2)
 
-    # Walk all label→value pairs in info tables
-    for tr in soup.find_all("tr"):
-        cells = [clean_text(td) for td in tr.find_all(["td", "th"])]
-        if len(cells) < 2:
-            continue
-        label, value = cells[0], cells[1]
-        if re.search(r"מד.?כושר|דירוג", label) and not re.search(r"fide|elo", label, re.I):
-            m = re.search(r"\d{3,4}", value)
-            if m:
-                profile["rating"] = int(m.group())
-        elif re.search(r"fide|elo", label, re.I):
-            m = re.search(r"\d{3,4}", value)
-            if m:
-                profile["fide"] = int(m.group())
-        elif re.search(r"שנת.?לידה|גיל|birth", label, re.I):
-            m = re.search(r"(19|20)\d{2}", value)
-            if m:
-                profile["birthYear"] = int(m.group())
-        elif re.search(r"מגדר|מין|gender|sex", label, re.I):
-            profile["gender"] = value
-        elif re.search(r"תוקף|expir|card", label, re.I):
-            profile["cardExpiry"] = value
-        elif re.search(r"שם", label) and "name" not in profile and value:
-            profile["name"] = value
+    # ── Basic info from the FormView text blob ──────────────────────────────────
+    form_table = soup.find("table", id=re.compile(r"PlayerFormView$", re.I))
+    if form_table:
+        # Grab the first (large) cell text — it contains all personal fields
+        first_td = form_table.find("td")
+        text = clean_text(first_td) if first_td else ""
 
-    # ── Tournament history ──────────────────────────────────────────────────────
+        m = re.search(r"שנת לידה[:\s]+(\d{4})", text)
+        if m:
+            profile["birthYear"] = int(m.group(1))
+
+        m = re.search(r"מד כושר ישראלי\s*:\s*(\d+)", text)
+        if m:
+            profile["rating"] = int(m.group(1))
+
+        m = re.search(r"צפוי:\s*(\d+)", text)
+        if m:
+            profile["ratingExpected"] = int(m.group(1))
+
+        m = re.search(r"תוקף כרטיס שחמטאי\s+(\d{2}/\d{2}/\d{4})", text)
+        if m:
+            profile["cardExpiry"] = m.group(1)
+
+        m = re.search(r"מד כושר FIDE[^:]*:\s*(\d+)", text)
+        if m:
+            profile["fide"] = int(m.group(1))
+
+        m = re.search(r"דרגה\s+(\S+)", text)
+        if m:
+            profile["grade"] = m.group(1)
+
+        # Gender is not explicit; infer from player number pattern or leave absent
+
+    # ── Tournament history from TournamentsGridView ─────────────────────────────
+    # Columns: תאריך התחלה | תאריך עדכון מד כושר | תחרות | משחקים | נקודות | רמת ביצוע | תוצאה | שינוי מד כושר
+    tourn_table = soup.find("table", id=re.compile(r"TournamentsGridView", re.I))
     tournaments = []
-    # The main tournament grid on chess.org.il uses an id containing "Grid" or "Tourn"
-    tourn_table = soup.find("table", id=re.compile(r"(Tournament|Tourn|Grid)", re.I))
     if tourn_table:
-        headers = [clean_text(th) for th in tourn_table.find_all("th")]
         for tr in tourn_table.find_all("tr")[1:]:
             cells = [clean_text(td) for td in tr.find_all("td")]
-            if not any(cells):
+            if len(cells) < 3 or not cells[0]:
                 continue
-            row: dict = {}
-            for i, h in enumerate(headers):
-                if i < len(cells):
-                    row[h] = cells[i]
-            if not row:
-                row = {f"col{i}": v for i, v in enumerate(cells)}
-            # Try to extract key fields by scanning values
-            for v in cells:
-                if re.fullmatch(r"\d{2}/\d{2}/\d{4}", v):
-                    row["date"] = v
-                elif re.fullmatch(r"[+-]?\d+", v) and abs(int(v)) < 200:
-                    row.setdefault("ratingChange", v)
-                elif re.search(r"\d+[./]\d+", v) and "/" in v:
-                    row.setdefault("score", v)
-            tournaments.append(row)
+            rc_raw = cells[7].strip() if len(cells) > 7 else ""
+            # Format: "11.8+" or "49.4-" or plain "0"
+            rc_num = None
+            m = re.search(r"([\d.]+)([+-])$", rc_raw)
+            if m:
+                rc_num = float(m.group(1)) if m.group(2) == "+" else -float(m.group(1))
+            elif re.fullmatch(r"-?\d+(\.\d+)?", rc_raw):
+                rc_num = float(rc_raw)
+            tournaments.append({
+                "date":           cells[0],
+                "name":           cells[2] if len(cells) > 2 else "",
+                "games":          cells[3] if len(cells) > 3 else "",
+                "points":         cells[4] if len(cells) > 4 else "",
+                "performance":    cells[5] if len(cells) > 5 else "",
+                "result":         cells[6] if len(cells) > 6 else "",
+                "ratingChange":   rc_num,
+                "ratingChangeRaw": rc_raw,
+            })
 
     profile["tournaments"] = tournaments
     return profile

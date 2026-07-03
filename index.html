@@ -12046,7 +12046,7 @@ async function loadYouthPlayers() {
     }
     // Fetch stale profiles (no profile or older than 24h)
     const now = Date.now();
-    const stale = Object.values(_youthPlayers).filter(p => !p.profileTs || (now - p.profileTs) > 86400000);
+    const stale = Object.values(_youthPlayers).filter(p => !p.profileTs || (now - p.profileTs) > 86400000 || !p.birthYear);
     for (const p of stale) await fetchYouthPlayerProfile(p.fedId);
     renderYouthList();
   } catch(e) {
@@ -12092,7 +12092,8 @@ function renderYouthCard(p) {
   const isFemale = p.gender === 'נקבה' || p.gender === 'F';
   const genderIcon = isFemale ? '♀' : '♂';
   const today = new Date().toISOString().split('T')[0];
-  const cardExpired = p.cardExpiry && p.cardExpiry < today;
+  const parseCardDate = d => { if (!d) return ''; const pts = d.split('/'); return pts.length===3 ? ${pts[2]}-- : d; };
+  const cardExpired = p.cardExpiry && parseCardDate(p.cardExpiry) < today;
 
   const allTourns = p.tournaments || [];
   const tourns = allTourns.filter(t => {
@@ -12105,7 +12106,7 @@ function renderYouthCard(p) {
   });
 
   const totalRcChange = tourns.reduce((s, t) => {
-    const v = parseInt(t.ratingChange || t['+/-'] || t[Object.keys(t).find(k => k.includes('שינ')) || ''] || 0);
+    const v = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChange) || 0;
     return s + (isNaN(v) ? 0 : v);
   }, 0);
 
