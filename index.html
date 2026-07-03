@@ -12007,7 +12007,10 @@ const YOUTH_AGE_GROUPS = [
 ];
 
 function buildYouthPlayersHTML() {
-  return '<div style="padding:20px" id="youth-players-root"><div id="youth-players-main"><div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div></div></div>';
+  return '<div style="padding:20px" id="youth-players-root">' +
+    '<div id="youth-status-bar" style="display:none;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;margin-bottom:14px"></div>' +
+    '<div id="youth-players-main"><div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div></div>' +
+    '</div>';
 }
 window.buildYouthPlayersHTML = buildYouthPlayersHTML;
 
@@ -12135,9 +12138,18 @@ async function refreshYouthData() {
 }
 window.refreshYouthData = refreshYouthData;
 
+function _youthSetStatus(msg, isError) {
+  const el = document.getElementById('youth-status-bar');
+  if (!el) return;
+  el.style.display = msg ? '' : 'none';
+  el.style.background = isError ? '#fff5f5' : '#f0fff4';
+  el.style.color = isError ? '#c53030' : '#276749';
+  el.textContent = msg;
+}
+
 async function loadYouthPlayers() {
   const mainEl = document.getElementById('youth-players-main');
-  if (mainEl && _youthView !== 'player-list' && _youthView !== 'player-detail')
+  if (mainEl && _youthView === 'age-select')
     mainEl.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div>';
   try {
     const snap = await db.ref('youthPlayers').get();
@@ -12158,7 +12170,11 @@ async function loadYouthPlayers() {
     }
     const now = Date.now();
     const stale = Object.values(_youthPlayers).filter(p => !p.profileTs || (now - p.profileTs) > 86400000 || !p.birthYear);
-    for (const p of stale) await fetchYouthPlayerProfile(p.fedId);
+    if (stale.length) {
+      _youthSetStatus(`⏳ מעדכן נתונים מהאיגוד (${stale.length} שחקנ${stale.length===1?'':'ים'})...`, false);
+      for (const p of stale) await fetchYouthPlayerProfile(p.fedId);
+      _youthSetStatus('', false);
+    }
     renderYouthPlayers();
   } catch(e) {
     if (mainEl) mainEl.innerHTML = `<div style="text-align:center;padding:40px;color:#c53030">שגיאה: ${e.message}</div>`;
@@ -12168,13 +12184,25 @@ window.loadYouthPlayers = loadYouthPlayers;
 
 async function fetchYouthPlayerProfile(fedId) {
   try {
+    _youthSetStatus(`⏳ טוען פרופיל ${fedId} מהאיגוד... (ייתכן עיכוב של עד דקה בהפעלת השרת)`, false);
     const res = await fetch(`https://chess-manager-7wkr.onrender.com/api/player-profile?fedId=${fedId}`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      _youthSetStatus(`❌ שגיאה בטעינת פרופיל ${fedId}: HTTP ${res.status}`, true);
+      return false;
+    }
     const data = await res.json();
+    if (!data.birthYear) {
+      _youthSetStatus(`⚠️ הפרופיל של ${fedId} חזר ללא שנת לידה — ייתכן שגיאת פרסור`, true);
+    }
     const update = { ...data, profileTs: Date.now() };
     await db.ref(`youthPlayers/${fedId}`).update(update);
     _youthPlayers[String(fedId)] = { ..._youthPlayers[String(fedId)], ...update };
-  } catch(e) { console.error('fetchYouthPlayerProfile', fedId, e); }
+    return true;
+  } catch(e) {
+    _youthSetStatus(`❌ שגיאת רשת בטעינת פרופיל ${fedId}: ${e.message}`, true);
+    console.error('fetchYouthPlayerProfile', fedId, e);
+    return false;
+  }
 }
 
 function switchYouthCardTab(btn, showId, hideId) {

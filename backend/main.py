@@ -43,6 +43,24 @@ def fetch_url(url: str) -> str:
     return resp.text
 
 
+def fetch_post(url: str, data: dict) -> str:
+    if ALLOWED_DOMAIN not in url:
+        raise ValueError("Domain not allowed")
+    post_headers = {**HEADERS, "Content-Type": "application/x-www-form-urlencoded"}
+    resp = cf_requests.post(url, data=data, impersonate="firefox120", timeout=30, headers=post_headers)
+    resp.raise_for_status()
+    return resp.text
+
+
+def get_form_state(soup) -> dict:
+    state = {}
+    for name in ("__VIEWSTATE", "__VIEWSTATEGENERATOR", "__EVENTVALIDATION", "__VIEWSTATEENCRYPTED"):
+        el = soup.find("input", {"name": name})
+        if el:
+            state[name] = el.get("value", "")
+    return state
+
+
 def clean_text(tag) -> str:
     return re.sub(r'\s+', ' ', tag.get_text(separator=' ')).strip()
 
@@ -574,7 +592,7 @@ def clear_team_cache(teamId: int = Query(None)):
         return {"cleared": keys}
 
 
-def parse_player_profile(html: str, fed_id: int) -> dict:
+def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
     """Parse individual player profile from chess.org.il Player.aspx page.
 
     The page puts all personal info in one large text blob inside PlayerFormView,
@@ -621,47 +639,85 @@ def parse_player_profile(html: str, fed_id: int) -> dict:
 
         # Gender is not explicit; infer from player number pattern or leave absent
 
-    # ── Tournament history from TournamentsGridView ─────────────────────────────
+    # ── Tournament history from TournamentsGridView (all pages) ─────────────────
     # Columns: תאריך התחלה | תאריך עדכון מד כושר | תחרות | משחקים | נקודות | רמת ביצוע | תוצאה | שינוי מד כושר
-    tourn_table = soup.find("table", id=re.compile(r"TournamentsGridView", re.I))
-    tournaments = []
-    if tourn_table:
-        for tr in tourn_table.find_all("tr")[1:]:
-            cells = [clean_text(td) for td in tr.find_all("td")]
-            if len(cells) < 3 or not cells[0]:
-                continue
-            rc_raw = cells[7].strip() if len(cells) > 7 else ""
-            # Format: "11.8+" or "49.4-" or plain "0"
-            rc_num = None
-            m = re.search(r"([\d.]+)([+-])$", rc_raw)
-            if m:
-                rc_num = float(m.group(1)) if m.group(2) == "+" else -float(m.group(1))
-            elif re.fullmatch(r"-?\d+(\.\d+)?", rc_raw):
-                rc_num = float(rc_raw)
-            tournaments.append({
-                "date":           cells[0],
-                "name":           cells[2] if len(cells) > 2 else "",
-                "games":          cells[3] if len(cells) > 3 else "",
-                "points":         cells[4] if len(cells) > 4 else "",
-                "performance":    cells[5] if len(cells) > 5 else "",
-                "result":         cells[6] if len(cells) > 6 else "",
-                "ratingChange":   rc_num,
-                "ratingChangeRaw": rc_raw,
-            })
+    GRID_RE = re.compile(r"TournamentsGridView", re.I)
+    # UniqueID uses $ separators (table id uses _)
+    tourn_table = soup.find("table", id=GRID_RE)
+    tournaments, max_page = _parse_tourn_rows(tourn_table)
+
+    if max_page > 1 and url:
+        grid_unique_id = (tourn_table["id"].replace("_", "$")
+                         if tourn_table and tourn_table.get("id") else
+                         "ctl00$ContentPlaceHolder1$PlayerFormView$TournamentsGridView")
+        form_state = get_form_state(soup)
+        for page_num in range(2, max_page + 1):
+            try:
+                post_data = {**form_state,
+                             "__EVENTTARGET": grid_unique_id,
+                             "__EVENTARGUMENT": f"Page${page_num}"}
+                page_html  = fetch_post(url, post_data)
+                page_soup  = BeautifulSoup(page_html, "html.parser")
+                page_table = page_soup.find("table", id=GRID_RE)
+                page_rows, _ = _parse_tourn_rows(page_table)
+                tournaments.extend(page_rows)
+                form_state = get_form_state(page_soup)
+            except Exception as exc:
+                print(f"[player-profile] pagination page {page_num} failed: {exc}")
+                break
 
     profile["tournaments"] = tournaments
     return profile
 
 
+def _parse_tourn_rows(tourn_table) -> tuple:
+    """Return (list_of_tournament_dicts, max_page_number)."""
+    tournaments = []
+    max_page = 1
+    if not tourn_table:
+        return tournaments, max_page
+    for tr in tourn_table.find_all("tr")[1:]:
+        cells = [clean_text(td) for td in tr.find_all("td")]
+        if not cells:
+            continue
+        # Pager row — single wide cell containing page links
+        if len(cells) == 1:
+            for a in tr.find_all("a"):
+                txt = a.get_text(strip=True)
+                if txt.isdigit():
+                    max_page = max(max_page, int(txt))
+            continue
+        if len(cells) < 3 or not cells[0]:
+            continue
+        rc_raw = cells[7].strip() if len(cells) > 7 else ""
+        rc_num = None
+        m = re.search(r"([\d.]+)([+-])$", rc_raw)
+        if m:
+            rc_num = float(m.group(1)) if m.group(2) == "+" else -float(m.group(1))
+        elif re.fullmatch(r"-?\d+(\.\d+)?", rc_raw):
+            rc_num = float(rc_raw)
+        tournaments.append({
+            "date":            cells[0],
+            "name":            cells[2] if len(cells) > 2 else "",
+            "games":           cells[3] if len(cells) > 3 else "",
+            "points":          cells[4] if len(cells) > 4 else "",
+            "performance":     cells[5] if len(cells) > 5 else "",
+            "result":          cells[6] if len(cells) > 6 else "",
+            "ratingChange":    rc_num,
+            "ratingChangeRaw": rc_raw,
+        })
+    return tournaments, max_page
+
+
 @app.get("/api/player-profile")
 def player_profile(fedId: int = Query(...)):
-    """Fetch and parse a player profile from chess.org.il."""
+    """Fetch and parse a player profile from chess.org.il (all tournament pages)."""
     url = f"https://www.chess.org.il/Players/Player.aspx?Id={fedId}"
     try:
         html = fetch_url(url)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
-    data = parse_player_profile(html, fedId)
+    data = parse_player_profile(html, fedId, url=url)
     return JSONResponse(content=data)
 
 
