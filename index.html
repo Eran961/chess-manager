@@ -12205,9 +12205,12 @@ async function fetchYouthPlayerProfile(fedId) {
   }
 }
 
-function switchYouthCardTab(btn, showId, hideId) {
-  document.getElementById(showId).style.display = '';
-  document.getElementById(hideId).style.display = 'none';
+function switchYouthCardTab(btn, showId) {
+  const showEl = document.getElementById(showId);
+  if (!showEl) return;
+  const paneWrapper = showEl.parentElement;
+  if (paneWrapper) Array.from(paneWrapper.children).forEach(el => { el.style.display = 'none'; });
+  showEl.style.display = '';
   btn.parentElement.querySelectorAll('button').forEach(b => { b.style.background = '#f7fafc'; b.style.color = '#4a5568'; });
   btn.style.background = '#553c9a'; btn.style.color = 'white';
 }
@@ -12279,6 +12282,91 @@ function renderYouthCard(p) {
     ? `<div style="max-height:220px;overflow-y:auto">${items.map((l, i) => renderLeagueRow(l, i)).join('')}</div>`
     : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">לא נמצאו משחקי ליגה</div>`;
 
+  const renderRatingTab = (ratingHistory) => {
+    const history = (ratingHistory || []).filter(r => r.date >= YOUTH_FROM && r.date <= today);
+    if (!history.length) {
+      return `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${p.profileTs ? 'לא נמצאו נתוני מד כושר' : '⏳ טוען...'}</div>`;
+    }
+    const chrono = [...history].sort((a, b) => a.date.localeCompare(b.date));
+    const ratings = chrono.map(r => r.rating);
+    const pad = 20;
+    const minR = Math.min(...ratings) - pad;
+    const maxR = Math.max(...ratings) + pad;
+    const W = 280, H = 120, PL = 38, PR = 8, PT = 10, PB = 26;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const n = chrono.length;
+    const xPos = i => PL + (n < 2 ? cW / 2 : (i / (n - 1)) * cW);
+    const yPos = r => PT + (1 - (r - minR) / (maxR - minR)) * cH;
+    const pts = chrono.map((r, i) => [xPos(i), yPos(r.rating)]);
+    let linePath = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+      const cx = (x1 - x0) * 0.4;
+      linePath += ` C${x0+cx},${y0} ${x1-cx},${y1} ${x1},${y1}`;
+    }
+    const areaPath = linePath + ` L${pts[n-1][0]},${PT+cH} L${PL},${PT+cH} Z`;
+    const rRange = maxR - minR;
+    const gStep = rRange > 150 ? 50 : rRange > 60 ? 25 : 20;
+    const firstG = Math.ceil(minR / gStep) * gStep;
+    let grids = '';
+    for (let g = firstG; g <= maxR; g += gStep) {
+      const gy = yPos(g);
+      grids += `<line x1="${PL}" y1="${gy}" x2="${W-PR}" y2="${gy}" stroke="#ede9ff" stroke-width="0.8"/>`;
+      grids += `<text x="${PL-3}" y="${gy+3.5}" font-size="7.5" fill="#b0a8d0" text-anchor="end">${g}</text>`;
+    }
+    const lEvery = Math.max(1, Math.ceil(n / 5));
+    let xLabels = '';
+    const monthHe = ['ינו','פבר','מרץ','אפר','מאי','יוני','יול','אוג','ספט','אוק','נוב','דצמ'];
+    chrono.forEach((r, i) => {
+      if (i % lEvery === 0 || i === n - 1) {
+        const [yr, mo] = r.date.split('-');
+        xLabels += `<text x="${xPos(i)}" y="${H-5}" font-size="7.5" fill="#b0a8d0" text-anchor="middle">${monthHe[+mo-1]} ${yr.slice(2)}</text>`;
+      }
+    });
+    const latestRating = ratings[ratings.length - 1];
+    let dots = '';
+    pts.forEach(([x, y], i) => {
+      const r = chrono[i];
+      const isLatest = i === n - 1;
+      const chgStr = r.change > 0 ? `+${r.change}` : `${r.change}`;
+      dots += `<circle cx="${x}" cy="${y}" r="${isLatest ? 5 : 3.5}" fill="${isLatest ? '#553c9a' : '#9f7aea'}" stroke="white" stroke-width="1.5"><title>${r.date}: ${r.rating} (${chgStr})</title></circle>`;
+    });
+    const svgChart = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+      <defs><linearGradient id="rg-${p.fedId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#805ad5" stop-opacity="0.3"/><stop offset="100%" stop-color="#805ad5" stop-opacity="0.02"/>
+      </linearGradient></defs>
+      ${grids}
+      <path d="${areaPath}" fill="url(#rg-${p.fedId})" stroke="none"/>
+      <path d="${linePath}" fill="none" stroke="#6b46c1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dots}${xLabels}
+    </svg>`;
+    const totalChange = history.reduce((s, r) => s + (r.change || 0), 0);
+    const tcStr = totalChange > 0 ? `+${totalChange}` : `${totalChange}`;
+    const tcColor = totalChange > 0 ? '#276749' : totalChange < 0 ? '#c53030' : '#718096';
+    const listItems = [...history].sort((a, b) => b.date.localeCompare(a.date)).map(r => {
+      const [yr, mo] = r.date.split('-');
+      const label = `${monthHe[+mo-1]} ${yr}`;
+      const chgStr = r.change > 0 ? `+${r.change}` : `${r.change}`;
+      const chgColor = r.change > 0 ? '#276749' : r.change < 0 ? '#c53030' : '#718096';
+      return `<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid #f7fafc;font-size:12px">
+        <div style="flex:1;color:#4a5568;font-weight:600">${label}</div>
+        <div style="font-weight:800;color:#553c9a;min-width:34px;text-align:center">${r.rating}</div>
+        <div style="font-weight:800;color:${chgColor};min-width:32px;text-align:right">${chgStr}</div>
+        ${r.games != null ? `<div style="font-size:10px;color:#a0aec0;min-width:22px;text-align:center">${r.games}m</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div style="padding:2px 0">
+      <div style="background:linear-gradient(160deg,#f3f0ff 0%,#faf5ff 100%);border-radius:10px;padding:10px 12px 6px;margin-bottom:10px;border:1px solid #e9d8fd">
+        ${svgChart}
+        <div style="display:flex;justify-content:space-between;padding-top:4px">
+          <div style="font-size:10px;color:#a0aec0">${chrono[0].date.slice(0,7)} → היום</div>
+          <div style="font-size:10px;font-weight:700;color:${tcColor}">${tcStr} סה"כ</div>
+        </div>
+      </div>
+      <div style="max-height:160px;overflow-y:auto">${listItems}</div>
+    </div>`;
+  };
+
   const statsRow = allTourns.length ? `
     <div style="display:flex;gap:8px;margin-top:12px">
       <div style="flex:1;background:#f7fafc;border-radius:8px;padding:8px;text-align:center">
@@ -12291,20 +12379,28 @@ function renderYouthCard(p) {
       </div>` : ''}
     </div>` : '';
 
-  const tabsSection = (allTourns.length || leagues.length || p.profileTs) ? `
+  const ratingHistory = p.ratingHistory || [];
+  const tabsSection = (allTourns.length || leagues.length || ratingHistory.length || p.profileTs) ? `
     <div style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:12px">
-      <div style="display:flex;gap:6px;margin-bottom:10px">
-        <button onclick="switchYouthCardTab(this,'yct-${p.fedId}','ycl-${p.fedId}')"
-          style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#553c9a;color:white;cursor:pointer">
+      <div style="display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap">
+        <button onclick="switchYouthCardTab(this,'yct-${p.fedId}')"
+          style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#553c9a;color:white;cursor:pointer">
           🏆 תחרויות (${allTourns.length})
         </button>
-        <button onclick="switchYouthCardTab(this,'ycl-${p.fedId}','yct-${p.fedId}')"
-          style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
+        <button onclick="switchYouthCardTab(this,'ycl-${p.fedId}')"
+          style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
           🏅 ליגות (${leagues.length})
         </button>
+        <button onclick="switchYouthCardTab(this,'ycr-${p.fedId}')"
+          style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
+          📈 מד כושר (${ratingHistory.filter(r=>r.date>=YOUTH_FROM&&r.date<=today).length})
+        </button>
       </div>
-      <div id="yct-${p.fedId}">${renderTabList(allTourns, 'לא נמצאו תחרויות')}</div>
-      <div id="ycl-${p.fedId}" style="display:none">${renderLeagueList(leagues)}</div>
+      <div>
+        <div id="yct-${p.fedId}">${renderTabList(allTourns, 'לא נמצאו תחרויות')}</div>
+        <div id="ycl-${p.fedId}" style="display:none">${renderLeagueList(leagues)}</div>
+        <div id="ycr-${p.fedId}" style="display:none">${renderRatingTab(ratingHistory)}</div>
+      </div>
     </div>` : (!p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>' : '');
 
   return `
