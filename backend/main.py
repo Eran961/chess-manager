@@ -741,6 +741,20 @@ def debug_player(fedId: int = Query(...)):
     return JSONResponse(content={"headings": headings, "tables": tables})
 
 
+@app.get("/api/debug-player-links")
+def debug_player_links(fedId: int = Query(...)):
+    """Return all links on a player page — to find tab URLs."""
+    url = f"https://www.chess.org.il/Players/Player.aspx?Id={fedId}"
+    try:
+        html = fetch_url(url)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    soup = BeautifulSoup(html, "html.parser")
+    links = [{"text": a.get_text(strip=True), "href": a.get("href",""), "onclick": a.get("onclick","")}
+             for a in soup.find_all("a") if a.get_text(strip=True)]
+    return JSONResponse(content={"links": links})
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
