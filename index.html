@@ -12399,6 +12399,19 @@ function renderYouthCard(p) {
 
   const leagues = p.leagues || [];
 
+  // Category helpers
+  const cats = p.tournamentCategories || {};
+  const toKey = n => (n||'').replace(/[.#$\/\[\]]/g,'_').substring(0,100);
+  const autoClassify = n => {
+    if (!n) return null;
+    if (!/אליפות\s*(ישראל|הארץ)/.test(n)) return null;
+    return /קבוצות/.test(n) ? 'teams' : 'individuals';
+  };
+  const getItemCat = (n, def) => cats[toKey(n)] || autoClassify(n) || def;
+  const buckets = { tournaments: [], leagues: [], individuals: [], teams: [] };
+  allTourns.forEach(t => { const c = getItemCat(t.name||t['תחרות']||'','tournaments'); (buckets[c]||buckets.tournaments).push(t); });
+  leagues.forEach(l => { const c = getItemCat(l['ליגה']||'','leagues'); (buckets[c]||buckets.leagues).push({...l,_isLeague:true}); });
+
   const totalRc = allTourns.reduce((s, t) => {
     const v = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChange) || 0;
     return s + (isNaN(v) ? 0 : v);
@@ -12411,12 +12424,15 @@ function renderYouthCard(p) {
     const rcNum = typeof t.ratingChange === 'number' ? t.ratingChange : parseFloat(t.ratingChangeRaw || t.ratingChange);
     const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
     const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
+    const itemKey = toKey(name);
+    const curCat  = getItemCat(name, 'tournaments');
     return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
       <div style="font-size:10px;font-weight:700;color:#c0bcd4;min-width:18px;text-align:center;flex-shrink:0">${idx + 1}</div>
       <div style="flex:1;font-weight:600;color:#2d3748;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
       <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0">${date}</div>
       <div style="font-weight:700;color:#1a4a8a;min-width:32px;text-align:center;flex-shrink:0">${score}</div>
       ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:32px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:32px"></div>'}
+      <button onclick="window.openCatPicker('${p.fedId}','${itemKey}','${curCat}')" style="background:none;border:none;cursor:pointer;color:#c0bcd4;font-size:10px;padding:1px 2px;flex-shrink:0" title="שנה קטגוריה">✏️</button>
     </div>`;
   };
 
@@ -12432,6 +12448,8 @@ function renderYouthCard(p) {
     const rcNum  = parseFloat(rcRaw);
     const rcColor = rcNum > 0 ? '#276749' : rcNum < 0 ? '#c53030' : '#718096';
     const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
+    const itemKey = toKey(lName);
+    const curCat  = getItemCat(lName, 'leagues');
     return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #f7fafc;font-size:12px">
       <div style="font-size:10px;font-weight:700;color:#c0bcd4;min-width:18px;text-align:center;flex-shrink:0;padding-top:3px">${idx + 1}</div>
       <div style="flex:1;min-width:0">
@@ -12440,12 +12458,17 @@ function renderYouthCard(p) {
       </div>
       <div style="font-weight:700;color:#1a4a8a;min-width:42px;text-align:center;flex-shrink:0;white-space:nowrap">${score}</div>
       ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:36px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:36px"></div>'}
+      <button onclick="window.openCatPicker('${p.fedId}','${itemKey}','${curCat}')" style="background:none;border:none;cursor:pointer;color:#c0bcd4;font-size:10px;padding:1px 2px;flex-shrink:0" title="שנה קטגוריה">✏️</button>
     </div>`;
   };
 
   const renderLeagueList = items => items.length
     ? `<div style="max-height:220px;overflow-y:auto">${items.map((l, i) => renderLeagueRow(l, i)).join('')}</div>`
     : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">לא נמצאו משחקי ליגה</div>`;
+
+  const renderMixedList = (items, emptyMsg) => items.length
+    ? `<div style="max-height:220px;overflow-y:auto">${items.map((item, i) => item._isLeague ? renderLeagueRow(item, i) : renderRow(item, i)).join('')}</div>`
+    : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${emptyMsg}</div>`;
 
   const renderRatingTab = (ratingHistory) => {
     const history = (ratingHistory || []).filter(r => r.date >= YOUTH_FROM && r.date <= today);
@@ -12561,11 +12584,19 @@ function renderYouthCard(p) {
       <div style="display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap">
         <button onclick="switchYouthCardTab(this,'yct-${p.fedId}')"
           style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#553c9a;color:white;cursor:pointer">
-          🏆 תחרויות (${allTourns.length})
+          🏆 תחרויות (${buckets.tournaments.length})
         </button>
         <button onclick="switchYouthCardTab(this,'ycl-${p.fedId}')"
           style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
-          🏅 ליגות (${leagues.length})
+          🏅 ליגות (${buckets.leagues.length})
+        </button>
+        <button onclick="switchYouthCardTab(this,'yci-${p.fedId}')"
+          style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
+          🥇 אליפויות ליחידים (${buckets.individuals.length})
+        </button>
+        <button onclick="switchYouthCardTab(this,'ycq-${p.fedId}')"
+          style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
+          👥 אליפויות קבוצות (${buckets.teams.length})
         </button>
         <button onclick="switchYouthCardTab(this,'ycr-${p.fedId}')"
           style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#4a5568;cursor:pointer">
@@ -12573,8 +12604,10 @@ function renderYouthCard(p) {
         </button>
       </div>
       <div>
-        <div id="yct-${p.fedId}">${renderTabList(allTourns, 'לא נמצאו תחרויות')}</div>
-        <div id="ycl-${p.fedId}" style="display:none">${renderLeagueList(leagues)}</div>
+        <div id="yct-${p.fedId}">${renderTabList(buckets.tournaments, 'לא נמצאו תחרויות')}</div>
+        <div id="ycl-${p.fedId}" style="display:none">${renderLeagueList(buckets.leagues)}</div>
+        <div id="yci-${p.fedId}" style="display:none">${renderMixedList(buckets.individuals, 'לא נמצאו אליפויות ליחידים')}</div>
+        <div id="ycq-${p.fedId}" style="display:none">${renderMixedList(buckets.teams, 'לא נמצאו אליפויות קבוצות')}</div>
         <div id="ycr-${p.fedId}" style="display:none">${renderRatingTab(ratingHistory)}</div>
       </div>
     </div>` : (!p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>' : '');
@@ -12623,6 +12656,59 @@ function renderYouthCard(p) {
       </div>
     </div>`;
 }
+
+function openCatPicker(fedId, itemKey, curCat) {
+  const existing = document.getElementById('cat-picker-popup');
+  if (existing) { existing.remove(); return; }
+  const CATS = [
+    { key: 'tournaments', label: '🏆 תחרויות' },
+    { key: 'leagues',     label: '🏅 ליגות' },
+    { key: 'individuals', label: '🥇 אליפויות ליחידים' },
+    { key: 'teams',       label: '👥 אליפויות קבוצות' },
+  ];
+  const popup = document.createElement('div');
+  popup.id = 'cat-picker-popup';
+  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:9999;min-width:260px;font-family:inherit;direction:rtl';
+  popup.innerHTML = `
+    <div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:14px">שנה קטגוריה</div>
+    ${CATS.map(c => `
+      <button onclick="window.setCategoryForItem('${fedId}','${itemKey}','${c.key}')"
+        style="display:block;width:100%;text-align:right;padding:10px 14px;margin-bottom:6px;
+               border-radius:8px;border:2px solid ${c.key===curCat?'#553c9a':'#e2e8f0'};
+               background:${c.key===curCat?'#f3f0ff':'white'};
+               color:${c.key===curCat?'#553c9a':'#2d3748'};
+               font-weight:${c.key===curCat?'700':'600'};cursor:pointer;font-size:13px;font-family:inherit">
+        ${c.label}${c.key===curCat?' ✓':''}
+      </button>`).join('')}
+    <button onclick="document.getElementById('cat-picker-popup')?.remove()"
+      style="display:block;width:100%;text-align:center;padding:8px;margin-top:8px;
+             border-radius:8px;border:1px solid #e2e8f0;background:#f7fafc;color:#718096;
+             cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">
+      ביטול
+    </button>`;
+  document.body.appendChild(popup);
+  setTimeout(() => {
+    const close = e => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 50);
+}
+window.openCatPicker = openCatPicker;
+
+async function setCategoryForItem(fedId, itemKey, category) {
+  document.getElementById('cat-picker-popup')?.remove();
+  try {
+    await db.ref(`youthPlayers/${fedId}/tournamentCategories/${itemKey}`).set(category);
+    if (_youthPlayers[String(fedId)]) {
+      if (!_youthPlayers[String(fedId)].tournamentCategories) _youthPlayers[String(fedId)].tournamentCategories = {};
+      _youthPlayers[String(fedId)].tournamentCategories[itemKey] = category;
+    }
+    renderYouthPlayers();
+  } catch(e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+window.setCategoryForItem = setCategoryForItem;
+
 window.syncAllTeamsData = syncAllTeamsData;
 window.loadLeagueStars = loadLeagueStars;
 window.addClubTeamManualTyped = addClubTeamManualTyped;
