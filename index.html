@@ -12399,8 +12399,9 @@ function renderYouthCard(p) {
 
   const leagues = p.leagues || [];
 
-  // Category helpers
+  // Category + board number helpers
   const cats = p.tournamentCategories || {};
+  const boardNums = p.boardNumbers || {};
   const toKey = n => (n||'').replace(/[.#$\/\[\]]/g,'_').substring(0,100);
   const autoClassify = n => {
     if (!n) return null;
@@ -12417,7 +12418,7 @@ function renderYouthCard(p) {
     return s + (isNaN(v) ? 0 : v);
   }, 0);
 
-  const renderRow = (t, idx) => {
+  const renderRow = (t, idx, showBoard = false) => {
     const name  = t.name || t['תחרות'] || '—';
     const date  = t.date || '—';
     const score = (t.points != null && t.games != null) ? `${t.points}/${t.games}` : (t.result || '—');
@@ -12426,12 +12427,22 @@ function renderYouthCard(p) {
     const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
     const itemKey = toKey(name);
     const curCat  = getItemCat(name, 'tournaments');
-    return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
-      <div style="font-size:10px;font-weight:700;color:#c0bcd4;min-width:18px;text-align:center;flex-shrink:0">${idx + 1}</div>
-      <div style="flex:1;font-weight:600;color:#2d3748;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
-      <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0">${date}</div>
-      <div style="font-weight:700;color:#1a4a8a;min-width:32px;text-align:center;flex-shrink:0">${score}</div>
-      ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:32px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:32px"></div>'}
+    const bn = showBoard ? boardNums[itemKey] : null;
+    const boardEl = showBoard
+      ? `<button onclick="window.openBoardNumEditor('${p.fedId}','${itemKey}',${bn != null ? bn : 'null'})"
+           style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;color:${bn != null ? '#553c9a' : '#c0bcd4'};font-weight:700;margin-top:2px;display:block;text-align:right">
+           ${bn != null ? `לוח ${bn} ✏️` : '+ לוח'}
+         </button>`
+      : '';
+    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12px">
+      <div style="font-size:10px;font-weight:700;color:#c0bcd4;min-width:18px;text-align:center;flex-shrink:0;padding-top:2px">${idx + 1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;color:#2d3748;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
+        ${boardEl}
+      </div>
+      <div style="color:#a0aec0;white-space:nowrap;flex-shrink:0;padding-top:2px">${date}</div>
+      <div style="font-weight:700;color:#1a4a8a;min-width:32px;text-align:center;flex-shrink:0;padding-top:2px">${score}</div>
+      ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:32px;text-align:right;flex-shrink:0;padding-top:2px">${rcText}</div>` : '<div style="min-width:32px"></div>'}
       <button onclick="window.openCatPicker('${p.fedId}','${itemKey}','${curCat}')" style="background:none;border:none;cursor:pointer;color:#c0bcd4;font-size:10px;padding:1px 2px;flex-shrink:0" title="שנה קטגוריה">✏️</button>
     </div>`;
   };
@@ -12440,7 +12451,7 @@ function renderYouthCard(p) {
     ? `<div style="max-height:220px;overflow-y:auto">${items.map((t, i) => renderRow(t, i)).join('')}</div>`
     : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${emptyMsg}</div>`;
 
-  const renderLeagueRow = (l, idx) => {
+  const renderLeagueRow = (l, idx, showBoard = false) => {
     const lName  = l['ליגה'] || '—';
     const team   = l['קבוצה'] || '';
     const score  = l['תוצאה'] || (l['נקודות'] ? `${l['נקודות']}/${l['משחקים']}` : '—');
@@ -12450,11 +12461,19 @@ function renderYouthCard(p) {
     const rcText  = !isNaN(rcNum) ? (rcNum > 0 ? `+${rcNum}` : `${rcNum}`) : '';
     const itemKey = toKey(lName);
     const curCat  = getItemCat(lName, 'leagues');
+    const bn = showBoard ? boardNums[itemKey] : null;
+    const boardEl = showBoard
+      ? `<button onclick="window.openBoardNumEditor('${p.fedId}','${itemKey}',${bn != null ? bn : 'null'})"
+           style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;color:${bn != null ? '#553c9a' : '#c0bcd4'};font-weight:700;margin-top:2px;display:block;text-align:right">
+           ${bn != null ? `לוח ${bn} ✏️` : '+ לוח'}
+         </button>`
+      : '';
     return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #f7fafc;font-size:12px">
       <div style="font-size:10px;font-weight:700;color:#c0bcd4;min-width:18px;text-align:center;flex-shrink:0;padding-top:3px">${idx + 1}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;color:#2d3748;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${lName}">${lName}</div>
         ${team ? `<div style="font-size:10px;color:#718096;margin-top:1px">${team}</div>` : ''}
+        ${boardEl}
       </div>
       <div style="font-weight:700;color:#1a4a8a;min-width:42px;text-align:center;flex-shrink:0;white-space:nowrap">${score}</div>
       ${rcText ? `<div style="font-weight:800;color:${rcColor};min-width:36px;text-align:right;flex-shrink:0">${rcText}</div>` : '<div style="min-width:36px"></div>'}
@@ -12463,11 +12482,11 @@ function renderYouthCard(p) {
   };
 
   const renderLeagueList = items => items.length
-    ? `<div style="max-height:220px;overflow-y:auto">${items.map((l, i) => renderLeagueRow(l, i)).join('')}</div>`
+    ? `<div style="max-height:220px;overflow-y:auto">${items.map((l, i) => renderLeagueRow(l, i, true)).join('')}</div>`
     : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">לא נמצאו משחקי ליגה</div>`;
 
-  const renderMixedList = (items, emptyMsg) => items.length
-    ? `<div style="max-height:220px;overflow-y:auto">${items.map((item, i) => item._isLeague ? renderLeagueRow(item, i) : renderRow(item, i)).join('')}</div>`
+  const renderMixedList = (items, emptyMsg, showBoard = false) => items.length
+    ? `<div style="max-height:220px;overflow-y:auto">${items.map((item, i) => item._isLeague ? renderLeagueRow(item, i, showBoard) : renderRow(item, i, showBoard)).join('')}</div>`
     : `<div style="padding:20px;text-align:center;color:#a0aec0;font-size:12px">${emptyMsg}</div>`;
 
   const renderRatingTab = (ratingHistory) => {
@@ -12606,8 +12625,8 @@ function renderYouthCard(p) {
       <div>
         <div id="yct-${p.fedId}">${renderTabList(buckets.tournaments, 'לא נמצאו תחרויות')}</div>
         <div id="ycl-${p.fedId}" style="display:none">${renderLeagueList(buckets.leagues)}</div>
-        <div id="yci-${p.fedId}" style="display:none">${renderMixedList(buckets.individuals, 'לא נמצאו אליפויות ליחידים')}</div>
-        <div id="ycq-${p.fedId}" style="display:none">${renderMixedList(buckets.teams, 'לא נמצאו אליפויות קבוצות')}</div>
+        <div id="yci-${p.fedId}" style="display:none">${renderMixedList(buckets.individuals, 'לא נמצאו אליפויות ליחידים', false)}</div>
+        <div id="ycq-${p.fedId}" style="display:none">${renderMixedList(buckets.teams, 'לא נמצאו אליפויות קבוצות', true)}</div>
         <div id="ycr-${p.fedId}" style="display:none">${renderRatingTab(ratingHistory)}</div>
       </div>
     </div>` : (!p.profileTs ? '<div style="margin-top:8px;font-size:12px;color:#a0aec0">⏳ טוען נתוני תחרויות...</div>' : '');
@@ -12633,6 +12652,29 @@ function renderYouthCard(p) {
       </div>
     </div>`;
 
+  const ci = p.clubInfo || {};
+  const ciRows = [
+    ci.clubGroup      ? ['חוג במועדון', ci.clubGroup]      : null,
+    ci.personalCoach  ? ['מאמן אישי',   ci.personalCoach]   : null,
+  ].filter(Boolean);
+  const clubInfoHtml = `
+    <div style="margin-top:10px;background:#f0f9ff;border-radius:10px;padding:10px 14px;border:1px solid #bee3f8">
+      <div style="display:flex;justify-content:space-between;align-items:center;${ciRows.length ? 'margin-bottom:8px' : ''}">
+        <div style="font-size:11px;font-weight:700;color:#2b6cb0">📋 מידע מועדון</div>
+        <button onclick="window.openClubInfoEditor('${p.fedId}')"
+          style="background:none;border:1px solid #90cdf4;border-radius:6px;cursor:pointer;font-size:10px;color:#2b6cb0;padding:2px 8px;font-weight:600;font-family:inherit">
+          ✏️ עריכה
+        </button>
+      </div>
+      ${ciRows.length
+        ? `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:12px">
+             ${ciRows.map(([label,value]) => `
+               <span style="color:#4a5568;font-weight:600;white-space:nowrap">${label}</span>
+               <span style="color:#1a202c;font-weight:600">${value}</span>`).join('')}
+           </div>`
+        : `<div style="font-size:11px;color:#90cdf4;text-align:center;padding:4px 0">לחץ עריכה להוספת מידע מועדון</div>`}
+    </div>`;
+
   return `
     <div style="background:white;border:1.5px solid #e2e8f0;border-radius:14px;margin-bottom:14px;overflow:hidden">
       <div style="padding:16px 18px">
@@ -12651,6 +12693,7 @@ function renderYouthCard(p) {
           </div>
         </div>
         ${dryDataHtml}
+        ${clubInfoHtml}
         ${statsRow}
         ${tabsSection}
       </div>
@@ -12708,6 +12751,116 @@ async function setCategoryForItem(fedId, itemKey, category) {
   }
 }
 window.setCategoryForItem = setCategoryForItem;
+
+function openBoardNumEditor(fedId, itemKey, currentNum) {
+  const existing = document.getElementById('board-num-popup');
+  if (existing) { existing.remove(); return; }
+  const popup = document.createElement('div');
+  popup.id = 'board-num-popup';
+  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:9999;min-width:220px;font-family:inherit;direction:rtl';
+  popup.innerHTML = `
+    <div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:14px">מספר לוח</div>
+    <input id="board-num-input" type="number" min="1" max="20" value="${currentNum != null ? currentNum : ''}"
+      placeholder="מספר לוח (1, 2, 3...)"
+      style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;text-align:center;direction:ltr">
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="window.saveBoardNumber('${fedId}','${itemKey}',document.getElementById('board-num-input').value)"
+        style="flex:1;padding:9px;background:#553c9a;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+        שמור
+      </button>
+      ${currentNum != null ? `<button onclick="window.saveBoardNumber('${fedId}','${itemKey}','')"
+        style="padding:9px 12px;background:#fff5f5;color:#c53030;border:1px solid #fed7d7;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+        מחק
+      </button>` : ''}
+      <button onclick="document.getElementById('board-num-popup')?.remove()"
+        style="padding:9px 12px;background:#f7fafc;color:#718096;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+        ביטול
+      </button>
+    </div>`;
+  document.body.appendChild(popup);
+  popup.querySelector('#board-num-input').focus();
+  setTimeout(() => {
+    const close = e => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 50);
+}
+window.openBoardNumEditor = openBoardNumEditor;
+
+async function saveBoardNumber(fedId, itemKey, val) {
+  document.getElementById('board-num-popup')?.remove();
+  const num = val === '' || val == null ? null : parseInt(val, 10);
+  try {
+    if (num === null) {
+      await db.ref(`youthPlayers/${fedId}/boardNumbers/${itemKey}`).remove();
+      if (_youthPlayers[String(fedId)]?.boardNumbers) delete _youthPlayers[String(fedId)].boardNumbers[itemKey];
+    } else {
+      await db.ref(`youthPlayers/${fedId}/boardNumbers/${itemKey}`).set(num);
+      if (_youthPlayers[String(fedId)]) {
+        if (!_youthPlayers[String(fedId)].boardNumbers) _youthPlayers[String(fedId)].boardNumbers = {};
+        _youthPlayers[String(fedId)].boardNumbers[itemKey] = num;
+      }
+    }
+    renderYouthPlayers();
+  } catch(e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+window.saveBoardNumber = saveBoardNumber;
+
+function openClubInfoEditor(fedId) {
+  const existing = document.getElementById('club-info-popup');
+  if (existing) { existing.remove(); return; }
+  const p = _youthPlayers[String(fedId)] || {};
+  const ci = p.clubInfo || {};
+  const popup = document.createElement('div');
+  popup.id = 'club-info-popup';
+  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:9999;min-width:280px;max-width:340px;width:90vw;font-family:inherit;direction:rtl';
+  popup.innerHTML = `
+    <div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:16px">📋 עריכת מידע מועדון</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:4px">חוג במועדון</div>
+        <input id="ci-clubGroup" type="text" value="${ci.clubGroup || ''}" placeholder="לדוגמה: גיל 10 — יום ראשון 17:00"
+          style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:4px">מאמן אישי</div>
+        <input id="ci-personalCoach" type="text" value="${ci.personalCoach || ''}" placeholder="שם המאמן"
+          style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="window.saveClubInfo('${fedId}')"
+        style="flex:1;padding:10px;background:#553c9a;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+        שמור
+      </button>
+      <button onclick="document.getElementById('club-info-popup')?.remove()"
+        style="padding:10px 14px;background:#f7fafc;color:#718096;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+        ביטול
+      </button>
+    </div>`;
+  document.body.appendChild(popup);
+  setTimeout(() => {
+    const close = e => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 50);
+}
+window.openClubInfoEditor = openClubInfoEditor;
+
+async function saveClubInfo(fedId) {
+  const clubGroup     = document.getElementById('ci-clubGroup')?.value.trim() || null;
+  const personalCoach = document.getElementById('ci-personalCoach')?.value.trim() || null;
+  document.getElementById('club-info-popup')?.remove();
+  const data = { clubGroup, personalCoach };
+  try {
+    await db.ref(`youthPlayers/${fedId}/clubInfo`).set(data);
+    if (_youthPlayers[String(fedId)]) _youthPlayers[String(fedId)].clubInfo = data;
+    renderYouthPlayers();
+  } catch(e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+window.saveClubInfo = saveClubInfo;
 
 window.syncAllTeamsData = syncAllTeamsData;
 window.loadLeagueStars = loadLeagueStars;
