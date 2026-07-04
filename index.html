@@ -12653,26 +12653,55 @@ function renderYouthCard(p) {
     </div>`;
 
   const ci = p.clubInfo || {};
-  const ciRows = [
-    ci.clubGroup      ? ['חוג במועדון', ci.clubGroup]      : null,
-    ci.personalCoach  ? ['מאמן אישי',   ci.personalCoach]   : null,
+  const goals = p.goals || {};
+
+  const motivColors = { 'גבוהה': ['#f0fff4','#276749'], 'בינונית': ['#fffbeb','#b7791f'], 'נמוכה': ['#fff5f5','#c53030'] };
+  const motivBadge = m => !m ? '' : `<span style="background:${(motivColors[m]||['#f7fafc','#718096'])[0]};color:${(motivColors[m]||['#f7fafc','#718096'])[1]};padding:2px 8px;border-radius:6px;font-weight:700;font-size:11px">${m}</span>`;
+  const yesNoSpan = v => v === true ? '<span style="color:#276749;font-weight:700">כן ✓</span>' : '<span style="color:#a0aec0;font-weight:600">לא</span>';
+  const ciRow = (lbl, val) => `<span style="color:#4a5568;font-weight:600;white-space:nowrap">${lbl}</span><span style="color:#1a202c;font-weight:600">${val}</span>`;
+
+  const ciFieldRows = [
+    ci.clubGroup                          ? ciRow('חוג במועדון',       ci.clubGroup)                          : '',
+    ci.personalCoach                      ? ciRow('מאמן אישי',         ci.personalCoach)                      : '',
+    ci.motivation                         ? ciRow('מוטיבציה',          motivBadge(ci.motivation))             : '',
+    ci.attendsFriday          != null     ? ciRow('ימי שישי',          yesNoSpan(ci.attendsFriday))           : '',
+    ci.attendsClubTournaments != null     ? ciRow('תחרויות מועדון',    yesNoSpan(ci.attendsClubTournaments))  : '',
+    ci.attendsNationalTournaments != null ? ciRow('תחרויות ארציות',    yesNoSpan(ci.attendsNationalTournaments)): '',
   ].filter(Boolean);
+  const ciHasData = ciFieldRows.length > 0 || !!ci.notes;
+
   const clubInfoHtml = `
     <div style="margin-top:10px;background:#f0f9ff;border-radius:10px;padding:10px 14px;border:1px solid #bee3f8">
-      <div style="display:flex;justify-content:space-between;align-items:center;${ciRows.length ? 'margin-bottom:8px' : ''}">
-        <div style="font-size:11px;font-weight:700;color:#2b6cb0">📋 מידע מועדון</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;${ciHasData ? 'margin-bottom:8px' : ''}">
+        <div style="font-size:11px;font-weight:700;color:#2b6cb0">📝 הערות מדריך</div>
         <button onclick="window.openClubInfoEditor('${p.fedId}')"
           style="background:none;border:1px solid #90cdf4;border-radius:6px;cursor:pointer;font-size:10px;color:#2b6cb0;padding:2px 8px;font-weight:600;font-family:inherit">
           ✏️ עריכה
         </button>
       </div>
-      ${ciRows.length
+      ${ciHasData
+        ? `${ciFieldRows.length ? `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:12px">${ciFieldRows.join('')}</div>` : ''}
+           ${ci.notes ? `<div style="margin-top:${ciFieldRows.length?'8':'0'}px;padding:7px 10px;background:#ebf8ff;border-radius:7px;font-size:12px;color:#2c5282;white-space:pre-wrap;line-height:1.5"><span style="font-weight:700">הערות: </span>${ci.notes}</div>` : ''}`
+        : `<div style="font-size:11px;color:#90cdf4;text-align:center;padding:4px 0">לחץ עריכה להוספת מידע</div>`}
+    </div>`;
+
+  const goalsHasData = !!(goals.primary || goals.secondary || goals.targetRating);
+  const goalsHtml = `
+    <div style="margin-top:10px;background:#f0fff4;border-radius:10px;padding:10px 14px;border:1px solid #c6f6d5">
+      <div style="display:flex;justify-content:space-between;align-items:center;${goalsHasData ? 'margin-bottom:8px' : ''}">
+        <div style="font-size:11px;font-weight:700;color:#276749">🎯 מטרות לשנה הקרובה</div>
+        <button onclick="window.openGoalsEditor('${p.fedId}')"
+          style="background:none;border:1px solid #9ae6b4;border-radius:6px;cursor:pointer;font-size:10px;color:#276749;padding:2px 8px;font-weight:600;font-family:inherit">
+          ✏️ עריכה
+        </button>
+      </div>
+      ${goalsHasData
         ? `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:12px">
-             ${ciRows.map(([label,value]) => `
-               <span style="color:#4a5568;font-weight:600;white-space:nowrap">${label}</span>
-               <span style="color:#1a202c;font-weight:600">${value}</span>`).join('')}
+             ${goals.primary   ? `<span style="color:#4a5568;font-weight:600;white-space:nowrap">מטרה ראשית</span><span style="color:#1a202c;font-weight:600">${goals.primary}</span>` : ''}
+             ${goals.secondary ? `<span style="color:#4a5568;font-weight:600;white-space:nowrap">מטרה משנית</span><span style="color:#1a202c;font-weight:600">${goals.secondary}</span>` : ''}
+             ${goals.targetRating ? `<span style="color:#4a5568;font-weight:600;white-space:nowrap">יעד מד כושר</span><span style="background:#c6f6d5;color:#276749;padding:2px 8px;border-radius:6px;font-weight:800;font-size:12px">${goals.targetRating}</span>` : ''}
            </div>`
-        : `<div style="font-size:11px;color:#90cdf4;text-align:center;padding:4px 0">לחץ עריכה להוספת מידע מועדון</div>`}
+        : `<div style="font-size:11px;color:#9ae6b4;text-align:center;padding:4px 0">לחץ עריכה להגדרת מטרות</div>`}
     </div>`;
 
   return `
@@ -12694,6 +12723,7 @@ function renderYouthCard(p) {
         </div>
         ${dryDataHtml}
         ${clubInfoHtml}
+        ${goalsHtml}
         ${statsRow}
         ${tabsSection}
       </div>
@@ -12810,24 +12840,36 @@ window.saveBoardNumber = saveBoardNumber;
 function openClubInfoEditor(fedId) {
   const existing = document.getElementById('club-info-popup');
   if (existing) { existing.remove(); return; }
-  const p = _youthPlayers[String(fedId)] || {};
-  const ci = p.clubInfo || {};
+  const pl = _youthPlayers[String(fedId)] || {};
+  const ci = pl.clubInfo || {};
+  const mv = ci.motivation || '';
+  const S = 'width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;background:white;box-sizing:border-box';
+  const L = t => `<div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:4px">${t}</div>`;
+  const YN = (id, v) => `<select id="${id}" style="${S}">
+    <option value="">לא ידוע</option>
+    <option value="yes"${v===true?' selected':''}>כן</option>
+    <option value="no"${v===false?' selected':''}>לא</option>
+  </select>`;
   const popup = document.createElement('div');
   popup.id = 'club-info-popup';
-  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:9999;min-width:280px;max-width:340px;width:90vw;font-family:inherit;direction:rtl';
+  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:9999;min-width:290px;max-width:360px;width:90vw;max-height:85vh;overflow-y:auto;font-family:inherit;direction:rtl';
   popup.innerHTML = `
-    <div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:16px">📋 עריכת מידע מועדון</div>
+    <div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:16px">📝 הערות מדריך</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:4px">חוג במועדון</div>
-        <input id="ci-clubGroup" type="text" value="${ci.clubGroup || ''}" placeholder="לדוגמה: גיל 10 — יום ראשון 17:00"
-          style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box">
+      <div>${L('חוג במועדון')}<input id="ci-clubGroup" type="text" value="${(ci.clubGroup||'').replace(/"/g,'&quot;')}" placeholder="לדוגמה: גיל 10 — יום ראשון 17:00" style="${S}"></div>
+      <div>${L('מאמן אישי')}<input id="ci-personalCoach" type="text" value="${(ci.personalCoach||'').replace(/"/g,'&quot;')}" placeholder="שם המאמן" style="${S}"></div>
+      <div>${L('מוטיבציה לשחמט')}
+        <select id="ci-motivation" style="${S}">
+          <option value=""${!mv?' selected':''}>לא הוגדר</option>
+          <option value="גבוהה"${mv==='גבוהה'?' selected':''}>גבוהה ⬆</option>
+          <option value="בינונית"${mv==='בינונית'?' selected':''}>בינונית ➡</option>
+          <option value="נמוכה"${mv==='נמוכה'?' selected':''}>נמוכה ⬇</option>
+        </select>
       </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:4px">מאמן אישי</div>
-        <input id="ci-personalCoach" type="text" value="${ci.personalCoach || ''}" placeholder="שם המאמן"
-          style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box">
-      </div>
+      <div>${L('משתתף בימי שישי?')}${YN('ci-friday', ci.attendsFriday)}</div>
+      <div>${L('משתתף בתחרויות מועדון?')}${YN('ci-clubTournaments', ci.attendsClubTournaments)}</div>
+      <div>${L('משתתף בתחרויות ארציות?')}${YN('ci-nationalTournaments', ci.attendsNationalTournaments)}</div>
+      <div>${L('הערות')}<textarea id="ci-notes" rows="3" placeholder="הערות חופשיות..." style="${S}">${(ci.notes||'').replace(/</g,'&lt;')}</textarea></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button onclick="window.saveClubInfo('${fedId}')"
@@ -12848,19 +12890,79 @@ function openClubInfoEditor(fedId) {
 window.openClubInfoEditor = openClubInfoEditor;
 
 async function saveClubInfo(fedId) {
-  const clubGroup     = document.getElementById('ci-clubGroup')?.value.trim() || null;
-  const personalCoach = document.getElementById('ci-personalCoach')?.value.trim() || null;
+  const getYN = id => { const v = document.getElementById(id)?.value; return v==='yes' ? true : v==='no' ? false : null; };
+  const data = {
+    clubGroup:                    document.getElementById('ci-clubGroup')?.value.trim() || null,
+    personalCoach:                document.getElementById('ci-personalCoach')?.value.trim() || null,
+    motivation:                   document.getElementById('ci-motivation')?.value || null,
+    attendsFriday:                getYN('ci-friday'),
+    attendsClubTournaments:       getYN('ci-clubTournaments'),
+    attendsNationalTournaments:   getYN('ci-nationalTournaments'),
+    notes:                        document.getElementById('ci-notes')?.value.trim() || null,
+  };
   document.getElementById('club-info-popup')?.remove();
-  const data = { clubGroup, personalCoach };
+  const clean = JSON.parse(JSON.stringify(data, (k,v) => v===undefined ? null : v));
   try {
-    await db.ref(`youthPlayers/${fedId}/clubInfo`).set(data);
-    if (_youthPlayers[String(fedId)]) _youthPlayers[String(fedId)].clubInfo = data;
+    await db.ref(`youthPlayers/${fedId}/clubInfo`).set(clean);
+    if (_youthPlayers[String(fedId)]) _youthPlayers[String(fedId)].clubInfo = clean;
     renderYouthPlayers();
   } catch(e) {
     showToast('שגיאה: ' + e.message, 'error');
   }
 }
 window.saveClubInfo = saveClubInfo;
+
+function openGoalsEditor(fedId) {
+  const existing = document.getElementById('goals-popup');
+  if (existing) { existing.remove(); return; }
+  const pl = _youthPlayers[String(fedId)] || {};
+  const g = pl.goals || {};
+  const S = 'width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box';
+  const L = t => `<div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:4px">${t}</div>`;
+  const popup = document.createElement('div');
+  popup.id = 'goals-popup';
+  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:9999;min-width:280px;max-width:340px;width:90vw;font-family:inherit;direction:rtl';
+  popup.innerHTML = `
+    <div style="font-size:14px;font-weight:700;color:#276749;margin-bottom:16px">🎯 מטרות לשנה הקרובה</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>${L('מטרה ראשית')}<input id="g-primary" type="text" value="${(g.primary||'').replace(/"/g,'&quot;')}" placeholder="לדוגמה: להעלות מד כושר ב-100 נקודות" style="${S}"></div>
+      <div>${L('מטרה משנית')}<input id="g-secondary" type="text" value="${(g.secondary||'').replace(/"/g,'&quot;')}" placeholder="לדוגמה: להשתתף באליפות ישראל" style="${S}"></div>
+      <div>${L('יעד מד כושר')}<input id="g-targetRating" type="number" min="100" max="3000" value="${g.targetRating||''}" placeholder="לדוגמה: 1500" style="${S};direction:ltr"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="window.saveGoals('${fedId}')"
+        style="flex:1;padding:10px;background:#276749;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+        שמור
+      </button>
+      <button onclick="document.getElementById('goals-popup')?.remove()"
+        style="padding:10px 14px;background:#f7fafc;color:#718096;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+        ביטול
+      </button>
+    </div>`;
+  document.body.appendChild(popup);
+  setTimeout(() => {
+    const close = e => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 50);
+}
+window.openGoalsEditor = openGoalsEditor;
+
+async function saveGoals(fedId) {
+  const primary   = document.getElementById('g-primary')?.value.trim() || null;
+  const secondary = document.getElementById('g-secondary')?.value.trim() || null;
+  const tr = document.getElementById('g-targetRating')?.value;
+  const targetRating = tr ? parseInt(tr, 10) : null;
+  document.getElementById('goals-popup')?.remove();
+  const data = JSON.parse(JSON.stringify({ primary, secondary, targetRating }, (k,v) => v===undefined ? null : v));
+  try {
+    await db.ref(`youthPlayers/${fedId}/goals`).set(data);
+    if (_youthPlayers[String(fedId)]) _youthPlayers[String(fedId)].goals = data;
+    renderYouthPlayers();
+  } catch(e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+window.saveGoals = saveGoals;
 
 window.syncAllTeamsData = syncAllTeamsData;
 window.loadLeagueStars = loadLeagueStars;
