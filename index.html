@@ -1373,11 +1373,11 @@
     /* ===== GALLERY ===== */
     .gallery-section { background:#0a1a2e; padding:56px 24px; direction:rtl; border-top:1px solid rgba(255,255,255,0.08); }
     .gallery-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; max-width:960px; margin:0 auto; }
-    .gallery-item { border-radius:12px; overflow:hidden; aspect-ratio:1; cursor:pointer; position:relative; }
-    .gallery-item img { width:100%; height:100%; object-fit:cover; object-position:top center; transition:transform 0.3s; display:block; }
-    .gallery-item:hover img { transform:scale(1.05); }
-    .gallery-item .gallery-overlay { position:absolute; inset:0; background:rgba(0,0,0,0); transition:background 0.3s; display:flex; align-items:center; justify-content:center; }
-    .gallery-item:hover .gallery-overlay { background:rgba(0,0,0,0.35); }
+    .gallery-item { border-radius:12px; overflow:hidden; cursor:pointer; background:var(--bg-card); }
+    .gallery-item-img { position:relative; overflow:hidden; aspect-ratio:1/1; }
+    .gallery-item-img img { width:100%; height:100%; object-fit:cover; object-position:top center; transition:transform 0.3s; display:block; }
+    .gallery-item:hover .gallery-item-img img { transform:scale(1.05); }
+    .gallery-caption { padding:8px 12px; font-size:13px; text-align:center; color:var(--text-secondary); line-height:1.4; }
 
     /* ===== TOURNAMENTS PAGE ===== */
     .pub-page-wrap { max-width:960px; margin:0 auto; padding:40px 24px; direction:rtl; }
@@ -15195,8 +15195,9 @@ function renderGalleryAdmin(data) {
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">' +
     items.map(function(g) {
       return '<div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;background:#000">' +
-        '<img src="'+g.imageData+'" style="width:100%;height:100%;object-fit:cover">' +
+        '<img src="'+g.imageData+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer" onclick="openGalleryEdit(\''+g._id+'\')">' +
         '<div style="position:absolute;top:4px;right:4px;display:flex;gap:4px">' +
+        '<button onclick="openGalleryEdit(\''+g._id+'\')" title="ערוך כיתוב" style="background:rgba(0,0,0,.6);border:none;border-radius:4px;padding:4px 6px;cursor:pointer;color:white;font-size:10px">✏️</button>' +
         '<button onclick="toggleGallerySpan(\''+g._id+'\','+(!g.span2)+')" title="'+(g.span2?'הצג רגיל':'הצג רחב')+'" style="background:rgba(0,0,0,.6);border:none;border-radius:4px;padding:4px 6px;cursor:pointer;color:white;font-size:10px">'+(g.span2?'⬛':'⬜⬜')+'</button>' +
         '<button onclick="deleteGalleryItem(\''+g._id+'\')" style="background:rgba(180,0,0,.7);border:none;border-radius:4px;padding:4px 6px;cursor:pointer;color:white;font-size:10px">✕</button></div>' +
         (g.caption?'<div style="position:absolute;bottom:0;left:0;right:0;padding:4px 6px;background:rgba(0,0,0,.6);font-size:11px;color:white">'+g.caption+'</div>':'') +
@@ -15245,6 +15246,32 @@ window.saveGalleryItem = async function() {
     await db.ref('siteContent/gallery').push(data);
     document.querySelector('.modal-overlay.open')?.remove();
     loadSiteContentAdmin(); loadSiteContent(); showToast('✅ תמונה נוספה!');
+  } catch(e) { showToast('❌ '+e.message); }
+};
+window.openGalleryEdit = async function(id) {
+  let caption = '';
+  try { const s = await db.ref('siteContent/gallery/'+id+'/caption').get(); caption = s.val() || ''; } catch(e) {}
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open'; modal.style.cssText = 'z-index:9999;padding:20px';
+  modal.onclick = function(e) { if (e.target===modal) modal.remove(); };
+  const safeCaption = caption.replace(/"/g,'&quot;');
+  modal.innerHTML = '<div style="background:var(--bg-card);border-radius:16px;max-width:400px;width:100%;padding:24px;direction:rtl">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+    '<h3 style="margin:0">✏️ ערוך כיתוב תמונה</h3>' +
+    '<button onclick="this.closest(\'.modal-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:inherit">✕</button></div>' +
+    '<input id="edit-gal-caption" value="' + safeCaption + '" placeholder="כיתוב לתמונה (אופציונלי)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box;margin-bottom:16px">' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+    '<button onclick="this.closest(\'.modal-overlay\').remove()" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:9px 18px;cursor:pointer;color:inherit">ביטול</button>' +
+    '<button onclick="saveGalleryCaption(\'' + id + '\')" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;cursor:pointer;font-weight:700">💾 שמור</button>' +
+    '</div></div>';
+  document.body.appendChild(modal);
+};
+window.saveGalleryCaption = async function(id) {
+  const caption = (document.getElementById('edit-gal-caption').value||'').trim();
+  try {
+    await db.ref('siteContent/gallery/'+id+'/caption').set(caption||null);
+    document.querySelector('.modal-overlay.open')?.remove();
+    loadSiteContentAdmin(); loadSiteContent(); showToast('✅ כיתוב עודכן!');
   } catch(e) { showToast('❌ '+e.message); }
 };
 window.deleteGalleryItem = async function(id) {
