@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -1372,7 +1372,7 @@
 
     /* ===== GALLERY ===== */
     .gallery-section { background:#0a1a2e; padding:56px 24px; direction:rtl; border-top:1px solid rgba(255,255,255,0.08); }
-    .gallery-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; max-width:960px; margin:0 auto; }
+    .gallery-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; max-width:960px; margin:0 auto; align-items:start; }
     .gallery-item { border-radius:12px; overflow:hidden; cursor:pointer; background:var(--bg-card); }
     .gallery-item-img { position:relative; overflow:hidden; aspect-ratio:1/1; }
     .gallery-item-img img { width:100%; height:100%; object-fit:cover; object-position:top center; transition:transform 0.3s; display:block; }
@@ -9009,7 +9009,7 @@ async function loadHoursHistory() {
   try {
     const snap = await db.ref('hourLogs').orderByChild('ts').get();
     const entries = [];
-    snap.forEach(child => entries.push({ id: child.key, ...child.val() }));
+    snap.forEach(child => { entries.push({ id: child.key, ...child.val() }); });
     entries.reverse();
     const isAdmin = currentUser?.role === 'admin';
     const filtered = isAdmin ? entries : entries.filter(e => e.instructorId === currentUser.uid);
@@ -14601,7 +14601,7 @@ async function loadNewsAdmin() {
   let posts = [];
   try {
     const snap = await db.ref('newsPosts').get();
-    if (snap.exists()) snap.forEach(c => posts.push({id: c.key, ...c.val()}));
+    if (snap.exists()) snap.forEach(c => { posts.push({id: c.key, ...c.val()}); });
     posts.sort((a,b) => (a.order||99) - (b.order||99));
   } catch(e) {
     el.innerHTML = `<div style="text-align:center;padding:30px;color:#fc8181">❌ שגיאה: ${e.message}</div>`;
@@ -14944,10 +14944,13 @@ function renderGalleryContent(data) {
   const items = Object.values(data).filter(function(g){ return g.imageData; });
   items.sort(function(a,b){ return (a.order||99)-(b.order||99); });
   el.innerHTML = items.map(function(g) {
-    const spanStyle = g.span2 ? 'grid-column:span 2;aspect-ratio:2/1;' : 'aspect-ratio:1/1;';
-    return '<div class="gallery-item" style="' + spanStyle + '">' +
-      '<img src="' + g.imageData + '" alt="' + (g.caption||'') + '" loading="lazy">' +
-      (g.caption ? '<div class="gallery-caption">' + g.caption + '</div>' : '') +
+    const colSpan = g.span2 ? 'grid-column:span 2;' : '';
+    const imgRatio = g.span2 ? 'aspect-ratio:2/1;' : 'aspect-ratio:1/1;';
+    return '<div class="gallery-item" style="' + colSpan + '">'+
+      '<div class="gallery-item-img" style="' + imgRatio + '">'+
+      '<img src="' + g.imageData + '" alt="' + (g.caption||'') + '" loading="lazy">'+
+      '</div>'+
+      (g.caption ? '<div class="gallery-caption">' + g.caption + '</div>' : '')+
       '</div>';
   }).join('');
 }
