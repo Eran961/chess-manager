@@ -14723,7 +14723,7 @@ async function loadPeopleSection() {
   try {
     const snap = await db.ref('clubPeople').get();
     _allPeople = [];
-    if (snap.exists()) snap.forEach(c => _allPeople.push({id: c.key, ...c.val()}));
+    if (snap.exists()) snap.forEach(c => { _allPeople.push({id: c.key, ...c.val()}); });
     _allPeople.sort((a,b) => (a.order||99) - (b.order||99));
     renderPeopleCards(_peopleTab);
   } catch(e) { grid.innerHTML = '<div style="text-align:center;padding:40px;color:#fc8181;grid-column:1/-1">שגיאה בטעינה</div>'; }
@@ -14765,7 +14765,7 @@ window.loadPeopleAdmin = async function() {
   let people = [];
   try {
     const snap = await db.ref('clubPeople').get();
-    if (snap.exists()) snap.forEach(c => people.push({id:c.key,...c.val()}));
+    if (snap.exists()) snap.forEach(c => { people.push({id:c.key,...c.val()}); });
     people.sort((a,b)=>(a.order||99)-(b.order||99));
   } catch(e) { el.innerHTML = '<div style="color:#fc8181">שגיאה: '+e.message+'</div>'; return; }
   const catLabels = {management:'חברי הנהלה',staff:'בעלי תפקידים',instructors:'מדריכים'};
