@@ -1378,6 +1378,19 @@
     .gallery-item-img img { width:100%; height:100%; object-fit:cover; object-position:top center; transition:transform 0.3s; display:block; }
     .gallery-item:hover .gallery-item-img img { transform:scale(1.05); }
     .gallery-caption { padding:8px 12px; font-size:13px; text-align:center; color:var(--text-secondary); line-height:1.4; }
+    /* ===== TOURNAMENT CALENDAR ===== */
+    .tc-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+    .tc-day { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:10px; min-height:88px; padding:5px 6px; cursor:pointer; display:flex; flex-direction:column; transition:background .15s; }
+    .tc-day:hover { background:rgba(255,255,255,.09); }
+    .tc-day.outside { background:transparent!important; border-color:transparent!important; cursor:default; pointer-events:none; }
+    .tc-day.today { border:2px solid #f97316!important; }
+    .tc-day-num { font-size:12px; font-weight:700; margin-bottom:4px; }
+    .tc-chip { font-size:10px; padding:2px 5px; border-radius:5px; color:white; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.4; }
+    .tc-week-hdr { text-align:center; font-size:11px; font-weight:700; opacity:.45; padding:4px 0; }
+    .tc-month-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:14px; }
+    .tc-month-tab { padding:6px 12px; border-radius:20px; border:1px solid rgba(255,255,255,.15); background:transparent; color:rgba(255,255,255,.7); font-size:12px; cursor:pointer; white-space:nowrap; font-family:inherit; transition:all .15s; }
+    .tc-month-tab.active { background:#f97316; border-color:#f97316; color:white; font-weight:700; }
+    .tc-month-tab:hover:not(.active) { background:rgba(255,255,255,.08); }
 
     /* ===== TOURNAMENTS PAGE ===== */
     .pub-page-wrap { max-width:960px; margin:0 auto; padding:40px 24px; direction:rtl; }
@@ -7602,11 +7615,156 @@ const settingsBtn = document.createElement('button');
     calPanel.id = 'panel-monthly-cal';
     calPanel.innerHTML = '<div style="padding:20px;color:#a0aec0">טוען...</div>';
     content.appendChild(calPanel);
+  const tcBtn = document.createElement('button');
+  tcBtn.className = 'tab-btn'; tcBtn.dataset.tab = 'tourn-cal';
+  tcBtn.textContent = '📅 גאנט תחרויות';
+  tcBtn.onclick = () => { switchTab('tourn-cal'); initTournCal(); };
+  tabsBar.appendChild(tcBtn);
+  const tcPanel = document.createElement('div');
+  tcPanel.className = 'tab-panel'; tcPanel.id = 'panel-tourn-cal';
+  tcPanel.innerHTML = '<div id="tourn-cal-root" style="padding:20px;direction:rtl;max-width:1100px;margin:0 auto"></div>';
+  content.appendChild(tcPanel);
   }
 }
 
   initData();
 } // end buildApp
+
+// ========== TOURNAMENT CALENDAR ==========
+const TC_MONTHS=[{y:2026,m:7,label:'אוגוסט 2026'},{y:2026,m:8,label:'ספטמבר 2026'},{y:2026,m:9,label:'אוקטובר 2026'},{y:2026,m:10,label:'נובמבר 2026'},{y:2026,m:11,label:'דצמבר 2026'},{y:2027,m:0,label:'ינואר 2027'},{y:2027,m:1,label:'פברואר 2027'},{y:2027,m:2,label:'מרץ 2027'},{y:2027,m:3,label:'אפריל 2027'},{y:2027,m:4,label:'מאי 2027'},{y:2027,m:5,label:'יוני 2027'},{y:2027,m:6,label:'יולי 2027'},{y:2027,m:7,label:'אוגוסט 2027'}];
+const TC_WEEK=['א','ב','ג','ד','ה','ו','ש'];
+const TC_COLORS=['#5b6fa8','#4a8fb8','#c98a2b','#2f7d6c','#a8503f','#8a5ba8','#6a8a3f'];
+const TC_CLABELS=['ליגה נוער ע+א','ליגה נוער מ','ימי שלישי','חג','תחרות/אליפות','מוקדמות','כללי'];
+const TC_DEF={'2026-09-01':[{id:'tc1',text:'סיום פסטיבל',color:'#6a8a3f'}],'2026-09-03':[{id:'tc2',text:'לבדוק לוח משחקים - תחרויות 1500+',color:'#6a8a3f'}],'2026-09-05':[{id:'tc3',text:'ליגת נוער (ע+א) - סיבוב 1',color:'#5b6fa8'},{id:'tc4',text:'לבדוק לוח - תחרויות',color:'#6a8a3f'}],'2026-09-08':[{id:'tc5',text:'ימי שלישי - סיבוב 1',color:'#c98a2b'}],'2026-09-10':[{id:'tc6',text:'ליגת נוער (ע+א) - סיבוב 1',color:'#5b6fa8'}],'2026-09-11':[{id:'tc7',text:'אליפות עד גיל 9 ו-13',color:'#a8503f'},{id:'tc8',text:'חג - ערב ראש השנה',color:'#2f7d6c'}],'2026-09-12':[{id:'tc9',text:'חג - ראש השנה',color:'#2f7d6c'},{id:'tc10',text:'תחרות משפחות לזכר סבא',color:'#a8503f'}],'2026-09-15':[{id:'tc11',text:'ימי שלישי - סיבוב שני',color:'#c98a2b'}],'2026-09-17':[{id:'tc12',text:'ליגת נוער (ע+א) - סיבוב 2',color:'#5b6fa8'}],'2026-09-19':[{id:'tc13',text:'ליגת נוער (ע+א) - סיבוב 2',color:'#5b6fa8'}],'2026-09-20':[{id:'tc14',text:'חג - ערב יום כיפור',color:'#2f7d6c'}],'2026-09-21':[{id:'tc15',text:'חג - יום כיפור',color:'#2f7d6c'}],'2026-09-22':[{id:'tc16',text:'ימי שלישי - סיבוב 3',color:'#c98a2b'}],'2026-09-24':[{id:'tc17',text:'חלון לתחרויות 1500+',color:'#c98a2b'}],'2026-09-26':[{id:'tc18',text:'חג - סוכות',color:'#2f7d6c'}],'2026-09-29':[{id:'tc19',text:'ימי שלישי - סיבוב השלמות',color:'#c98a2b'}],'2026-10-02':[{id:'tc20',text:'סבב סתיו במועדון - גיל 6',color:'#6a8a3f'}],'2026-10-03':[{id:'tc21',text:'שלמה צליל',color:'#6a8a3f'}],'2026-10-06':[{id:'tc22',text:'ימי שלישי - סיבוב 4',color:'#c98a2b'}],'2026-10-08':[{id:'tc23',text:'ליגת נוער (ע+א) - סיבוב 3',color:'#5b6fa8'},{id:'tc24',text:'ליגת נוער מ - סיבוב 1',color:'#4a8fb8'}],'2026-10-10':[{id:'tc25',text:'ליגת נוער (ע+א) - סיבוב 3',color:'#5b6fa8'},{id:'tc26',text:'ליגת נוער מ - סיבוב 1',color:'#4a8fb8'}],'2026-10-13':[{id:'tc27',text:'ימי שלישי - סיבוב 5',color:'#c98a2b'}],'2026-10-15':[{id:'tc28',text:'ליגת נוער (ע+א) - סיבוב 4',color:'#5b6fa8'},{id:'tc29',text:'ליגת נוער מ - סיבוב 2',color:'#4a8fb8'}],'2026-10-17':[{id:'tc30',text:'ליגת נוער (ע+א) - סיבוב 4',color:'#5b6fa8'},{id:'tc31',text:'ליגת נוער מ - סיבוב 2',color:'#4a8fb8'}],'2026-10-20':[{id:'tc32',text:'ימי שלישי - סיבוב 6',color:'#c98a2b'}],'2026-10-22':[{id:'tc33',text:'חלון לתחרויות 1500+',color:'#c98a2b'}],'2026-10-24':[{id:'tc34',text:'שי זרמי',color:'#6a8a3f'}],'2026-10-27':[{id:'tc35',text:'ימי שלישי - סיבוב 7',color:'#c98a2b'},{id:'tc36',text:'יום בחירות',color:'#6a8a3f'}],'2026-10-29':[{id:'tc37',text:'ליגת נוער (ע+א) - סיבוב 5',color:'#5b6fa8'},{id:'tc38',text:'ליגת נוער מ - סיבוב 3',color:'#4a8fb8'}],'2026-10-31':[{id:'tc39',text:'ליגת נוער ע+א - סיבוב 5',color:'#5b6fa8'},{id:'tc40',text:'ליגת נוער מ - סיבוב 3',color:'#4a8fb8'}],'2026-11-03':[{id:'tc41',text:'אקטיבי סיום סבב',color:'#6a8a3f'}],'2026-11-07':[{id:'tc42',text:'גיבוש לילדי גן',color:'#6a8a3f'}],'2026-11-10':[{id:'tc43',text:'ימי שלישי חורף - סיבוב 1',color:'#c98a2b'}],'2026-11-12':[{id:'tc44',text:'ליגת נוער מ - סיבוב 4',color:'#4a8fb8'}],'2026-11-14':[{id:'tc45',text:'ליגת נוער מ - סיבוב 4',color:'#4a8fb8'}],'2026-11-17':[{id:'tc46',text:'ימי שלישי חורף - סיבוב 2',color:'#c98a2b'}],'2026-11-19':[{id:'tc47',text:'ליגת נוער ע+א - סיבוב 6',color:'#5b6fa8'},{id:'tc48',text:'ליגת נוער מ - סיבוב 5',color:'#4a8fb8'}],'2026-11-21':[{id:'tc49',text:'ליגת נוער ע+א - סיבוב 6',color:'#5b6fa8'},{id:'tc50',text:'ליגת נוער מ - סיבוב 5',color:'#4a8fb8'}],'2026-11-24':[{id:'tc51',text:'ימי שלישי חורף - סיבוב 3',color:'#c98a2b'}],'2026-11-28':[{id:'tc52',text:'חצאי גמר נבחרות',color:'#a8503f'}],'2026-12-01':[{id:'tc53',text:'ימי שלישי חורף - סיבוב 4',color:'#c98a2b'}],'2026-12-03':[{id:'tc54',text:'ליגת נוער ע+א - סיבוב 7 אחרון',color:'#5b6fa8'},{id:'tc55',text:'ליגת נוער מ - סיבוב 6',color:'#4a8fb8'}],'2026-12-05':[{id:'tc56',text:'ליגת נוער ע+א ואחרון - סיבוב 7',color:'#5b6fa8'},{id:'tc57',text:'ליגת נוער מ - סיבוב 6',color:'#4a8fb8'}],'2026-12-06':[{id:'tc58',text:'מוקדמות נוער - 1',color:'#8a5ba8'}],'2026-12-07':[{id:'tc59',text:'מוקדמות נוער - 2',color:'#8a5ba8'}],'2026-12-08':[{id:'tc60',text:'ימי שלישי חורף - סיבוב השלמות',color:'#c98a2b'},{id:'tc61',text:'מוקדמות נוער - 3',color:'#8a5ba8'}],'2026-12-11':[{id:'tc62',text:'אליפות נערות ארצית',color:'#a8503f'}],'2026-12-12':[{id:'tc63',text:'גמר נבחרות',color:'#a8503f'}],'2026-12-15':[{id:'tc64',text:'ימי שלישי חורף - סיבוב 5',color:'#c98a2b'}],'2026-12-17':[{id:'tc65',text:'ליגת נוער מ - סיבוב 7 אחרון',color:'#4a8fb8'}],'2026-12-19':[{id:'tc66',text:'ליגת נוער מ - סיבוב 7 ואחרון',color:'#4a8fb8'}],'2026-12-22':[{id:'tc67',text:'ימי שלישי חורף - סיבוב 6',color:'#c98a2b'}],'2026-12-24':[{id:'tc68',text:'ליגת נוער ע+א - מבחנים',color:'#5b6fa8'}],'2026-12-26':[{id:'tc69',text:'ליגת נוער ע+א - מבחנים',color:'#5b6fa8'}],'2026-12-29':[{id:'tc70',text:'ימי שלישי חורף - סיבוב 7',color:'#c98a2b'}]};
+let _tcEvents={},_tcMonth=1,_tcLoaded=false,_tcOpenDate=null,_tcEditId=null,_tcSelColor=TC_COLORS[0];
+function tcKey(y,m,d){return y+'-'+(m+1).toString().padStart(2,'0')+'-'+d.toString().padStart(2,'0');}
+function tcUid(){return 'tc'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+async function initTournCal(){
+  const root=document.getElementById('tourn-cal-root'); if(!root) return;
+  if(!_tcLoaded){
+    root.innerHTML='<div style="text-align:center;padding:40px;opacity:.5">טוען...</div>';
+    try{
+      const snap=await db.ref('tournamentCalendar').get();
+      if(snap.exists()&&snap.val()&&Object.keys(snap.val()).length>0){
+        _tcEvents=snap.val();
+        Object.keys(_tcEvents).forEach(k=>{ if(!Array.isArray(_tcEvents[k])) _tcEvents[k]=Object.values(_tcEvents[k]); });
+      } else {
+        _tcEvents=JSON.parse(JSON.stringify(TC_DEF));
+        await db.ref('tournamentCalendar').set(_tcEvents);
+      }
+      _tcLoaded=true;
+    }catch(e){ root.innerHTML='<div style="color:#fc8181;padding:20px">שגיאה: '+e.message+'</div>'; return; }
+  }
+  renderTournCal();
+}
+function renderTournCal(){
+  const root=document.getElementById('tourn-cal-root'); if(!root) return;
+  const td=new Date(),todayKey=tcKey(td.getFullYear(),td.getMonth(),td.getDate());
+  let tabsHtml='<div class="tc-month-tabs">';
+  TC_MONTHS.forEach((mo,i)=>{ tabsHtml+='<button class="tc-month-tab'+(i===_tcMonth?' active':'')+'" onclick="window.tcGoMonth('+i+')">'+mo.label+'</button>'; });
+  tabsHtml+='</div>';
+  const mo=TC_MONTHS[_tcMonth];
+  const navHtml='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'+
+    '<button onclick="window.tcGoMonth('+(_tcMonth-1)+')" '+(_tcMonth===0?'disabled':'')+' style="background:rgba(255,255,255,.1);border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:20px;color:white;display:flex;align-items:center;justify-content:center">‹</button>'+
+    '<h2 style="margin:0;font-size:22px;font-weight:800">'+mo.label+'</h2>'+
+    '<button onclick="window.tcGoMonth('+(_tcMonth+1)+')" '+(_tcMonth===12?'disabled':'')+' style="background:rgba(255,255,255,.1);border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:20px;color:white;display:flex;align-items:center;justify-content:center">›</button>'+
+  '</div>';
+  let wkHtml='<div class="tc-grid" style="margin-bottom:6px">';
+  TC_WEEK.forEach(d=>{ wkHtml+='<div class="tc-week-hdr">'+d+'</div>'; });
+  wkHtml+='</div>';
+  const firstDay=new Date(mo.y,mo.m,1).getDay();
+  const daysInMonth=new Date(mo.y,mo.m+1,0).getDate();
+  const prevDays=new Date(mo.y,mo.m,0).getDate();
+  let grid='<div class="tc-grid">';
+  for(let i=0;i<firstDay;i++) grid+='<div class="tc-day outside"><div class="tc-day-num" style="opacity:.25">'+(prevDays-firstDay+i+1)+'</div></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const key=tcKey(mo.y,mo.m,d);
+    const dow=new Date(mo.y,mo.m,d).getDay();
+    const evts=_tcEvents[key]||[];
+    const wkBg=(dow===6||dow===5)?'background:rgba(249,115,22,.05);':'';
+    grid+='<div class="tc-day'+(key===todayKey?' today':'')+'" style="'+wkBg+'" onclick="window.openTCDay(\''+key+'\')">';
+    grid+='<div class="tc-day-num">'+d+'</div>';
+    evts.slice(0,3).forEach(ev=>{ grid+='<div class="tc-chip" style="background:'+ev.color+'">'+ev.text+'</div>'; });
+    if(evts.length>3) grid+='<div style="font-size:9px;opacity:.45;padding:1px 2px">+עוד '+(evts.length-3)+'</div>';
+    grid+='</div>';
+  }
+  const trail=(7-(firstDay+daysInMonth)%7)%7;
+  for(let i=1;i<=trail;i++) grid+='<div class="tc-day outside"><div class="tc-day-num" style="opacity:.25">'+i+'</div></div>';
+  grid+='</div>';
+  const legend='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">'+
+    TC_COLORS.map((c,i)=>'<span style="display:flex;align-items:center;gap:5px;font-size:11px;opacity:.8"><span style="width:11px;height:11px;border-radius:3px;background:'+c+';flex-shrink:0"></span>'+TC_CLABELS[i]+'</span>').join('')+'</div>';
+  root.innerHTML=tabsHtml+navHtml+wkHtml+grid+legend;
+}
+window.tcGoMonth=function(i){ if(i<0||i>12)return; _tcMonth=i; renderTournCal(); };
+window.openTCDay=function(dateKey){
+  _tcOpenDate=dateKey; _tcEditId=null; _tcSelColor=TC_COLORS[0];
+  const parts=dateKey.split('-');
+  const mNames=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const label=parseInt(parts[2])+' ב'+mNames[parseInt(parts[1])-1]+' '+parts[0];
+  function buildOv(){
+    document.querySelector('.tc-ov')?.remove();
+    const evts=_tcEvents[_tcOpenDate]||[];
+    const editEv=_tcEditId?evts.find(e=>e.id===_tcEditId):null;
+    const selCol=editEv?editEv.color:_tcSelColor;
+    const ov=document.createElement('div');
+    ov.className='tc-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+    ov.onclick=e=>{if(e.target===ov)ov.remove();};
+    const evHtml=evts.map(e=>'<div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.07);border-radius:8px;padding:7px 10px;margin-bottom:6px">'+
+      '<span style="width:11px;height:11px;border-radius:3px;background:'+e.color+';flex-shrink:0"></span>'+
+      '<span style="flex:1;font-size:13px">'+e.text+'</span>'+
+      '<button onclick="window.tcStartEdit(\''+e.id+'\')" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7;padding:2px 4px">✏️</button>'+
+      '<button onclick="window.tcDelEv(\''+e.id+'\')" style="background:none;border:none;cursor:pointer;color:#fc8181;font-size:13px;padding:2px 4px">✕</button>'+
+    '</div>').join('');
+    const colorPick=TC_COLORS.map((c,i)=>'<span onclick="window.tcPickCol(\''+c+'\')" title="'+TC_CLABELS[i]+'" style="display:inline-block;width:20px;height:20px;border-radius:50%;background:'+c+';cursor:pointer;border:2px solid '+(c===selCol?'white':'transparent')+';margin:2px 3px"></span>').join('');
+    const inputVal=editEv?editEv.text.replace(/&/g,'&amp;').replace(/"/g,'&quot;'):'';
+    const btnRow=_tcEditId
+      ?'<button onclick="window.tcSaveEdit()" style="flex:1;background:#f97316;color:white;border:none;border-radius:8px;padding:9px;cursor:pointer;font-weight:700;font-family:inherit;font-size:14px">💾 עדכן</button><button onclick="window.tcCancelEdit()" style="background:rgba(255,255,255,.1);color:inherit;border:none;border-radius:8px;padding:9px 14px;cursor:pointer;font-family:inherit">ביטול</button>'
+      :'<button onclick="window.tcAddEv()" style="flex:1;background:#f97316;color:white;border:none;border-radius:8px;padding:9px;cursor:pointer;font-weight:700;font-family:inherit;font-size:14px">➕ הוסף</button>';
+    ov.innerHTML='<div style="background:#1e2736;border-radius:16px;width:380px;max-width:96vw;padding:22px;direction:rtl;color:white;max-height:88vh;overflow-y:auto">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
+        '<h3 style="margin:0;font-size:16px;font-weight:800">📅 '+label+'</h3>'+
+        '<button onclick="document.querySelector(\'.tc-ov\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;opacity:.5;color:white;line-height:1">✕</button>'+
+      '</div>'+
+      '<div style="margin-bottom:12px">'+(evHtml||'<div style="opacity:.4;font-size:13px;text-align:center;padding:8px">אין אירועים</div>')+'</div>'+
+      '<div style="font-size:12px;opacity:.6;margin-bottom:6px">'+(_tcEditId?'✏️ ערוך אירוע':'➕ הוסף אירוע חדש')+'</div>'+
+      '<input id="tc-inp" value="'+inputVal+'" placeholder="שם האירוע..." style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:white;font-family:inherit;font-size:14px;box-sizing:border-box;direction:rtl;margin-bottom:10px">'+
+      '<div style="display:flex;flex-wrap:wrap;margin-bottom:14px">'+colorPick+'</div>'+
+      '<div style="display:flex;gap:8px">'+btnRow+'</div>'+
+    '</div>';
+    document.body.appendChild(ov);
+    setTimeout(()=>document.getElementById('tc-inp')?.focus(),40);
+    window._tcRebuildOv=buildOv;
+  }
+  buildOv();
+};
+window.tcPickCol=function(c){ _tcSelColor=c; if(_tcEditId){ const ev=(_tcEvents[_tcOpenDate]||[]).find(e=>e.id===_tcEditId); if(ev) ev.color=c; } window._tcRebuildOv&&window._tcRebuildOv(); };
+window.tcAddEv=async function(){
+  const t=(document.getElementById('tc-inp')?.value||'').trim(); if(!t) return;
+  if(!_tcEvents[_tcOpenDate]) _tcEvents[_tcOpenDate]=[];
+  const ev={id:tcUid(),text:t,color:_tcSelColor};
+  _tcEvents[_tcOpenDate].push(ev);
+  try{ await db.ref('tournamentCalendar/'+_tcOpenDate).set(_tcEvents[_tcOpenDate]); }catch(e){ showToast('❌ '+e.message); return; }
+  renderTournCal(); window._tcRebuildOv&&window._tcRebuildOv();
+};
+window.tcDelEv=async function(id){
+  if(!_tcEvents[_tcOpenDate]) return;
+  _tcEvents[_tcOpenDate]=(_tcEvents[_tcOpenDate]||[]).filter(e=>e.id!==id);
+  try{
+    if(!_tcEvents[_tcOpenDate].length){ await db.ref('tournamentCalendar/'+_tcOpenDate).remove(); delete _tcEvents[_tcOpenDate]; }
+    else await db.ref('tournamentCalendar/'+_tcOpenDate).set(_tcEvents[_tcOpenDate]);
+  }catch(e){ showToast('❌ '+e.message); return; }
+  renderTournCal(); window._tcRebuildOv&&window._tcRebuildOv();
+};
+window.tcStartEdit=function(id){ _tcEditId=id; const ev=(_tcEvents[_tcOpenDate]||[]).find(e=>e.id===id); if(ev) _tcSelColor=ev.color; window._tcRebuildOv&&window._tcRebuildOv(); };
+window.tcCancelEdit=function(){ _tcEditId=null; window._tcRebuildOv&&window._tcRebuildOv(); };
+window.tcSaveEdit=async function(){
+  const t=(document.getElementById('tc-inp')?.value||'').trim(); if(!t) return;
+  const evts=_tcEvents[_tcOpenDate]||[]; const ev=evts.find(e=>e.id===_tcEditId); if(!ev) return;
+  ev.text=t; ev.color=_tcSelColor;
+  try{ await db.ref('tournamentCalendar/'+_tcOpenDate).set(evts); }catch(e){ showToast('❌ '+e.message); return; }
+  _tcEditId=null; renderTournCal(); window._tcRebuildOv&&window._tcRebuildOv();
+};
 
 // ===== FRIDAY LEAGUES =====
 function getFridaysBetween(start, end) {
