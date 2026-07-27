@@ -7630,13 +7630,13 @@ const settingsBtn = document.createElement('button');
   initData();
 } // end buildApp
 
+
 // ========== TOURNAMENT CALENDAR ==========
 const TC_MONTHS=[{y:2026,m:7,label:'אוגוסט 2026'},{y:2026,m:8,label:'ספטמבר 2026'},{y:2026,m:9,label:'אוקטובר 2026'},{y:2026,m:10,label:'נובמבר 2026'},{y:2026,m:11,label:'דצמבר 2026'},{y:2027,m:0,label:'ינואר 2027'},{y:2027,m:1,label:'פברואר 2027'},{y:2027,m:2,label:'מרץ 2027'},{y:2027,m:3,label:'אפריל 2027'},{y:2027,m:4,label:'מאי 2027'},{y:2027,m:5,label:'יוני 2027'},{y:2027,m:6,label:'יולי 2027'},{y:2027,m:7,label:'אוגוסט 2027'}];
 const TC_WEEK=['א','ב','ג','ד','ה','ו','ש'];
-const TC_COLORS=['#5b6fa8','#4a8fb8','#c98a2b','#2f7d6c','#a8503f','#8a5ba8','#6a8a3f'];
-const TC_CLABELS=['ליגה נוער ע+א','ליגה נוער מ','ימי שלישי','חג','תחרות/אליפות','מוקדמות','כללי'];
-const TC_DEF={'2026-09-01':[{id:'tc1',text:'סיום פסטיבל',color:'#6a8a3f'}],'2026-09-03':[{id:'tc2',text:'לבדוק לוח משחקים - תחרויות 1500+',color:'#6a8a3f'}],'2026-09-05':[{id:'tc3',text:'ליגת נוער (ע+א) - סיבוב 1',color:'#5b6fa8'},{id:'tc4',text:'לבדוק לוח - תחרויות',color:'#6a8a3f'}],'2026-09-08':[{id:'tc5',text:'ימי שלישי - סיבוב 1',color:'#c98a2b'}],'2026-09-10':[{id:'tc6',text:'ליגת נוער (ע+א) - סיבוב 1',color:'#5b6fa8'}],'2026-09-11':[{id:'tc7',text:'אליפות עד גיל 9 ו-13',color:'#a8503f'},{id:'tc8',text:'חג - ערב ראש השנה',color:'#2f7d6c'}],'2026-09-12':[{id:'tc9',text:'חג - ראש השנה',color:'#2f7d6c'},{id:'tc10',text:'תחרות משפחות לזכר סבא',color:'#a8503f'}],'2026-09-15':[{id:'tc11',text:'ימי שלישי - סיבוב שני',color:'#c98a2b'}],'2026-09-17':[{id:'tc12',text:'ליגת נוער (ע+א) - סיבוב 2',color:'#5b6fa8'}],'2026-09-19':[{id:'tc13',text:'ליגת נוער (ע+א) - סיבוב 2',color:'#5b6fa8'}],'2026-09-20':[{id:'tc14',text:'חג - ערב יום כיפור',color:'#2f7d6c'}],'2026-09-21':[{id:'tc15',text:'חג - יום כיפור',color:'#2f7d6c'}],'2026-09-22':[{id:'tc16',text:'ימי שלישי - סיבוב 3',color:'#c98a2b'}],'2026-09-24':[{id:'tc17',text:'חלון לתחרויות 1500+',color:'#c98a2b'}],'2026-09-26':[{id:'tc18',text:'חג - סוכות',color:'#2f7d6c'}],'2026-09-29':[{id:'tc19',text:'ימי שלישי - סיבוב השלמות',color:'#c98a2b'}],'2026-10-02':[{id:'tc20',text:'סבב סתיו במועדון - גיל 6',color:'#6a8a3f'}],'2026-10-03':[{id:'tc21',text:'שלמה צליל',color:'#6a8a3f'}],'2026-10-06':[{id:'tc22',text:'ימי שלישי - סיבוב 4',color:'#c98a2b'}],'2026-10-08':[{id:'tc23',text:'ליגת נוער (ע+א) - סיבוב 3',color:'#5b6fa8'},{id:'tc24',text:'ליגת נוער מ - סיבוב 1',color:'#4a8fb8'}],'2026-10-10':[{id:'tc25',text:'ליגת נוער (ע+א) - סיבוב 3',color:'#5b6fa8'},{id:'tc26',text:'ליגת נוער מ - סיבוב 1',color:'#4a8fb8'}],'2026-10-13':[{id:'tc27',text:'ימי שלישי - סיבוב 5',color:'#c98a2b'}],'2026-10-15':[{id:'tc28',text:'ליגת נוער (ע+א) - סיבוב 4',color:'#5b6fa8'},{id:'tc29',text:'ליגת נוער מ - סיבוב 2',color:'#4a8fb8'}],'2026-10-17':[{id:'tc30',text:'ליגת נוער (ע+א) - סיבוב 4',color:'#5b6fa8'},{id:'tc31',text:'ליגת נוער מ - סיבוב 2',color:'#4a8fb8'}],'2026-10-20':[{id:'tc32',text:'ימי שלישי - סיבוב 6',color:'#c98a2b'}],'2026-10-22':[{id:'tc33',text:'חלון לתחרויות 1500+',color:'#c98a2b'}],'2026-10-24':[{id:'tc34',text:'שי זרמי',color:'#6a8a3f'}],'2026-10-27':[{id:'tc35',text:'ימי שלישי - סיבוב 7',color:'#c98a2b'},{id:'tc36',text:'יום בחירות',color:'#6a8a3f'}],'2026-10-29':[{id:'tc37',text:'ליגת נוער (ע+א) - סיבוב 5',color:'#5b6fa8'},{id:'tc38',text:'ליגת נוער מ - סיבוב 3',color:'#4a8fb8'}],'2026-10-31':[{id:'tc39',text:'ליגת נוער ע+א - סיבוב 5',color:'#5b6fa8'},{id:'tc40',text:'ליגת נוער מ - סיבוב 3',color:'#4a8fb8'}],'2026-11-03':[{id:'tc41',text:'אקטיבי סיום סבב',color:'#6a8a3f'}],'2026-11-07':[{id:'tc42',text:'גיבוש לילדי גן',color:'#6a8a3f'}],'2026-11-10':[{id:'tc43',text:'ימי שלישי חורף - סיבוב 1',color:'#c98a2b'}],'2026-11-12':[{id:'tc44',text:'ליגת נוער מ - סיבוב 4',color:'#4a8fb8'}],'2026-11-14':[{id:'tc45',text:'ליגת נוער מ - סיבוב 4',color:'#4a8fb8'}],'2026-11-17':[{id:'tc46',text:'ימי שלישי חורף - סיבוב 2',color:'#c98a2b'}],'2026-11-19':[{id:'tc47',text:'ליגת נוער ע+א - סיבוב 6',color:'#5b6fa8'},{id:'tc48',text:'ליגת נוער מ - סיבוב 5',color:'#4a8fb8'}],'2026-11-21':[{id:'tc49',text:'ליגת נוער ע+א - סיבוב 6',color:'#5b6fa8'},{id:'tc50',text:'ליגת נוער מ - סיבוב 5',color:'#4a8fb8'}],'2026-11-24':[{id:'tc51',text:'ימי שלישי חורף - סיבוב 3',color:'#c98a2b'}],'2026-11-28':[{id:'tc52',text:'חצאי גמר נבחרות',color:'#a8503f'}],'2026-12-01':[{id:'tc53',text:'ימי שלישי חורף - סיבוב 4',color:'#c98a2b'}],'2026-12-03':[{id:'tc54',text:'ליגת נוער ע+א - סיבוב 7 אחרון',color:'#5b6fa8'},{id:'tc55',text:'ליגת נוער מ - סיבוב 6',color:'#4a8fb8'}],'2026-12-05':[{id:'tc56',text:'ליגת נוער ע+א ואחרון - סיבוב 7',color:'#5b6fa8'},{id:'tc57',text:'ליגת נוער מ - סיבוב 6',color:'#4a8fb8'}],'2026-12-06':[{id:'tc58',text:'מוקדמות נוער - 1',color:'#8a5ba8'}],'2026-12-07':[{id:'tc59',text:'מוקדמות נוער - 2',color:'#8a5ba8'}],'2026-12-08':[{id:'tc60',text:'ימי שלישי חורף - סיבוב השלמות',color:'#c98a2b'},{id:'tc61',text:'מוקדמות נוער - 3',color:'#8a5ba8'}],'2026-12-11':[{id:'tc62',text:'אליפות נערות ארצית',color:'#a8503f'}],'2026-12-12':[{id:'tc63',text:'גמר נבחרות',color:'#a8503f'}],'2026-12-15':[{id:'tc64',text:'ימי שלישי חורף - סיבוב 5',color:'#c98a2b'}],'2026-12-17':[{id:'tc65',text:'ליגת נוער מ - סיבוב 7 אחרון',color:'#4a8fb8'}],'2026-12-19':[{id:'tc66',text:'ליגת נוער מ - סיבוב 7 ואחרון',color:'#4a8fb8'}],'2026-12-22':[{id:'tc67',text:'ימי שלישי חורף - סיבוב 6',color:'#c98a2b'}],'2026-12-24':[{id:'tc68',text:'ליגת נוער ע+א - מבחנים',color:'#5b6fa8'}],'2026-12-26':[{id:'tc69',text:'ליגת נוער ע+א - מבחנים',color:'#5b6fa8'}],'2026-12-29':[{id:'tc70',text:'ימי שלישי חורף - סיבוב 7',color:'#c98a2b'}]};
-let _tcEvents={},_tcMonth=1,_tcLoaded=false,_tcOpenDate=null,_tcEditId=null,_tcSelColor=TC_COLORS[0];
+const TC_DEFAULT_CATS=[{id:'cat1',color:'#5b6fa8',label:'ליגה נוער ע+א'},{id:'cat2',color:'#4a8fb8',label:'ליגה נוער מ'},{id:'cat3',color:'#c98a2b',label:'ימי שלישי / פסטיבל'},{id:'cat4',color:'#2f7d6c',label:'חג'},{id:'cat5',color:'#a8503f',label:'תחרות / אליפות'},{id:'cat6',color:'#8a5ba8',label:'מוקדמות'},{id:'cat7',color:'#6a8a3f',label:'כללי'}];
+const TC_DEF={'2026-08-08':[{id:'tc0a',text:'בזק - לזכר שי מיכאלי',color:'#c98a2b'}],'2026-08-15':[{id:'tc0b',text:'אופציה לתחרות בלתי מזורגים',color:'#c98a2b'}],'2026-08-22':[{id:'tc0c',text:'אירוע סיום ליגות',color:'#c98a2b'}],'2026-08-23':[{id:'tc0d',text:'פסטיבל - יום ראשון',color:'#c98a2b'}],'2026-08-24':[{id:'tc0e',text:'פסטיבל - יום שני',color:'#c98a2b'}],'2026-08-25':[{id:'tc0f',text:'פסטיבל - יום שלישי',color:'#c98a2b'}],'2026-08-26':[{id:'tc0g',text:'פסטיבל - יום רביעי',color:'#c98a2b'}],'2026-08-27':[{id:'tc0h',text:'פסטיבל - יום חמישי',color:'#c98a2b'}],'2026-09-01':[{id:'tc1',text:'סיום פסטיבל',color:'#6a8a3f'}],'2026-09-03':[{id:'tc2',text:'לבדוק לוח משחקים - תחרויות 1500+',color:'#6a8a3f'}],'2026-09-05':[{id:'tc3',text:'ליגת נוער (ע+א) - סיבוב 1',color:'#5b6fa8'},{id:'tc4',text:'לבדוק לוח - תחרויות',color:'#6a8a3f'}],'2026-09-08':[{id:'tc5',text:'ימי שלישי - סיבוב 1',color:'#c98a2b'}],'2026-09-10':[{id:'tc6',text:'ליגת נוער (ע+א) - סיבוב 1',color:'#5b6fa8'}],'2026-09-11':[{id:'tc7',text:'אליפות עד גיל 9 ו-13',color:'#a8503f'},{id:'tc8',text:'חג - ערב ראש השנה',color:'#2f7d6c'}],'2026-09-12':[{id:'tc9',text:'חג - ראש השנה',color:'#2f7d6c'},{id:'tc10',text:'תחרות משפחות לזכר סבא',color:'#a8503f'}],'2026-09-15':[{id:'tc11',text:'ימי שלישי - סיבוב שני',color:'#c98a2b'}],'2026-09-17':[{id:'tc12',text:'ליגת נוער (ע+א) - סיבוב 2',color:'#5b6fa8'}],'2026-09-19':[{id:'tc13',text:'ליגת נוער (ע+א) - סיבוב 2',color:'#5b6fa8'}],'2026-09-20':[{id:'tc14',text:'חג - ערב יום כיפור',color:'#2f7d6c'}],'2026-09-21':[{id:'tc15',text:'חג - יום כיפור',color:'#2f7d6c'}],'2026-09-22':[{id:'tc16',text:'ימי שלישי - סיבוב 3',color:'#c98a2b'}],'2026-09-24':[{id:'tc17',text:'חלון לתחרויות 1500+',color:'#c98a2b'}],'2026-09-26':[{id:'tc18',text:'חג - סוכות',color:'#2f7d6c'}],'2026-09-29':[{id:'tc19',text:'ימי שלישי - סיבוב השלמות',color:'#c98a2b'}],'2026-10-02':[{id:'tc20',text:'סבב סתיו במועדון - גיל 6',color:'#6a8a3f'}],'2026-10-03':[{id:'tc21',text:'שלמה צליל',color:'#6a8a3f'}],'2026-10-06':[{id:'tc22',text:'ימי שלישי - סיבוב 4',color:'#c98a2b'}],'2026-10-08':[{id:'tc23',text:'ליגת נוער (ע+א) - סיבוב 3',color:'#5b6fa8'},{id:'tc24',text:'ליגת נוער מ - סיבוב 1',color:'#4a8fb8'}],'2026-10-10':[{id:'tc25',text:'ליגת נוער (ע+א) - סיבוב 3',color:'#5b6fa8'},{id:'tc26',text:'ליגת נוער מ - סיבוב 1',color:'#4a8fb8'}],'2026-10-13':[{id:'tc27',text:'ימי שלישי - סיבוב 5',color:'#c98a2b'}],'2026-10-15':[{id:'tc28',text:'ליגת נוער (ע+א) - סיבוב 4',color:'#5b6fa8'},{id:'tc29',text:'ליגת נוער מ - סיבוב 2',color:'#4a8fb8'}],'2026-10-17':[{id:'tc30',text:'ליגת נוער (ע+א) - סיבוב 4',color:'#5b6fa8'},{id:'tc31',text:'ליגת נוער מ - סיבוב 2',color:'#4a8fb8'}],'2026-10-20':[{id:'tc32',text:'ימי שלישי - סיבוב 6',color:'#c98a2b'}],'2026-10-22':[{id:'tc33',text:'חלון לתחרויות 1500+',color:'#c98a2b'}],'2026-10-24':[{id:'tc34',text:'שי זרמי',color:'#6a8a3f'}],'2026-10-27':[{id:'tc35',text:'ימי שלישי - סיבוב 7',color:'#c98a2b'},{id:'tc36',text:'יום בחירות',color:'#6a8a3f'}],'2026-10-29':[{id:'tc37',text:'ליגת נוער (ע+א) - סיבוב 5',color:'#5b6fa8'},{id:'tc38',text:'ליגת נוער מ - סיבוב 3',color:'#4a8fb8'}],'2026-10-31':[{id:'tc39',text:'ליגת נוער ע+א - סיבוב 5',color:'#5b6fa8'},{id:'tc40',text:'ליגת נוער מ - סיבוב 3',color:'#4a8fb8'}],'2026-11-03':[{id:'tc41',text:'אקטיבי סיום סבב',color:'#6a8a3f'}],'2026-11-07':[{id:'tc42',text:'גיבוש לילדי גן',color:'#6a8a3f'}],'2026-11-10':[{id:'tc43',text:'ימי שלישי חורף - סיבוב 1',color:'#c98a2b'}],'2026-11-12':[{id:'tc44',text:'ליגת נוער מ - סיבוב 4',color:'#4a8fb8'}],'2026-11-14':[{id:'tc45',text:'ליגת נוער מ - סיבוב 4',color:'#4a8fb8'}],'2026-11-17':[{id:'tc46',text:'ימי שלישי חורף - סיבוב 2',color:'#c98a2b'}],'2026-11-19':[{id:'tc47',text:'ליגת נוער ע+א - סיבוב 6',color:'#5b6fa8'},{id:'tc48',text:'ליגת נוער מ - סיבוב 5',color:'#4a8fb8'}],'2026-11-21':[{id:'tc49',text:'ליגת נוער ע+א - סיבוב 6',color:'#5b6fa8'},{id:'tc50',text:'ליגת נוער מ - סיבוב 5',color:'#4a8fb8'}],'2026-11-24':[{id:'tc51',text:'ימי שלישי חורף - סיבוב 3',color:'#c98a2b'}],'2026-11-28':[{id:'tc52',text:'חצאי גמר נבחרות',color:'#a8503f'}],'2026-12-01':[{id:'tc53',text:'ימי שלישי חורף - סיבוב 4',color:'#c98a2b'}],'2026-12-03':[{id:'tc54',text:'ליגת נוער ע+א - סיבוב 7 אחרון',color:'#5b6fa8'},{id:'tc55',text:'ליגת נוער מ - סיבוב 6',color:'#4a8fb8'}],'2026-12-05':[{id:'tc56',text:'ליגת נוער ע+א ואחרון - סיבוב 7',color:'#5b6fa8'},{id:'tc57',text:'ליגת נוער מ - סיבוב 6',color:'#4a8fb8'}],'2026-12-06':[{id:'tc58',text:'מוקדמות נוער - 1',color:'#8a5ba8'}],'2026-12-07':[{id:'tc59',text:'מוקדמות נוער - 2',color:'#8a5ba8'}],'2026-12-08':[{id:'tc60',text:'ימי שלישי חורף - סיבוב השלמות',color:'#c98a2b'},{id:'tc61',text:'מוקדמות נוער - 3',color:'#8a5ba8'}],'2026-12-11':[{id:'tc62',text:'אליפות נערות ארצית',color:'#a8503f'}],'2026-12-12':[{id:'tc63',text:'גמר נבחרות',color:'#a8503f'}],'2026-12-15':[{id:'tc64',text:'ימי שלישי חורף - סיבוב 5',color:'#c98a2b'}],'2026-12-17':[{id:'tc65',text:'ליגת נוער מ - סיבוב 7 אחרון',color:'#4a8fb8'}],'2026-12-19':[{id:'tc66',text:'ליגת נוער מ - סיבוב 7 ואחרון',color:'#4a8fb8'}],'2026-12-22':[{id:'tc67',text:'ימי שלישי חורף - סיבוב 6',color:'#c98a2b'}],'2026-12-24':[{id:'tc68',text:'ליגת נוער ע+א - מבחנים',color:'#5b6fa8'}],'2026-12-26':[{id:'tc69',text:'ליגת נוער ע+א - מבחנים',color:'#5b6fa8'}],'2026-12-29':[{id:'tc70',text:'ימי שלישי חורף - סיבוב 7',color:'#c98a2b'}]};
+let _tcEvents={},_tcCats=TC_DEFAULT_CATS.map(c=>({...c})),_tcMonth=0,_tcLoaded=false,_tcOpenDate=null,_tcEditId=null,_tcSelColor=TC_DEFAULT_CATS[0].color;
 function tcKey(y,m,d){return y+'-'+(m+1).toString().padStart(2,'0')+'-'+d.toString().padStart(2,'0');}
 function tcUid(){return 'tc'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
 async function initTournCal(){
@@ -7644,14 +7644,16 @@ async function initTournCal(){
   if(!_tcLoaded){
     root.innerHTML='<div style="text-align:center;padding:40px;opacity:.5">טוען...</div>';
     try{
+      const catSnap=await db.ref('tcCategories').get();
+      if(catSnap.exists()&&Array.isArray(catSnap.val())) _tcCats=catSnap.val();
       const snap=await db.ref('tournamentCalendar').get();
-      if(snap.exists()&&snap.val()&&Object.keys(snap.val()).length>0){
-        _tcEvents=snap.val();
-        Object.keys(_tcEvents).forEach(k=>{ if(!Array.isArray(_tcEvents[k])) _tcEvents[k]=Object.values(_tcEvents[k]); });
-      } else {
-        _tcEvents=JSON.parse(JSON.stringify(TC_DEF));
-        await db.ref('tournamentCalendar').set(_tcEvents);
+      if(snap.exists()&&snap.val()){
+        const data=snap.val();
+        Object.keys(data).forEach(k=>{ const v=data[k]; _tcEvents[k]=Array.isArray(v)?v:Object.values(v); });
       }
+      let merged=false;
+      Object.keys(TC_DEF).forEach(k=>{ if(!_tcEvents[k]){ _tcEvents[k]=JSON.parse(JSON.stringify(TC_DEF[k])); merged=true; } });
+      if(merged||!snap.exists()) await db.ref('tournamentCalendar').set(_tcEvents);
       _tcLoaded=true;
     }catch(e){ root.innerHTML='<div style="color:#fc8181;padding:20px">שגיאה: '+e.message+'</div>'; return; }
   }
@@ -7691,13 +7693,15 @@ function renderTournCal(){
   const trail=(7-(firstDay+daysInMonth)%7)%7;
   for(let i=1;i<=trail;i++) grid+='<div class="tc-day outside"><div class="tc-day-num" style="opacity:.25">'+i+'</div></div>';
   grid+='</div>';
-  const legend='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">'+
-    TC_COLORS.map((c,i)=>'<span style="display:flex;align-items:center;gap:5px;font-size:11px;opacity:.8"><span style="width:11px;height:11px;border-radius:3px;background:'+c+';flex-shrink:0"></span>'+TC_CLABELS[i]+'</span>').join('')+'</div>';
+  const legend='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);align-items:center">'+
+    _tcCats.map(c=>'<span style="display:flex;align-items:center;gap:5px;font-size:11px;opacity:.8"><span style="width:11px;height:11px;border-radius:3px;background:'+c.color+';flex-shrink:0"></span>'+c.label+'</span>').join('')+
+    '<button onclick="window.openCatManager()" style="margin-right:auto;background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:4px 10px;cursor:pointer;color:white;font-size:11px;font-family:inherit">⚙️ קטגוריות</button>'+
+  '</div>';
   root.innerHTML=tabsHtml+navHtml+wkHtml+grid+legend;
 }
 window.tcGoMonth=function(i){ if(i<0||i>12)return; _tcMonth=i; renderTournCal(); };
 window.openTCDay=function(dateKey){
-  _tcOpenDate=dateKey; _tcEditId=null; _tcSelColor=TC_COLORS[0];
+  _tcOpenDate=dateKey; _tcEditId=null; _tcSelColor=_tcCats[0]?.color||'#5b6fa8';
   const parts=dateKey.split('-');
   const mNames=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const label=parseInt(parts[2])+' ב'+mNames[parseInt(parts[1])-1]+' '+parts[0];
@@ -7716,12 +7720,12 @@ window.openTCDay=function(dateKey){
       '<button onclick="window.tcStartEdit(\''+e.id+'\')" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7;padding:2px 4px">✏️</button>'+
       '<button onclick="window.tcDelEv(\''+e.id+'\')" style="background:none;border:none;cursor:pointer;color:#fc8181;font-size:13px;padding:2px 4px">✕</button>'+
     '</div>').join('');
-    const colorPick=TC_COLORS.map((c,i)=>'<span onclick="window.tcPickCol(\''+c+'\')" title="'+TC_CLABELS[i]+'" style="display:inline-block;width:20px;height:20px;border-radius:50%;background:'+c+';cursor:pointer;border:2px solid '+(c===selCol?'white':'transparent')+';margin:2px 3px"></span>').join('');
+    const catPills=_tcCats.map(c=>'<button onclick="window.tcPickCol(\''+c.color+'\')" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:2px solid '+(c.color===selCol?'white':'transparent')+';background:'+c.color+';color:white;font-size:11px;cursor:pointer;font-family:inherit;margin:2px;white-space:nowrap">'+c.label+'</button>').join('');
     const inputVal=editEv?editEv.text.replace(/&/g,'&amp;').replace(/"/g,'&quot;'):'';
     const btnRow=_tcEditId
       ?'<button onclick="window.tcSaveEdit()" style="flex:1;background:#f97316;color:white;border:none;border-radius:8px;padding:9px;cursor:pointer;font-weight:700;font-family:inherit;font-size:14px">💾 עדכן</button><button onclick="window.tcCancelEdit()" style="background:rgba(255,255,255,.1);color:inherit;border:none;border-radius:8px;padding:9px 14px;cursor:pointer;font-family:inherit">ביטול</button>'
       :'<button onclick="window.tcAddEv()" style="flex:1;background:#f97316;color:white;border:none;border-radius:8px;padding:9px;cursor:pointer;font-weight:700;font-family:inherit;font-size:14px">➕ הוסף</button>';
-    ov.innerHTML='<div style="background:#1e2736;border-radius:16px;width:380px;max-width:96vw;padding:22px;direction:rtl;color:white;max-height:88vh;overflow-y:auto">'+
+    ov.innerHTML='<div style="background:#1e2736;border-radius:16px;width:400px;max-width:96vw;padding:22px;direction:rtl;color:white;max-height:88vh;overflow-y:auto">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
         '<h3 style="margin:0;font-size:16px;font-weight:800">📅 '+label+'</h3>'+
         '<button onclick="document.querySelector(\'.tc-ov\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;opacity:.5;color:white;line-height:1">✕</button>'+
@@ -7729,7 +7733,7 @@ window.openTCDay=function(dateKey){
       '<div style="margin-bottom:12px">'+(evHtml||'<div style="opacity:.4;font-size:13px;text-align:center;padding:8px">אין אירועים</div>')+'</div>'+
       '<div style="font-size:12px;opacity:.6;margin-bottom:6px">'+(_tcEditId?'✏️ ערוך אירוע':'➕ הוסף אירוע חדש')+'</div>'+
       '<input id="tc-inp" value="'+inputVal+'" placeholder="שם האירוע..." style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:white;font-family:inherit;font-size:14px;box-sizing:border-box;direction:rtl;margin-bottom:10px">'+
-      '<div style="display:flex;flex-wrap:wrap;margin-bottom:14px">'+colorPick+'</div>'+
+      '<div style="display:flex;flex-wrap:wrap;margin-bottom:14px">'+catPills+'</div>'+
       '<div style="display:flex;gap:8px">'+btnRow+'</div>'+
     '</div>';
     document.body.appendChild(ov);
@@ -7764,6 +7768,53 @@ window.tcSaveEdit=async function(){
   ev.text=t; ev.color=_tcSelColor;
   try{ await db.ref('tournamentCalendar/'+_tcOpenDate).set(evts); }catch(e){ showToast('❌ '+e.message); return; }
   _tcEditId=null; renderTournCal(); window._tcRebuildOv&&window._tcRebuildOv();
+};
+window.openCatManager=function(){
+  document.querySelector('.tc-catmgr')?.remove();
+  function buildCatOv(){
+    document.querySelector('.tc-catmgr')?.remove();
+    const ov=document.createElement('div');
+    ov.className='tc-catmgr';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px';
+    ov.onclick=e=>{if(e.target===ov)ov.remove();};
+    const catRows=_tcCats.map((c,i)=>'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+      '<input type="color" value="'+c.color+'" onchange="window.tcCatColor('+i+',this.value)" style="width:32px;height:32px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:none;flex-shrink:0">'+
+      '<input type="text" value="'+c.label.replace(/"/g,'&quot;')+'" onchange="window.tcCatLabel('+i+',this.value)" placeholder="שם קטגוריה" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:white;font-family:inherit;font-size:13px;direction:rtl">'+
+      '<button onclick="window.tcDelCat('+i+')" style="background:rgba(252,129,129,.15);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;color:#fc8181;font-size:13px">✕</button>'+
+    '</div>').join('');
+    ov.innerHTML='<div style="background:#1e2736;border-radius:16px;width:420px;max-width:96vw;padding:22px;direction:rtl;color:white;max-height:88vh;overflow-y:auto">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
+        '<h3 style="margin:0;font-size:16px;font-weight:800">⚙️ ניהול קטגוריות</h3>'+
+        '<button onclick="document.querySelector(\'.tc-catmgr\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;opacity:.5;color:white">✕</button>'+
+      '</div>'+
+      '<div id="tc-cat-list">'+catRows+'</div>'+
+      '<div style="border-top:1px solid rgba(255,255,255,.1);margin-top:14px;padding-top:14px">'+
+        '<div style="font-size:12px;opacity:.6;margin-bottom:8px">➕ קטגוריה חדשה</div>'+
+        '<div style="display:flex;gap:8px;align-items:center">'+
+          '<input type="color" id="tc-new-cat-color" value="#5b6fa8" style="width:32px;height:32px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:none;flex-shrink:0">'+
+          '<input type="text" id="tc-new-cat-label" placeholder="שם הקטגוריה..." style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:white;font-family:inherit;font-size:13px;direction:rtl">'+
+          '<button onclick="window.tcAddCat()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-family:inherit;font-weight:700">הוסף</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+    document.body.appendChild(ov);
+    window._tcRebuildCatOv=buildCatOv;
+  }
+  buildCatOv();
+};
+window.tcCatColor=function(i,c){ _tcCats[i].color=c; window.tcSaveCats(); };
+window.tcCatLabel=function(i,v){ _tcCats[i].label=v; window.tcSaveCats(); };
+window.tcDelCat=function(i){ _tcCats.splice(i,1); window.tcSaveCats(); window._tcRebuildCatOv&&window._tcRebuildCatOv(); renderTournCal(); };
+window.tcAddCat=async function(){
+  const label=(document.getElementById('tc-new-cat-label')?.value||'').trim(); if(!label) return;
+  const color=document.getElementById('tc-new-cat-color')?.value||'#5b6fa8';
+  _tcCats.push({id:'cat'+Date.now(),color,label});
+  await window.tcSaveCats();
+  window._tcRebuildCatOv&&window._tcRebuildCatOv();
+  renderTournCal();
+};
+window.tcSaveCats=async function(){
+  try{ await db.ref('tcCategories').set(_tcCats); }catch(e){ showToast('❌ '+e.message); }
 };
 
 // ===== FRIDAY LEAGUES =====
