@@ -3197,7 +3197,7 @@ async function loadDbTeams() {
       _useDbTeams = true;
       teams = Object.entries(data).map(([id, t]) => ({
         id,
-        name:     t.name     || t.teamName || '',
+        name:     t.name || t.teamName || t.label || id.replace(/^team-/,'').replace(/-\d{3,}$/,'').replace(/-/g,' ').trim(),
         coach:    t.coach    || '',
         coachWa:  t.coachWa  || '',
         region:   t.region   || '',
@@ -10451,21 +10451,6 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
             ${teamCheckboxes || '<div style="color:#a0aec0;font-size:12px">אין נבחרות</div>'}
           </div>
         </div>
-        <div style="padding:14px 14px 8px;border-top:1px solid rgba(0,0,0,0.06)">
-          <details id="inst-perms-${inst.uid}">
-            <summary style="font-size:12px;font-weight:700;color:#6b46c1;cursor:pointer;padding:4px 0;list-style:none">🔐 הרשאות גישה לטאבים ▾</summary>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:5px;margin-top:10px">
-              ${PERMISSION_TABS.map(tab => {
-                const instPerms = inst.permissions || {};
-                const enabled = tab.key in instPerms ? !!instPerms[tab.key] : tab.instructorDefault;
-                return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:6px;background:rgba(107,70,193,0.05);cursor:pointer">' +
-                  '<input type="checkbox" data-perm="'+tab.key+'" '+(enabled?'checked':'')+'>'+
-                  tab.label +
-                  '</label>';
-              }).join('')}
-            </div>
-          </details>
-        </div>
         <div style="padding:0 14px 14px;display:flex;justify-content:space-between;align-items:center">
           <button onclick="clearInstructorAssignments('${inst.uid}')"
             style="background:#fff5f5;color:#c53030;border:1px solid #fed7d7;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
@@ -10510,11 +10495,6 @@ async function saveInstructorAssignments(uid) {
   const teamMap = {};
   document.querySelectorAll(`#inst-teams-${uid} input[type=checkbox]:checked`).forEach(cb => {
     teamMap[cb.dataset.id] = true;
-  });
-  // Collect permissions from checkboxes
-  const permMap = {};
-  document.querySelectorAll(`#inst-perms-${uid} input[data-perm]`).forEach(cb => {
-    permMap[cb.dataset.perm] = cb.checked;
   });
   try {
     // Overwrite completely — fixes duplicates from legacy IDs
@@ -10933,9 +10913,44 @@ function buildUserCredRow(u) {
           </div>
         </div>
       </div>
+      ${u.role !== 'admin' ? `
+      <details style="border-top:1px solid #e2e8f0" id="user-perms-${u.uid}">
+        <summary style="display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-size:12px;font-weight:700;color:#6b46c1;list-style:none;background:#faf5ff">
+          🔐 הרשאות גישה לטאבים
+          <span style="font-size:11px;font-weight:400;color:#805ad5;margin-right:4px">(לחץ להרחבה)</span>
+        </summary>
+        <div style="padding:12px 14px;background:#fefcff">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:5px;margin-bottom:12px">
+            ${PERMISSION_TABS.map(tab => {
+              const uPerms = u.permissions || {};
+              const enabled = tab.key in uPerms ? !!uPerms[tab.key] : tab.instructorDefault;
+              return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:6px;background:rgba(107,70,193,0.05);cursor:pointer">' +
+                '<input type="checkbox" data-perm="'+tab.key+'" id="perm-'+u.uid+'-'+tab.key+'" '+(enabled?'checked':'')+'>'+
+                tab.label + '</label>';
+            }).join('')}
+          </div>
+          <button onclick="saveUserPermissions('${u.uid}')"
+            style="background:#6b46c1;color:white;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+            💾 שמור הרשאות
+          </button>
+        </div>
+      </details>` : ''}
     </div>`;
 }
 window.buildUserCredRow = buildUserCredRow;
+
+async function saveUserPermissions(uid) {
+  if (!db) return;
+  const permMap = {};
+  document.querySelectorAll(`#user-perms-${uid} input[data-perm]`).forEach(cb => {
+    permMap[cb.dataset.perm] = cb.checked;
+  });
+  try {
+    await db.ref(`roles/${uid}/permissions`).set(Object.keys(permMap).length > 0 ? permMap : null);
+    showToast('הרשאות נשמרו ✅');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveUserPermissions = saveUserPermissions;
 
 function toggleSaPass(uid, pass) {
   const el  = document.getElementById('sa-pass-' + uid);
