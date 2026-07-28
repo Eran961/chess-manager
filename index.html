@@ -7639,7 +7639,7 @@ if (currentUser?.role === 'admin') {
   content.appendChild(peopleAdminPanel);
 const settingsBtn = document.createElement('button');
   settingsBtn.className = 'tab-btn'; settingsBtn.dataset.tab = 'settings'; settingsBtn.textContent = '⚙️ הגדרות';
-  settingsBtn.onclick = () => { switchTab('settings'); loadInstructorsList(); if (currentUser?.superAdmin) loadAllUsersList(); };
+  settingsBtn.onclick = () => { switchTab('settings'); loadInstructorsList(); if (currentUser?.role === 'admin') loadAllUsersList(); };
   tabsBar.appendChild(settingsBtn);
   const settingsPanel = document.createElement('div');
   settingsPanel.className = 'tab-panel'; settingsPanel.id = 'panel-settings'; settingsPanel.innerHTML = renderSettingsPanel();
@@ -9966,7 +9966,7 @@ function renderSettingsPanel() {
       </div>
     </div>
 
-    ${currentUser?.superAdmin ? `
+    ${currentUser?.role === "admin" ? `
     <div class="att-card" style="border:1px solid #d6bcfa">
       <div class="att-card-header" style="background:#faf5ff;color:#553c9a">🔐 ניהול משתמשים</div>
       <div style="padding:20px">
