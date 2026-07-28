@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -3098,6 +3098,39 @@ let _useDbGroups = false; // true = groups come from Firebase, don't fallback to
 let _deletedGroupIds = new Set(); // persisted in Firebase so ALL_GROUPS deletions survive refresh
 
 let teams = [];
+
+const PERMISSION_TABS = [
+  { key: 'attendance',       label: '🗓 נוכחות',           instructorDefault: true  },
+  { key: 'payments',         label: '💳 תשלומים',          instructorDefault: true  },
+  { key: 'reports',          label: '📊 דוחות',            instructorDefault: true  },
+  { key: 'calendar',         label: '📅 לוח שנה',          instructorDefault: true  },
+  { key: 'hours',            label: '⏱️ שעות',             instructorDefault: false },
+  { key: 'friday',           label: '♟ ליגות שישי',        instructorDefault: false },
+  { key: 'club-tournaments', label: '🏆 תחרויות',          instructorDefault: false },
+  { key: 'league-adults',    label: '♟ ליגות בוגרים',      instructorDefault: false },
+  { key: 'league-women',     label: '♛ ליגות נשים',        instructorDefault: false },
+  { key: 'league-youth',     label: '🎓 ליגות נוער',        instructorDefault: false },
+  { key: 'league-stars',     label: '⭐ מצטייני ליגות',     instructorDefault: false },
+  { key: 'saturday',         label: '🏅 מפגשי ליגה',        instructorDefault: false },
+  { key: 'prospects',        label: '🌟 מצטייני גנים',      instructorDefault: false },
+  { key: 'youth-players',    label: '👦 שחקני נוער',        instructorDefault: false },
+  { key: 'audit',            label: '📊 פעילות מדריכים',    instructorDefault: false },
+  { key: 'schedule-editor',  label: '📅 לוח חוגים',         instructorDefault: false },
+  { key: 'site-content',     label: '📝 עמוד הבית',         instructorDefault: false },
+  { key: 'news-posts',       label: '📰 כתבות',             instructorDefault: false },
+  { key: 'club-people',      label: '👥 אנשי המועדון',      instructorDefault: false },
+  { key: 'tourn-cal',        label: '📅 גאנט תחרויות',      instructorDefault: false },
+  { key: 'monthly-cal',      label: '📅 לוח חודשי',         instructorDefault: false },
+];
+
+function hasTabPerm(tabKey) {
+  if (!currentUser || currentUser.role === 'admin') return true;
+  const perms = currentUser.permissions || {};
+  if (tabKey in perms) return !!perms[tabKey];
+  // Instructor defaults
+  const tab = PERMISSION_TABS.find(t => t.key === tabKey);
+  return tab ? tab.instructorDefault : false;
+}
 let _useDbTeams = false;
 let _addPlayerIsTeam = false;
 let _teamProfileState = { teamIdx: 0, subTeamIdx: 0, playerIdx: 0 };
@@ -3164,7 +3197,7 @@ async function loadDbTeams() {
       _useDbTeams = true;
       teams = Object.entries(data).map(([id, t]) => ({
         id,
-        name:     t.name     || '',
+        name:     t.name     || t.teamName || '',
         coach:    t.coach    || '',
         coachWa:  t.coachWa  || '',
         region:   t.region   || '',
@@ -3236,6 +3269,7 @@ async function loadDeletedGroups() {
 async function initializeApp() {
   if (db) { await loadDeletedGroups(); await loadDbGroups(); await loadDbTeams(); }
   buildApp();
+  injectPermissionTabs();
 }
 
 function sortedPlayers(players) {
@@ -7200,6 +7234,7 @@ function initAuth() {
       groups:     roleData?.groups     || {},
       teams:      roleData?.teams      || {},
       superAdmin: roleData?.superAdmin || false,
+      permissions: roleData?.permissions || {},
     };
     // Filter groups by role
     console.log('role:', currentUser.role, 'groups:', JSON.stringify(currentUser.groups));
@@ -7379,6 +7414,7 @@ if (teams.length > 0 || currentUser.role === 'admin') {
 // ── ניהול ──────────────────────────────────────
 addSidebarLabel('ניהול');
 
+if (hasTabPerm('attendance')) {
 const attBtn = document.createElement('button');
 attBtn.className = 'tab-btn'; attBtn.dataset.tab = 'attendance'; attBtn.textContent = '🗓 נוכחות';
 attBtn.onclick = () => {
@@ -7394,7 +7430,9 @@ tabsBar.appendChild(attBtn);
 const attPanel = document.createElement('div');
 attPanel.className = 'tab-panel'; attPanel.id = 'panel-attendance'; attPanel.innerHTML = renderAttendancePanel();
 content.appendChild(attPanel);
+}
 
+if (hasTabPerm('payments')) {
 const payBtn = document.createElement('button');
 payBtn.className = 'tab-btn'; payBtn.dataset.tab = 'payments'; payBtn.textContent = '💳 תשלומים';
 payBtn.onclick = () => { switchTab('payments'); document.getElementById('panel-payments').innerHTML = renderPaymentsPanel(); };
@@ -7402,7 +7440,9 @@ tabsBar.appendChild(payBtn);
 const payPanel = document.createElement('div');
 payPanel.className = 'tab-panel'; payPanel.id = 'panel-payments'; payPanel.innerHTML = renderPaymentsPanel();
 content.appendChild(payPanel);
+}
 
+if (hasTabPerm('reports')) {
 const repBtn = document.createElement('button');
 repBtn.className = 'tab-btn'; repBtn.dataset.tab = 'reports'; repBtn.textContent = '📊 דוחות';
 repBtn.onclick = () => { switchTab('reports'); if (groups.length > 0) loadReportsData(); else loadTeamReportsData(); };
@@ -7410,7 +7450,9 @@ tabsBar.appendChild(repBtn);
 const repPanel = document.createElement('div');
 repPanel.className = 'tab-panel'; repPanel.id = 'panel-reports'; repPanel.innerHTML = renderReportsPanel();
 content.appendChild(repPanel);
+}
 
+if (hasTabPerm('calendar')) {
 const calBtn = document.createElement('button');
 calBtn.className = 'tab-btn'; calBtn.dataset.tab = 'calendar'; calBtn.textContent = '📅 לוח שנה';
 calBtn.onclick = () => { switchTab('calendar'); document.getElementById('panel-calendar').innerHTML = renderCalendarPanel(); };
@@ -7418,6 +7460,7 @@ tabsBar.appendChild(calBtn);
 const calPanel = document.createElement('div');
 calPanel.className = 'tab-panel'; calPanel.id = 'panel-calendar'; calPanel.innerHTML = renderCalendarPanel();
 content.appendChild(calPanel);
+}
 
 // ── מדריך ────────────────────────────────────────
 addSidebarLabel('עזרה');
@@ -7629,6 +7672,124 @@ const settingsBtn = document.createElement('button');
 
   initData();
 } // end buildApp
+
+function injectPermissionTabs() {
+  if (!currentUser || currentUser.role === 'admin') return;
+  const perms = currentUser.permissions || {};
+  const grantedExtras = PERMISSION_TABS.filter(t => !t.instructorDefault && hasTabPerm(t.key)).map(t => t.key);
+  if (grantedExtras.length === 0) return;
+
+  const tabsBar = document.getElementById('tabsBar');
+  const content = document.getElementById('content');
+
+  function addTab(key, text, onclick, panelHtml) {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn'; btn.dataset.tab = key; btn.textContent = text;
+    btn.onclick = onclick;
+    tabsBar.appendChild(btn);
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel'; panel.id = 'panel-' + key;
+    panel.innerHTML = panelHtml || '<div style="padding:20px;color:#a0aec0">טוען...</div>';
+    content.appendChild(panel);
+  }
+
+  const addLabel = (lbl) => {
+    const d = document.createElement('div');
+    d.style.cssText = 'padding:20px 16px 6px;font-size:10px;font-weight:700;letter-spacing:0.8px;color:rgba(255,255,255,0.45);text-transform:uppercase;user-select:none';
+    d.textContent = lbl; tabsBar.appendChild(d);
+  };
+
+  const makeSyncBar = (type, suffix) =>
+    `<div id="sync-bar-${suffix}" style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button id="btn-sync-${suffix}" onclick="syncAllTeamsData('${type}')" style="background:#2b6cb0;color:white;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🔄 סנכרן קבוצות ${type} מהאיגוד</button>
+      <span id="sync-status-${suffix}" style="font-size:12px;color:#718096"></span></div>`;
+
+  const hasLeague = ['league-adults','league-women','league-youth','league-stars','saturday'].some(k => grantedExtras.includes(k));
+  const hasTourn  = ['friday','club-tournaments'].some(k => grantedExtras.includes(k));
+  const hasGanim  = grantedExtras.includes('prospects');
+  const hasShach  = grantedExtras.includes('youth-players');
+  const hasKlim   = grantedExtras.includes('hours');
+  const hasMaarechet = ['audit','schedule-editor','site-content','news-posts','club-people','tourn-cal','monthly-cal'].some(k => grantedExtras.includes(k));
+
+  if (hasLeague) {
+    addLabel('ליגות');
+    if (grantedExtras.includes('league-adults')) {
+      addTab('league-adults','♟ בוגרים', () => { switchTab('league-adults'); loadClubTeams().then(renderLeagueTypePanels); },
+        `<div style="padding:20px">${makeSyncBar('בוגרים','adults')}<div id="lteams-בוגרים"><div style="color:#a0aec0;font-size:13px">טוען...</div></div></div>`);
+    }
+    if (grantedExtras.includes('league-women')) {
+      addTab('league-women','♛ נשים', () => { switchTab('league-women'); loadClubTeams().then(renderLeagueTypePanels); },
+        `<div style="padding:20px">${makeSyncBar('נשים','women')}<div id="lteams-נשים"><div style="color:#a0aec0;font-size:13px">טוען...</div></div></div>`);
+    }
+    if (grantedExtras.includes('league-youth')) {
+      addTab('league-youth','🎓 נוער', () => { switchTab('league-youth'); loadClubTeams().then(renderLeagueTypePanels); },
+        `<div style="padding:20px">${makeSyncBar('נוער','youth')}<div id="lteams-נוער"><div style="color:#a0aec0;font-size:13px">טוען...</div></div></div>`);
+    }
+    if (grantedExtras.includes('league-stars')) {
+      addTab('league-stars','⭐ מצטייני הליגות', () => { switchTab('league-stars'); loadLeagueStars(); },
+        '<div style="padding:20px" id="league-stars-content"><div style="color:#a0aec0;font-size:13px">טוען...</div></div>');
+    }
+    if (grantedExtras.includes('saturday')) {
+      addTab('saturday','🏅 מפגשי ליגה', () => { switchTab('saturday'); loadClubTeams().then(renderLeagueTypePanels); loadSatSchedule(); }, buildSatLeaguesHTML());
+    }
+  }
+
+  if (hasTourn) {
+    addLabel('תחרויות');
+    if (grantedExtras.includes('friday')) {
+      addTab('friday','♟ ליגות שישי', () => { switchTab('friday'); loadFridayLeague(_fridayActiveLeague); }, renderFridayPanel());
+    }
+    if (grantedExtras.includes('club-tournaments')) {
+      addTab('club-tournaments','🏆 תחרויות', () => { switchTab('club-tournaments'); loadTournaments(); }, buildTournamentsHTML());
+    }
+  }
+
+  if (hasGanim) {
+    addLabel('גנים');
+    addTab('prospects','🌟 מצטייני גנים', () => { switchTab('prospects'); loadProspects(); }, buildProspectsHTML());
+  }
+
+  if (hasShach) {
+    addLabel('שחקנים');
+    addTab('youth-players','👦 שחקני נוער', () => { switchTab('youth-players'); loadYouthPlayers(); }, buildYouthPlayersHTML());
+  }
+
+  if (hasKlim) {
+    addLabel('כלים');
+    addTab('hours','⏱️ שעות', () => { switchTab('hours'); loadHoursHistory(); }, renderHoursPanel());
+  }
+
+  if (hasMaarechet) {
+    addLabel('מערכת');
+    if (grantedExtras.includes('audit')) {
+      addTab('audit','📊 פעילות מדריכים', () => { switchTab('audit'); loadAuditLog(); },
+        '<div style="padding:32px;text-align:center;color:#888;">לחץ על הלשונית לטעינת הנתונים</div>');
+    }
+    if (grantedExtras.includes('schedule-editor')) {
+      addTab('schedule-editor','📅 לוח חוגים', () => { switchTab('schedule-editor'); loadScheduleEditor(); }, renderScheduleEditorPanel());
+    }
+    if (grantedExtras.includes('site-content')) {
+      addTab('site-content','📝 עמוד הבית', () => { switchTab('site-content'); loadSiteContentAdmin(); },
+        '<div id="site-content-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
+    }
+    if (grantedExtras.includes('news-posts')) {
+      addTab('news-posts','📰 כתבות', () => { switchTab('news-posts'); loadNewsAdmin(); },
+        '<div id="news-admin-container" style="padding:20px;direction:rtl;max-width:800px"></div>');
+    }
+    if (grantedExtras.includes('club-people')) {
+      addTab('club-people','👥 אנשי המועדון', () => { switchTab('club-people'); loadPeopleAdmin(); },
+        '<div id="people-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
+    }
+    if (grantedExtras.includes('tourn-cal')) {
+      addTab('tourn-cal','📅 גאנט תחרויות', () => { switchTab('tourn-cal'); initTournCal(); },
+        '<div id="tourn-cal-root" style="padding:20px;direction:rtl;max-width:1100px;margin:0 auto"></div>');
+    }
+    if (grantedExtras.includes('monthly-cal')) {
+      addTab('monthly-cal','📅 לוח חודשי', () => { switchTab('monthly-cal'); loadAdminCalendarPanel(); },
+        '<div style="padding:20px;color:#a0aec0">טוען...</div>');
+    }
+  }
+}
 
 
 // ========== TOURNAMENT CALENDAR ==========
@@ -10173,6 +10334,7 @@ async function loadInstructorsList() {
   const el = document.getElementById('instructors-list');
   if (!el || !db) return;
   el.innerHTML = '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">טוען...</div>';
+  console.log('[Instructors] teams array:', teams.map(t => ({ id: t.id, name: t.name, keys: Object.keys(t) })));
   try {
     const snap = await db.ref('roles').get();
     const allRoles = snap.val() || {};
@@ -10246,7 +10408,7 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'}"
                    title="${taken ? `משויך ל${taken}` : ''}">
               <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
-              ${t.name}
+              <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
               ${taken ? `<span style="font-size:11px;color:#e53e3e">(${taken})</span>` : ''}
             </label>`;
         }).join('')}`;
@@ -10257,7 +10419,7 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
       return `
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'}">
           <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
-          ${t.name}
+          <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
           ${taken ? `<span style="font-size:11px;color:#e53e3e">(${taken})</span>` : ''}
         </label>`;
     })
@@ -10288,6 +10450,21 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
             <div style="font-size:12px;font-weight:700;color:#553c9a;margin-bottom:8px">🏅 נבחרות</div>
             ${teamCheckboxes || '<div style="color:#a0aec0;font-size:12px">אין נבחרות</div>'}
           </div>
+        </div>
+        <div style="padding:14px 14px 8px;border-top:1px solid rgba(0,0,0,0.06)">
+          <details id="inst-perms-${inst.uid}">
+            <summary style="font-size:12px;font-weight:700;color:#6b46c1;cursor:pointer;padding:4px 0;list-style:none">🔐 הרשאות גישה לטאבים ▾</summary>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:5px;margin-top:10px">
+              ${PERMISSION_TABS.map(tab => {
+                const instPerms = inst.permissions || {};
+                const enabled = tab.key in instPerms ? !!instPerms[tab.key] : tab.instructorDefault;
+                return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:6px;background:rgba(107,70,193,0.05);cursor:pointer">' +
+                  '<input type="checkbox" data-perm="'+tab.key+'" '+(enabled?'checked':'')+'>'+
+                  tab.label +
+                  '</label>';
+              }).join('')}
+            </div>
+          </details>
         </div>
         <div style="padding:0 14px 14px;display:flex;justify-content:space-between;align-items:center">
           <button onclick="clearInstructorAssignments('${inst.uid}')"
@@ -10334,10 +10511,16 @@ async function saveInstructorAssignments(uid) {
   document.querySelectorAll(`#inst-teams-${uid} input[type=checkbox]:checked`).forEach(cb => {
     teamMap[cb.dataset.id] = true;
   });
+  // Collect permissions from checkboxes
+  const permMap = {};
+  document.querySelectorAll(`#inst-perms-${uid} input[data-perm]`).forEach(cb => {
+    permMap[cb.dataset.perm] = cb.checked;
+  });
   try {
     // Overwrite completely — fixes duplicates from legacy IDs
     await db.ref(`roles/${uid}/groups`).set(Object.keys(groupMap).length > 0 ? groupMap : null);
     await db.ref(`roles/${uid}/teams`).set(Object.keys(teamMap).length  > 0 ? teamMap  : null);
+    await db.ref(`roles/${uid}/permissions`).set(Object.keys(permMap).length > 0 ? permMap : null);
     // Update displayed counts in header
     const countEl = document.querySelector(`#inst-expand-${uid}`)?.previousElementSibling;
     if (countEl) {
