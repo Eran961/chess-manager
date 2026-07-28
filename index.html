@@ -9901,7 +9901,7 @@ function renderSettingsPanel() {
   const groupRows = groups.map((g, i) => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:6px">
       <div style="flex:1;min-width:0">
-        <span style="font-weight:600;font-size:14px">${g.name}</span>
+        <span style="font-weight:600;font-size:14px;color:#2d3748">${g.name}</span>
         ${g.instructor ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${g.instructor}</span>` : ''}
         <span style="font-size:12px;color:#a0aec0"> · ${g.subGroups.length} קבוצות</span>
         ${(g.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(g.meetings)}</span>` : ''}
@@ -9942,7 +9942,7 @@ function renderSettingsPanel() {
             return regionHeader + regionTeams.map(t => `
               <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:4px">
                 <div style="flex:1;min-width:0">
-                  <span style="font-weight:600;font-size:14px">🏅 ${t.name}</span>
+                  <span style="font-weight:600;font-size:14px;color:#2d3748">🏅 ${t.name}</span>
                   ${t.coach ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${t.coach}</span>` : ''}
                   <span style="font-size:11px;color:#a0aec0;margin-right:6px">${t.subGroups.length} קטגורי${t.subGroups.length===1?'ה':'ות'}</span>
                   ${(t.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(t.meetings)}</span>` : ''}
@@ -10435,7 +10435,7 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
       <div style="background:#f7fafc;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
            onclick="toggleInstructorExpand('${inst.uid}')">
         <div>
-          <span style="font-weight:700;font-size:14px">${inst.name || inst.email || inst.uid}</span>
+          <span style="font-weight:700;font-size:14px;color:#2d3748">${inst.name || inst.email || inst.uid}</span>
           <span style="font-size:12px;color:#718096;margin-right:8px"> · ${inst.email || ''}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -10574,20 +10574,33 @@ async function submitAddInstructor() {
     // Create user via secondary Firebase app — doesn't affect admin session
     const secondaryApp = firebase.initializeApp(FIREBASE_CONFIG, 'inst-create-' + Date.now());
     const secondaryAuth = secondaryApp.auth();
-    const cred = await secondaryAuth.createUserWithEmailAndPassword(email, pass);
-    const newUid = cred.user.uid;
+    let newUid;
+    try {
+      const cred = await secondaryAuth.createUserWithEmailAndPassword(email, pass);
+      newUid = cred.user.uid;
+    } catch(createErr) {
+      if (createErr.code === 'auth/email-already-in-use') {
+        // User already exists in Auth — sign in to get their UID
+        const cred = await secondaryAuth.signInWithEmailAndPassword(email, pass);
+        newUid = cred.user.uid;
+      } else {
+        throw createErr;
+      }
+    }
     await secondaryAuth.signOut();
     await secondaryApp.delete();
-    // Save role to database
+    // Save role to database (overwrite any partial/missing entry)
     await db.ref(`roles/${newUid}`).set({ name, username, email, role: 'instructor', groups: {}, teams: {}, tempPassword: pass });
     document.querySelector('.friday-modal')?.remove();
-    showToast(`המדריך "${name}" נוצר ✅`);
+    showToast(`המדריך "${name}" נוסף ✅`);
     loadInstructorsList();
+    loadAllUsersList();
   } catch(e) {
     const msgs = {
-      'auth/email-already-in-use': 'האימייל כבר קיים במערכת',
-      'auth/invalid-email':        'כתובת אימייל לא תקינה',
-      'auth/weak-password':        'הסיסמה חלשה מדי',
+      'auth/invalid-email':   'כתובת אימייל לא תקינה',
+      'auth/weak-password':   'הסיסמה חלשה מדי',
+      'auth/wrong-password':  'סיסמה שגויה — לא ניתן לאמת משתמש קיים',
+      'auth/invalid-credential': 'סיסמה שגויה — לא ניתן לאמת משתמש קיים',
     };
     errEl.textContent = msgs[e.code] || e.message;
     errEl.style.display = '';
