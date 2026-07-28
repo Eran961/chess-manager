@@ -10386,7 +10386,7 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
     const mine  = isGroupAssigned(g);
     const taken = !mine && groupTakenBy(g);
     return `
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'}"
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748"
              title="${taken ? `משויך ל${taken}` : ''}">
         <input type="checkbox" data-id="${g.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
         ${g.name}
@@ -10400,15 +10400,15 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
     ...regions.map(region => {
       const regionTeams = teams.filter(t => t.region === region);
       return `
-        <div style="font-size:11px;font-weight:700;color:#718096;letter-spacing:0.8px;text-transform:uppercase;padding:6px 0 2px">― ${region} ―</div>
+        <div style="font-size:11px;font-weight:700;color:#4a5568;letter-spacing:0.8px;text-transform:uppercase;padding:6px 0 2px">― ${region} ―</div>
         ${regionTeams.map(t => {
           const mine  = assignedTeams.includes(t.id);
           const taken = !mine && teamTakenBy(t);
           return `
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'}"
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748"
                    title="${taken ? `משויך ל${taken}` : ''}">
               <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
-              <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
+              <span style="font-weight:600;color:#2d3748">${t.name || t.teamName || t.id}</span>
               ${taken ? `<span style="font-size:11px;color:#e53e3e">(${taken})</span>` : ''}
             </label>`;
         }).join('')}`;
@@ -10417,9 +10417,9 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
       const mine  = assignedTeams.includes(t.id);
       const taken = !mine && teamTakenBy(t);
       return `
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'}">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748">
           <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
-          <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
+          <span style="font-weight:600;color:#2d3748">${t.name || t.teamName || t.id}</span>
           ${taken ? `<span style="font-size:11px;color:#e53e3e">(${taken})</span>` : ''}
         </label>`;
     })
@@ -10919,12 +10919,12 @@ function buildUserCredRow(u) {
           🔐 הרשאות גישה לטאבים
           <span style="font-size:11px;font-weight:400;color:#805ad5;margin-right:4px">(לחץ להרחבה)</span>
         </summary>
-        <div style="padding:12px 14px;background:#fefcff">
+        <div style="padding:12px 14px;background:#fefcff;color:#2d3748">
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:5px;margin-bottom:12px">
             ${PERMISSION_TABS.map(tab => {
               const uPerms = u.permissions || {};
               const enabled = tab.key in uPerms ? !!uPerms[tab.key] : tab.instructorDefault;
-              return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:6px;background:rgba(107,70,193,0.05);cursor:pointer">' +
+              return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:6px;background:rgba(107,70,193,0.05);cursor:pointer;color:#2d3748">' +
                 '<input type="checkbox" data-perm="'+tab.key+'" id="perm-'+u.uid+'-'+tab.key+'" '+(enabled?'checked':'')+'>'+
                 tab.label + '</label>';
             }).join('')}
