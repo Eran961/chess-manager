@@ -92,6 +92,12 @@
       flex-direction: column;
       min-height: calc(100vh - 90px);
     }
+    @media (max-width: 600px) {
+      #app-layout { min-height: calc(100vh - 120px); }
+    }
+    @media (max-width: 400px) {
+      #app-layout { min-height: calc(100vh - 140px); }
+    }
 
     .tabs-bar {
       background: #1a2744;
@@ -1091,6 +1097,7 @@
         height: 48px;
         padding: 0 8px;
         gap: 1px;
+        -webkit-overflow-scrolling: touch;
       }
       .cat-btn {
         padding: 6px 10px;
@@ -1098,6 +1105,9 @@
         height: 34px;
       }
       .content { padding: 16px 14px; }
+      /* Hub cards — compact on tablet */
+      .hub-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+      .hub-card { padding: 18px 12px; }
       .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
       .dash-stat-num { font-size: 26px; }
       .profile-modal-box { width: calc(100vw - 32px); }
@@ -1303,6 +1313,33 @@
 
       /* Reports table */
       .rep-table td, .rep-table th { padding: 6px 8px; font-size: 12px; }
+
+      /* ===== PORTAL — MOBILE ===== */
+
+      /* Hub cards — 2-per-row grid on phones */
+      .hub-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; padding-top: 6px; }
+      .hub-card { padding: 14px 10px; }
+      .hub-card-icon { font-size: 24px; margin-bottom: 6px; }
+      .hub-card-title { font-size: 12px; }
+
+      /* Portal top nav — emoji-only theme toggle to save space */
+      #portal-theme-toggle { font-size: 16px; padding: 3px 6px; }
+
+      /* Portal JS-created modals (z-index:9999) — shrink overlay padding on mobile */
+      .modal-overlay[style*="z-index:9999"] { padding: 8px !important; }
+
+      /* Inner div of those modals — reduce padding so content has room */
+      .modal-overlay[style*="z-index:9999"] > div:not(.modal-box):not(.profile-modal-box) {
+        padding: 18px 14px !important;
+        max-height: 92vh !important;
+        border-radius: 12px !important;
+      }
+
+      /* Person rows in people admin — wrap action buttons below on tiny screens */
+      .people-admin-row { flex-wrap: wrap; }
+
+      /* Settings section panel title */
+      #panel-settings h3 { font-size: 16px; }
     }
 
     /* ===== VERY SMALL SCREENS (≤400px) ===== */
@@ -1324,6 +1361,13 @@
       .btn-att { font-size: 12px; padding: 6px 8px; }
       .profile-att-numbers > div { min-width: 100%; }
       .pay-group-cards > div { min-width: 100%; }
+      /* Hub cards — force 2 columns minimum on tiny screens */
+      .hub-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      .hub-card { padding: 12px 8px; }
+      .hub-card-icon { font-size: 22px; }
+      .hub-card-title { font-size: 11px; }
+      /* Cat-btn — very compact */
+      .cat-btn { padding: 5px 8px; font-size: 12px; height: 32px; }
     }
 
 
