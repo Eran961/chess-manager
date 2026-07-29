@@ -86,105 +86,104 @@
     header h1 { font-size: 24px; font-weight: 700; }
     header p { font-size: 13px; color: #a0aec0; margin-top: 2px; }
 
-    /* ===== SIDEBAR LAYOUT ===== */
+    /* ===== TOP NAV LAYOUT ===== */
     #app-layout {
       display: flex;
+      flex-direction: column;
       min-height: calc(100vh - 90px);
     }
 
     .tabs-bar {
-      width: 210px;
-      min-width: 210px;
       background: #1a2744;
       display: flex;
-      flex-direction: column;
-      padding: 8px 0 32px;
+      flex-direction: row;
+      align-items: center;
+      padding: 0 12px;
       position: sticky;
       top: 0;
-      height: 100vh;
-      overflow-y: auto;
-      flex-shrink: 0;
-      border-left: 1px solid rgba(255,255,255,0.06);
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255,255,255,0.12) transparent;
-      z-index: 50;
-    }
-
-    .sidebar-section-label {
-      padding: 18px 16px 5px;
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.55);
-      user-select: none;
-      pointer-events: none;
-    }
-
-    .sidebar-logo-area {
-      padding: 14px 16px 10px;
-      font-size: 13px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.9);
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      margin-bottom: 6px;
-      letter-spacing: 0.3px;
-    }
-
-    .tab-btn {
-      display: block;
       width: 100%;
-      padding: 9px 18px;
+      height: 52px;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      z-index: 100;
+      box-sizing: border-box;
+      gap: 2px;
+      direction: rtl;
+    }
+    .tabs-bar::-webkit-scrollbar { display: none; }
+
+    .sidebar-section-label { display: none; }
+    .sidebar-logo-area { display: none; }
+    .sidebar-overlay { display: none !important; }
+    .btn-hamburger { display: none !important; }
+
+    /* Old tab buttons — hidden in top bar but kept in DOM for onclick access */
+    .tab-btn { display: none; }
+    .tab-btn.active { display: none; }
+
+    /* ===== CATEGORY BUTTONS ===== */
+    .cat-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 14px;
       border: none;
       background: none;
       cursor: pointer;
       font-size: 13.5px;
       font-weight: 600;
-      color: rgba(255,255,255,0.88);
-      text-align: right;
-      border-bottom: none;
+      color: rgba(255,255,255,0.75);
+      border-radius: 8px;
       transition: background 0.15s, color 0.15s;
       font-family: inherit;
       white-space: nowrap;
-      border-radius: 0;
+      flex-shrink: 0;
+      height: 38px;
     }
-
-    .tab-btn:hover {
-      background: rgba(255,255,255,0.07);
+    .cat-btn:hover {
+      background: rgba(255,255,255,0.08);
       color: rgba(255,255,255,0.95);
     }
-
-    .tab-btn.active {
-      background: rgba(43,108,176,0.8);
+    .cat-btn.active {
+      background: rgba(43,108,176,0.85);
       color: white;
       font-weight: 700;
-      border-bottom: none;
-    }
-
-    .sidebar-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.45);
-      z-index: 49;
-    }
-
-    .btn-hamburger {
-      display: none;
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.2);
-      color: white;
-      border-radius: 8px;
-      padding: 7px 11px;
-      cursor: pointer;
-      font-size: 18px;
-      line-height: 1;
     }
 
     .content { padding: 28px 32px; flex: 1; min-width: 0; overflow-x: hidden; }
 
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
+
+    /* ===== HUB PAGES ===== */
+    .hub-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+      direction: rtl;
+      padding: 24px 0 0;
+    }
+    .hub-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 16px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s, transform 0.1s;
+      color: var(--text-primary);
+      font-family: inherit;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .hub-card:hover {
+      background: var(--bg-card);
+      transform: translateY(-2px);
+    }
+    .hub-card-icon { font-size: 30px; margin-bottom: 8px; }
+    .hub-card-title { font-size: 13px; font-weight: 700; line-height: 1.3; }
 
     .sub-group {
       background: white;
@@ -258,7 +257,7 @@
     }
 
     td.idx { color: #a0aec0; font-size: 12px; width: 36px; text-align: center; }
-    td.first-name { font-weight: 600; }
+    td.first-name { font-weight: 600; color: #2d3748; }
     td.last-name { color: #2d3748; }
 
     td.birth {
@@ -1089,19 +1088,15 @@
     /* ===== TABLET (768px) ===== */
     @media (max-width: 768px) {
       .tabs-bar {
-        position: fixed;
-        top: 0; right: -240px;
-        height: 100vh;
-        width: 240px;
-        transition: right 0.25s ease;
-        box-shadow: -4px 0 20px rgba(0,0,0,0.4);
-        z-index: 200;
-        padding-top: 20px;
+        height: 48px;
+        padding: 0 8px;
+        gap: 1px;
       }
-      .tabs-bar.sidebar-open { right: 0; }
-      .sidebar-overlay { display: block; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
-      .sidebar-overlay.visible { opacity: 1; pointer-events: auto; }
-      .btn-hamburger { display: block !important; }
+      .cat-btn {
+        padding: 6px 10px;
+        font-size: 12.5px;
+        height: 34px;
+      }
       .content { padding: 16px 14px; }
       .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
       .dash-stat-num { font-size: 26px; }
@@ -3270,6 +3265,7 @@ async function initializeApp() {
   if (db) { await loadDeletedGroups(); await loadDbGroups(); await loadDbTeams(); }
   buildApp();
   injectPermissionTabs();
+  buildTopNav();
 }
 
 function sortedPlayers(players) {
@@ -6730,47 +6726,83 @@ window.loadPublicSchedule = async function() {
       .sort((a,b) => (a.order||0)-(b.order||0));
     const allClasses = Object.entries(data.classes || {})
       .map(([id,v]) => ({id,...v}));
+    const allFilters = Object.entries(data.filters || {})
+      .map(([id,v]) => ({id,...v}))
+      .sort((a,b) => (a.order||0)-(b.order||0));
 
-    if (cats.length === 0) {
+    window._pubScheduleClasses = allClasses;
+    window._pubScheduleFilters = allFilters;
+
+    if (cats.length === 0 && allClasses.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4)">לוח החוגים יתעדכן בקרוב</div>';
       return;
     }
 
-    let activeCatId = cats[0].id;
+    let activeCatId = cats.length ? cats[0].id : null;
+
+    const viewToggle =
+      '<div style="display:flex;background:var(--bg-subtle);border-radius:8px;padding:3px;gap:2px;flex-shrink:0">' +
+      '<button id="pub-view-detail" onclick="window._setPubView(\'detail\')" style="background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📋 פירוט</button>' +
+      '<button id="pub-view-weekly" onclick="window._setPubView(\'weekly\')" style="background:none;color:var(--text-muted);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📅 לוח שבועי</button>' +
+      '</div>';
 
     function renderTable(catId) {
-      const rows = allClasses
-        .filter(c => c.categoryId === catId)
-        .sort((a,b) => (a.order||0)-(b.order||0));
-      if (!rows.length) return '<div style="text-align:center;padding:32px;color:rgba(255,255,255,0.35)">אין חוגים בקטגוריה זו</div>';
-      return '<table class="schedule-table"><thead><tr>' +
+      const cat  = cats.find(c => c.id === catId);
+      const notesHtml = (cat?.notes||'').trim()
+        ? '<div style="padding:10px 0 18px;font-size:14px;color:var(--text-muted);line-height:1.6;white-space:pre-wrap;direction:rtl">'+cat.notes+'</div>'
+        : '';
+      const rows = allClasses.filter(c => c.categoryId===catId).sort((a,b) => (a.order||0)-(b.order||0));
+      if (!rows.length) return notesHtml + '<div style="text-align:center;padding:32px;color:rgba(255,255,255,0.35)">אין חוגים בקטגוריה זו</div>';
+      return notesHtml + '<table class="schedule-table"><thead><tr>' +
         '<th>יום</th><th>שעות</th><th>גיל</th><th>רמה</th><th>מדריך</th><th>מחיר/חודש</th>' +
         '</tr></thead><tbody>' +
         rows.map(c => '<tr>' +
-          '<td>' + (c.day||'') + '</td>' +
-          '<td>' + (c.timeStart||'') + '–' + (c.timeEnd||'') + '</td>' +
-          '<td style="font-size:12px">' + (c.ageLabel||'') + '</td>' +
-          '<td><span class="level-badge level-' + (c.levelType||'beginner') + '">' + (c.levelLabel||'') + '</span></td>' +
-          '<td>' + (c.instructor||'') + '</td>' +
-          '<td class="price-cell">' + (c.price ? c.price + ' ₪' : '–') + '</td>' +
+          '<td>'+(c.day||'')+'</td>' +
+          '<td>'+(c.timeStart||'')+'–'+(c.timeEnd||'')+'</td>' +
+          '<td style="font-size:12px">'+(c.ageLabel||'')+'</td>' +
+          '<td><span class="level-badge level-'+(c.levelType||'beginner')+'">'+(c.levelLabel||'')+'</span></td>' +
+          '<td>'+(c.instructor||'')+'</td>' +
+          '<td class="price-cell">'+(c.price?c.price+' ₪':'–')+'</td>' +
           '</tr>').join('') +
         '</tbody></table>';
     }
 
-    function renderTabs() {
-      catTabs.innerHTML = cats.map(c =>
-        '<button onclick="window._pubClubTab(\'' + c.id + '\')" id="pubcat-' + c.id + '" style="padding:8px 18px;border:none;border-radius:20px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;' +
-        (c.id===activeCatId ? 'background:#f97316;color:white' : 'background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.75)') +
-        '">' + c.name + '</button>'
+    function renderCatTabs() {
+      const onSt  = 'background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit';
+      const offSt = 'background:none;color:var(--text-muted);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+      catTabs.innerHTML = viewToggle + cats.map(c =>
+        '<button onclick="window._pubClubTab(\''+c.id+'\')" id="pubcat-'+c.id+'" style="padding:6px 16px;border:none;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;' +
+        (c.id===activeCatId?'background:#f97316;color:white':'background:var(--bg-subtle);color:var(--text-primary)') +
+        '">'+c.name+'</button>'
       ).join('');
-      container.innerHTML = renderTable(activeCatId);
+      const pvd = document.getElementById('pub-view-detail');
+      const pvw = document.getElementById('pub-view-weekly');
+      if (pvd) pvd.style.cssText = onSt;
+      if (pvw) pvw.style.cssText = offSt;
+      container.innerHTML = activeCatId ? renderTable(activeCatId) : '<div style="text-align:center;padding:32px;color:rgba(255,255,255,0.35)">אין חוגים</div>';
+    }
+
+    function renderWeeklyView() {
+      const onSt  = 'background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit';
+      const offSt = 'background:none;color:var(--text-muted);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+      catTabs.innerHTML = viewToggle;
+      const pvd = document.getElementById('pub-view-detail');
+      const pvw = document.getElementById('pub-view-weekly');
+      if (pvd) pvd.style.cssText = offSt;
+      if (pvw) pvw.style.cssText = onSt;
+      container.innerHTML = _renderWeeklyPublicSection(allClasses, allFilters);
     }
 
     window._pubClubTab = function(catId) {
       activeCatId = catId;
-      renderTabs();
+      renderCatTabs();
     };
-    renderTabs();
+    window._setPubView = function(view) {
+      window._pubScheduleView = view;
+      if (view==='weekly') renderWeeklyView(); else renderCatTabs();
+    };
+
+    if ((window._pubScheduleView||'detail')==='weekly') renderWeeklyView(); else renderCatTabs();
   } catch(e) {
     container.innerHTML = '<div style="text-align:center;padding:40px;color:#fc8181">שגיאה בטעינת לוח החוגים: ' + e.message + '</div>';
   }
@@ -6781,10 +6813,14 @@ window.loadPublicSchedule = async function() {
 // ════════════════════════════════════════════════════════════
 function renderScheduleEditorPanel() {
   return '<div style="padding:24px;max-width:960px;margin:0 auto;direction:rtl">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;gap:12px;flex-wrap:wrap">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:12px;flex-wrap:wrap">' +
     '<h2 style="margin:0;font-size:22px;font-weight:800">📅 עורך לוח חוגים</h2>' +
-    '<div style="display:flex;gap:10px">' +
-    '<button onclick="window.addScheduleCategory()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">+ קטגוריה חדשה</button>' +
+    '<div style="display:flex;gap:8px;align-items:center">' +
+    '<div style="display:flex;background:var(--bg-subtle);border-radius:8px;padding:3px;gap:2px">' +
+    '<button id="sch-view-detail" onclick="window._schSetView(\'detail\')" style="background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 פירוט</button>' +
+    '<button id="sch-view-weekly" onclick="window._schSetView(\'weekly\')" style="background:none;color:var(--text-muted);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">📅 לוח שבועי</button>' +
+    '</div>' +
+    '<button id="sch-add-cat-btn" onclick="window.addScheduleCategory()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ קטגוריה</button>' +
     '</div></div>' +
     '<div id="schedule-editor-content"><div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div></div>' +
     '</div>';
@@ -6801,81 +6837,86 @@ async function loadScheduleEditor() {
       .sort((a,b) => (a.order||0)-(b.order||0));
     const allClasses = Object.entries(data.classes || {})
       .map(([id,v]) => ({id,...v}));
+    const allFilters = Object.entries(data.filters || {})
+      .map(([id,v]) => ({id,...v}))
+      .sort((a,b) => (a.order||0)-(b.order||0));
 
-    if (cats.length === 0) {
-      el.innerHTML = '<div style="text-align:center;padding:48px;color:#a0aec0">' +
-        '<div style="font-size:36px;margin-bottom:12px">📋</div>' +
-        '<div style="font-weight:700;font-size:16px;margin-bottom:8px">אין קטגוריות עדיין</div>' +
-        '<div style="font-size:14px;margin-bottom:20px">לחץ על "קטגוריה חדשה" כדי להתחיל לבנות את לוח החוגים</div>' +
-        '</div>';
-      return;
+    window._schedCats    = cats;
+    window._schedClasses = allClasses;
+    window._schedFilters = allFilters;
+
+    if ((window._schedView || 'detail') === 'weekly') {
+      el.innerHTML = _renderWeeklyAdminSection(allClasses, allFilters);
+      const onStyle  = 'background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit';
+      const offStyle = 'background:none;color:var(--text-muted);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit';
+      const detBtn = document.getElementById('sch-view-detail');
+      const wkBtn  = document.getElementById('sch-view-weekly');
+      if (detBtn) detBtn.style.cssText = offStyle;
+      if (wkBtn)  wkBtn.style.cssText  = onStyle;
+      const addCatBtn = document.getElementById('sch-add-cat-btn');
+      if (addCatBtn) addCatBtn.style.display = 'none';
+    } else {
+      el.innerHTML = renderDetailViewHtml(cats, allClasses);
     }
-
-    el.innerHTML = cats.map(cat => {
-      const catClasses = allClasses
-        .filter(c => c.categoryId === cat.id)
-        .sort((a,b) => (a.order||0)-(b.order||0));
-      const rows = catClasses.map((c,i) =>
-        '<tr>' +
-        '<td style="padding:8px 10px">' + (c.day||'') + '</td>' +
-        '<td style="padding:8px 10px">' + (c.timeStart||'') + '–' + (c.timeEnd||'') + '</td>' +
-        '<td style="padding:8px 10px;font-size:12px">' + (c.ageLabel||'–') + '</td>' +
-        '<td style="padding:8px 10px"><span class="level-badge level-' + (c.levelType||'beginner') + '">' + (c.levelLabel||'') + '</span></td>' +
-        '<td style="padding:8px 10px">' + (c.instructor||'–') + '</td>' +
-        '<td style="padding:8px 10px;font-weight:700;color:#f97316">' + (c.price ? c.price+' ₪' : '–') + '</td>' +
-        '<td style="padding:8px 6px;white-space:nowrap">' +
-        '<button onclick="window.editScheduleClass(\'' + c.id + '\')" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit;margin-left:4px">✏️ עריכה</button>' +
-        '<button onclick="window.deleteScheduleClass(\'' + c.id + '\',\'' + cat.id + '\')" style="background:rgba(239,68,68,0.12);color:#fc8181;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit">🗑 מחק</button>' +
-        '</td>' +
-        '</tr>'
-      ).join('');
-
-      return '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:20px;margin-bottom:20px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-        '<span style="font-size:17px;font-weight:800">' + cat.name + '</span>' +
-        '<button onclick="window.editScheduleCategory(\'' + cat.id + '\',\'' + cat.name.replace(/'/g,"\\'") + '\')" style="background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.6);border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit">✏️ שנה שם</button>' +
-        '<button onclick="window.deleteScheduleCategory(\'' + cat.id + '\')" style="background:none;border:1px solid rgba(239,68,68,0.3);color:#fc8181;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit">🗑 מחק קטגוריה</button>' +
-        '</div>' +
-        '<button onclick="window.addScheduleClass(\'' + cat.id + '\')" style="background:#1e3a6e;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ הוסף חוג</button>' +
-        '</div>' +
-        (catClasses.length > 0
-          ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
-            '<thead><tr style="color:rgba(255,255,255,0.5);font-size:11px;text-transform:uppercase">' +
-            '<th style="padding:6px 10px;text-align:right">יום</th>' +
-            '<th style="padding:6px 10px;text-align:right">שעות</th>' +
-            '<th style="padding:6px 10px;text-align:right">גיל</th>' +
-            '<th style="padding:6px 10px;text-align:right">רמה</th>' +
-            '<th style="padding:6px 10px;text-align:right">מדריך</th>' +
-            '<th style="padding:6px 10px;text-align:right">מחיר</th>' +
-            '<th style="padding:6px 10px;text-align:right">פעולות</th>' +
-            '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-          : '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.35);font-size:13px">אין חוגים בקטגוריה זו — לחץ על "הוסף חוג"</div>'
-        ) +
-        '</div>';
-    }).join('');
   } catch(e) {
     el.innerHTML = '<div style="color:#fc8181;padding:20px">שגיאה: ' + e.message + '</div>';
   }
 }
 
 // --- Category CRUD ---
-window.addScheduleCategory = async function() {
-  const name = prompt('שם הקטגוריה החדשה (למשל: ילדים ונוער, מבוגרים):');
-  if (!name || !name.trim()) return;
-  const snap = await db.ref('clubSchedule/categories').once('value');
-  const existing = snap.val() || {};
-  const order = Object.keys(existing).length;
-  await db.ref('clubSchedule/categories').push({ name: name.trim(), order });
+window.openCategoryModal = function(catId) {
+  const existing = catId ? (window._schedCats||[]).find(c=>c.id===catId) : null;
+  document.querySelector('.cat-edit-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.className = 'cat-edit-modal friday-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
+  modal.innerHTML =
+    '<div style="background:#1e2a45;border-radius:16px;padding:28px;width:420px;max-width:92vw;color:white">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
+    '<h3 style="margin:0;font-size:18px;font-weight:800">'+(catId?'עריכת קטגוריה':'קטגוריה חדשה')+'</h3>' +
+    '<button onclick="this.closest(\'.cat-edit-modal\').remove()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:22px;cursor:pointer;line-height:1">✕</button>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:14px">' +
+    '<div>' +
+    '<label style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);display:block;margin-bottom:6px">שם הקטגוריה</label>' +
+    '<input id="cat-modal-name" type="text" value="'+(existing?.name||'')+'" placeholder="לדוגמא: ילדים ונוער, מבוגרים" ' +
+    'style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:white;font-size:14px;font-family:inherit;box-sizing:border-box">' +
+    '</div>' +
+    '<div>' +
+    '<label style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);display:block;margin-bottom:6px">הערות (יוצג באתר מתחת לכותרת הקטגוריה)</label>' +
+    '<textarea id="cat-modal-notes" rows="3" placeholder="מלל חופשי שיופיע מתחת לשם הקטגוריה..." ' +
+    'style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:white;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical">' +
+    (existing?.notes||'') +
+    '</textarea>' +
+    '</div>' +
+    '<div id="cat-modal-err" style="color:#fc8181;font-size:13px;display:none"></div>' +
+    '<button onclick="window._saveCategoryModal(\''+(catId||'')+'\')" ' +
+    'style="background:#f97316;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">' +
+    (catId?'💾 שמור שינויים':'+ הוסף קטגוריה') +
+    '</button></div></div>';
+  document.body.appendChild(modal);
+  setTimeout(()=>document.getElementById('cat-modal-name')?.focus(),50);
+};
+
+window._saveCategoryModal = async function(catId) {
+  const name  = (document.getElementById('cat-modal-name')?.value||'').trim();
+  const notes = (document.getElementById('cat-modal-notes')?.value||'').trim();
+  const errEl = document.getElementById('cat-modal-err');
+  if (!name) { errEl.textContent='נדרש שם לקטגוריה'; errEl.style.display=''; return; }
+  errEl.style.display = 'none';
+  if (catId) {
+    await db.ref('clubSchedule/categories/'+catId).update({ name, notes });
+  } else {
+    const snap = await db.ref('clubSchedule/categories').once('value');
+    const order = Object.keys(snap.val()||{}).length;
+    await db.ref('clubSchedule/categories').push({ name, notes, order });
+  }
+  document.querySelector('.cat-edit-modal')?.remove();
   loadScheduleEditor();
 };
 
-window.editScheduleCategory = async function(catId, currentName) {
-  const name = prompt('שם חדש לקטגוריה:', currentName);
-  if (!name || !name.trim()) return;
-  await db.ref('clubSchedule/categories/' + catId + '/name').set(name.trim());
-  loadScheduleEditor();
-};
+window.addScheduleCategory = function() { window.openCategoryModal(null); };
+window.editScheduleCategory = function(catId) { window.openCategoryModal(catId); };
 
 window.deleteScheduleCategory = async function(catId) {
   if (!confirm('למחוק קטגוריה זו וכל החוגים שבה?')) return;
@@ -6962,6 +7003,21 @@ function getScheduleClassModal(cls, catId) {
     '<input id="sch-price" type="text" placeholder="למשל: 195 או 235/355" value="' + (cls&&cls.price||'') + '" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:9px 12px;color:white;font-size:14px;font-family:inherit;width:100%;box-sizing:border-box">' +
     '</div>' +
 
+    (() => {
+      const allF = window._schedFilters || [];
+      if (!allF.length) return '';
+      return '<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">' +
+        '<label style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:700">פילטרים</label>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:10px">' +
+        allF.map(f => {
+          const checked = cls && cls.filters && cls.filters[f.id];
+          return '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px">' +
+            '<input type="checkbox" id="sch-filter-cb-'+f.id+'" '+(checked?'checked':'')+' style="accent-color:'+f.color+';width:14px;height:14px">' +
+            '<span style="width:10px;height:10px;border-radius:50%;background:'+f.color+';display:inline-block;flex-shrink:0"></span>' +
+            f.name+'</label>';
+        }).join('') +
+        '</div></div>';
+    })() +
     '<div style="margin-top:22px;display:flex;gap:10px">' +
     '<button onclick="window._saveScheduleClass(\'' + (cls?cls.id:'') + '\',\'' + (catId||'') + '\')" style="flex:1;background:#f97316;color:white;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור</button>' +
     '<button onclick="document.getElementById(\'sch-class-modal\').remove()" style="background:rgba(255,255,255,0.08);color:white;border:none;border-radius:10px;padding:12px 20px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">ביטול</button>' +
@@ -7031,7 +7087,13 @@ window._saveScheduleClass = async function(classId, catId) {
     return;
   }
 
+  const filterObj = {};
+  (window._schedFilters||[]).forEach(f => {
+    const cb = document.getElementById('sch-filter-cb-'+f.id);
+    if (cb && cb.checked) filterObj[f.id] = true;
+  });
   const obj = { categoryId: catId, day, timeStart, timeEnd, ageLabel, levelLabel, levelType, instructor, price };
+  if (Object.keys(filterObj).length > 0) obj.filters = filterObj;
   // Set order
   if (!classId) {
     const snap = await db.ref('clubSchedule/classes').orderByChild('categoryId').equalTo(catId).once('value');
@@ -7045,6 +7107,350 @@ window._saveScheduleClass = async function(classId, catId) {
   document.getElementById('sch-class-modal')?.remove();
   loadScheduleEditor();
 };
+
+// ════════════════════════════════════════════════════════════
+// SCHEDULE: DETAIL VIEW RENDERER (extracted from loadScheduleEditor)
+// ════════════════════════════════════════════════════════════
+function renderDetailViewHtml(cats, allClasses) {
+  if (cats.length === 0) {
+    return '<div style="text-align:center;padding:48px;color:#a0aec0">' +
+      '<div style="font-size:36px;margin-bottom:12px">📋</div>' +
+      '<div style="font-weight:700;font-size:16px;margin-bottom:8px">אין קטגוריות עדיין</div>' +
+      '<div style="font-size:14px;margin-bottom:20px">לחץ על "קטגוריה חדשה" כדי להתחיל לבנות את לוח החוגים</div>' +
+      '</div>';
+  }
+  return cats.map(cat => {
+    const catClasses = allClasses.filter(c => c.categoryId === cat.id).sort((a,b) => (a.order||0)-(b.order||0));
+    const rows = catClasses.map(c =>
+      '<tr>' +
+      '<td style="padding:8px 10px">' + (c.day||'') + '</td>' +
+      '<td style="padding:8px 10px">' + (c.timeStart||'') + '–' + (c.timeEnd||'') + '</td>' +
+      '<td style="padding:8px 10px;font-size:12px">' + (c.ageLabel||'–') + '</td>' +
+      '<td style="padding:8px 10px"><span class="level-badge level-' + (c.levelType||'beginner') + '">' + (c.levelLabel||'') + '</span></td>' +
+      '<td style="padding:8px 10px">' + (c.instructor||'–') + '</td>' +
+      '<td style="padding:8px 10px;font-weight:700;color:#f97316">' + (c.price ? c.price+' ₪' : '–') + '</td>' +
+      '<td style="padding:8px 6px;white-space:nowrap">' +
+      '<button onclick="window.editScheduleClass(\'' + c.id + '\')" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit;margin-left:4px">✏️ עריכה</button>' +
+      '<button onclick="window.deleteScheduleClass(\'' + c.id + '\',\'' + cat.id + '\')" style="background:rgba(239,68,68,0.12);color:#fc8181;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit">🗑 מחק</button>' +
+      '</td></tr>'
+    ).join('');
+    return '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:20px;margin-bottom:20px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">' +
+      '<div style="display:flex;flex-direction:column;gap:4px">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<span style="font-size:17px;font-weight:800">' + cat.name + '</span>' +
+      '<button onclick="window.editScheduleCategory(\'' + cat.id + '\')" style="background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.6);border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit">✏️ ערוך</button>' +
+      '<button onclick="window.deleteScheduleCategory(\'' + cat.id + '\')" style="background:none;border:1px solid rgba(239,68,68,0.3);color:#fc8181;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit">🗑 מחק קטגוריה</button>' +
+      '</div>' +
+      (cat.notes ? '<div style="font-size:13px;color:rgba(255,255,255,0.55);white-space:pre-wrap;line-height:1.5">' + cat.notes + '</div>' : '') +
+      '</div>' +
+      '<button onclick="window.addScheduleClass(\'' + cat.id + '\')" style="background:#1e3a6e;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ הוסף חוג</button>' +
+      '</div>' +
+      (catClasses.length > 0
+        ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
+          '<thead><tr style="color:rgba(255,255,255,0.5);font-size:11px;text-transform:uppercase">' +
+          '<th style="padding:6px 10px;text-align:right">יום</th><th style="padding:6px 10px;text-align:right">שעות</th>' +
+          '<th style="padding:6px 10px;text-align:right">גיל</th><th style="padding:6px 10px;text-align:right">רמה</th>' +
+          '<th style="padding:6px 10px;text-align:right">מדריך</th><th style="padding:6px 10px;text-align:right">מחיר</th>' +
+          '<th style="padding:6px 10px;text-align:right">פעולות</th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.35);font-size:13px">אין חוגים בקטגוריה זו — לחץ על "הוסף חוג"</div>'
+      ) + '</div>';
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+// SCHEDULE: FILTER MANAGEMENT (admin)
+// ════════════════════════════════════════════════════════════
+function renderFilterManagementSection(allFilters) {
+  const items = allFilters.map(f =>
+    '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.05);border-radius:8px">' +
+    '<span style="width:12px;height:12px;border-radius:50%;background:' + f.color + ';flex-shrink:0;display:inline-block"></span>' +
+    '<span style="flex:1;font-size:13px">' + f.name + '</span>' +
+    '<button onclick="window.editScheduleFilter(\'' + f.id + '\',\'' + f.name.replace(/'/g,"\\'") + '\',\'' + f.color + '\')" style="background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;font-family:inherit">✏️</button>' +
+    '<button onclick="window.deleteScheduleFilter(\'' + f.id + '\')" style="background:none;border:1px solid rgba(239,68,68,0.3);color:#fc8181;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;font-family:inherit">🗑</button>' +
+    '</div>'
+  ).join('');
+  return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;margin-bottom:18px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;' + (allFilters.length ? 'margin-bottom:10px' : '') + '">' +
+    '<span style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.75)">🏷️ פילטרים</span>' +
+    '<button onclick="window.addScheduleFilter()" style="background:#6366f1;color:white;border:none;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">+ פילטר חדש</button>' +
+    '</div>' +
+    (allFilters.length > 0
+      ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + items + '</div>'
+      : '<div style="font-size:12px;color:rgba(255,255,255,0.3);padding-top:2px">הוסף פילטרים כדי לסנן את הלוח השבועי</div>'
+    ) + '</div>';
+}
+
+function getFilterModal(f) {
+  const COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#f97316','#84cc16','#64748b'];
+  const cur = f ? f.color : '#3b82f6';
+  return '<div id="sch-filter-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px">' +
+    '<div style="background:#0d2137;border:1px solid rgba(255,255,255,0.15);border-radius:14px;padding:24px;width:320px;max-width:100%;direction:rtl">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">' +
+    '<h3 style="margin:0;font-size:16px;font-weight:800">' + (f ? 'עריכת פילטר' : 'פילטר חדש') + '</h3>' +
+    '<button onclick="document.getElementById(\'sch-filter-modal\').remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:22px;cursor:pointer;line-height:1">×</button>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:14px">' +
+    '<div style="display:flex;flex-direction:column;gap:6px">' +
+    '<label style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:700">שם הפילטר</label>' +
+    '<input id="sch-filter-name" type="text" placeholder="למשל: ילדים, מבוגרים, שישי בוקר" value="' + (f ? f.name : '') + '" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:9px 12px;color:white;font-size:14px;font-family:inherit;width:100%;box-sizing:border-box">' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px">' +
+    '<label style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:700">צבע</label>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    COLORS.map(c =>
+      '<div onclick="window._schPickFilterColor(\'' + c + '\')" id="fclr' + c.replace('#','') + '" ' +
+      'style="width:26px;height:26px;border-radius:50%;background:' + c + ';cursor:pointer;box-sizing:border-box;border:' + (c===cur?'3px solid white':'2px solid transparent') + '"></div>'
+    ).join('') +
+    '</div><input id="sch-filter-color" type="hidden" value="' + cur + '">' +
+    '</div></div>' +
+    '<div style="margin-top:20px;display:flex;gap:10px">' +
+    '<button onclick="window._saveScheduleFilter(\'' + (f?f.id:'') + '\',' + (f?f.order||0:0) + ')" style="flex:1;background:#6366f1;color:white;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור</button>' +
+    '<button onclick="document.getElementById(\'sch-filter-modal\').remove()" style="background:rgba(255,255,255,0.08);color:white;border:none;border-radius:10px;padding:11px 18px;font-size:14px;cursor:pointer;font-family:inherit">ביטול</button>' +
+    '</div></div></div>';
+}
+
+window.addScheduleFilter = function() {
+  document.getElementById('sch-filter-modal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', getFilterModal(null));
+};
+window.editScheduleFilter = function(filterId, name, color) {
+  document.getElementById('sch-filter-modal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', getFilterModal({id:filterId, name, color}));
+};
+window.deleteScheduleFilter = async function(filterId) {
+  if (!confirm('למחוק פילטר זה?')) return;
+  await db.ref('clubSchedule/filters/'+filterId).remove();
+  loadScheduleEditor();
+};
+window._schPickFilterColor = function(color) {
+  const inp = document.getElementById('sch-filter-color');
+  if (inp) inp.value = color;
+  document.querySelectorAll('[id^="fclr"]').forEach(el => {
+    el.style.border = el.id === 'fclr'+color.replace('#','') ? '3px solid white' : '2px solid transparent';
+  });
+};
+window._saveScheduleFilter = async function(filterId, order) {
+  const name  = document.getElementById('sch-filter-name')?.value?.trim();
+  const color = document.getElementById('sch-filter-color')?.value || '#3b82f6';
+  if (!name) { alert('יש להזין שם לפילטר'); return; }
+  if (filterId) {
+    await db.ref('clubSchedule/filters/'+filterId).set({ name, color, order: +order });
+  } else {
+    const snap = await db.ref('clubSchedule/filters').once('value');
+    const cnt  = Object.keys(snap.val()||{}).length;
+    await db.ref('clubSchedule/filters').push({ name, color, order: cnt });
+  }
+  document.getElementById('sch-filter-modal')?.remove();
+  loadScheduleEditor();
+};
+
+// ════════════════════════════════════════════════════════════
+// SCHEDULE: WEEKLY GRID RENDERER (shared admin + public)
+// ════════════════════════════════════════════════════════════
+function _buildScheduleWeeklyGrid(classes, allFilters, activeFilters) {
+  const DAYS  = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const toMin = t => { if (!t) return 0; const p=(t+':00').split(':'); return +p[0]*60+(+p[1]||0); };
+  const fmtH  = m => String(Math.floor(m/60)).padStart(2,'0')+':00';
+  const active = activeFilters instanceof Set ? activeFilters : new Set(Array.isArray(activeFilters)?activeFilters:[]);
+
+  let shown = classes;
+  if (active.size > 0) {
+    shown = classes.filter(c => {
+      const cf = c.filters || {};
+      for (const fid of active) { if (cf[fid]) return true; }
+      return false;
+    });
+  }
+  if (!shown.length) return '<div style="text-align:center;padding:48px;color:rgba(255,255,255,0.4)">אין חוגים להצגה</div>';
+
+  const colorMap = {};
+  (allFilters||[]).forEach(f => { colorMap[f.id] = f.color||'#3b82f6'; });
+  const CAT_COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#f97316'];
+  const catColors = {};
+  let ci = 0;
+  shown.forEach(c => { if (c.categoryId && !catColors[c.categoryId]) catColors[c.categoryId]=CAT_COLORS[ci++%CAT_COLORS.length]; });
+
+  const activeDays = DAYS.filter(d => shown.some(c => c.day===d));
+  if (!activeDays.length) return '<div style="text-align:center;padding:48px;color:rgba(255,255,255,0.4)">אין חוגים להצגה</div>';
+
+  const starts = shown.map(c => toMin(c.timeStart)).filter(Boolean);
+  const ends   = shown.map(c => toMin(c.timeEnd)).filter(Boolean);
+  if (!starts.length) return '<div style="text-align:center;padding:48px;color:rgba(255,255,255,0.4)">אין שעות להצגה</div>';
+
+  const startMin = Math.floor(Math.min(...starts)/60)*60;
+  const endMin   = Math.ceil(Math.max(...ends)/60)*60;
+  const PX       = 1.2;
+  const GRID_H   = (endMin-startMin)*PX;
+  const HOUR_H   = 60*PX;
+
+  let hourHtml = '<div style="flex-shrink:0;width:40px;padding-top:36px;box-sizing:border-box;border-left:1px solid rgba(255,255,255,0.08)">';
+  for (let m=startMin; m<=endMin; m+=60) {
+    hourHtml += '<div style="height:'+HOUR_H+'px;position:relative"><span style="position:absolute;top:-8px;left:0;right:4px;font-size:10px;color:rgba(255,255,255,0.4);text-align:left">'+fmtH(m)+'</span></div>';
+  }
+  hourHtml += '</div>';
+
+  let daysHtml = '';
+  activeDays.forEach(day => {
+    const dayCls = shown.filter(c => c.day===day);
+    const sorted = [...dayCls].sort((a,b) => toMin(a.timeStart)-toMin(b.timeStart));
+
+    // Cluster-based lane assignment: each overlapping group is handled independently
+    // so non-overlapping classes always get full width
+    const laneOf = {}, numLanesOf = {};
+    const visited = new Set();
+    sorted.forEach(c => {
+      if (visited.has(c.id)) return;
+      // BFS to collect all classes in this overlap cluster
+      const cluster = [], queue = [c];
+      while (queue.length) {
+        const curr = queue.shift();
+        if (visited.has(curr.id)) continue;
+        visited.add(curr.id);
+        cluster.push(curr);
+        dayCls.forEach(o => {
+          if (!visited.has(o.id) && toMin(o.timeStart)<toMin(curr.timeEnd) && toMin(o.timeEnd)>toMin(curr.timeStart))
+            queue.push(o);
+        });
+      }
+      // Assign lanes within this cluster
+      const cLanes = [];
+      [...cluster].sort((a,b)=>toMin(a.timeStart)-toMin(b.timeStart)).forEach(cls => {
+        let placed=false;
+        for (let li=0;li<cLanes.length;li++) {
+          if (toMin(cLanes[li][cLanes[li].length-1].timeEnd)<=toMin(cls.timeStart)) {
+            cLanes[li].push(cls); laneOf[cls.id]=li; placed=true; break;
+          }
+        }
+        if (!placed) { laneOf[cls.id]=cLanes.length; cLanes.push([cls]); }
+      });
+      cluster.forEach(cls => { numLanesOf[cls.id]=cLanes.length; });
+    });
+
+    daysHtml += '<div style="flex:1;min-width:120px;border-left:1px solid rgba(255,255,255,0.08)">';
+    daysHtml += '<div style="height:36px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.1)">'+day+'</div>';
+    daysHtml += '<div style="position:relative;height:'+GRID_H+'px">';
+    for (let m=startMin; m<=endMin; m+=60) {
+      daysHtml += '<div style="position:absolute;top:'+(m-startMin)*PX+'px;left:0;right:0;border-top:1px solid rgba(255,255,255,0.05)"></div>';
+    }
+    dayCls.forEach(c => {
+      const top      = (toMin(c.timeStart)-startMin)*PX;
+      const height   = Math.max((toMin(c.timeEnd)-toMin(c.timeStart))*PX-2,16);
+      const lane     = laneOf[c.id]||0;
+      const numLanes = numLanesOf[c.id]||1;
+      const cFilts   = Object.keys(c.filters||{}).filter(fid=>(c.filters||{})[fid]);
+      const color    = (cFilts.length&&colorMap[cFilts[0]])||catColors[c.categoryId]||'#3b82f6';
+      const catName  = (window._schedCats||[]).find(cat=>cat.id===c.categoryId)?.name||'';
+      const fs = numLanes > 1 ? '9.5' : '11';
+      const lbl = (label,val) => val ? '<span style="opacity:0.75;font-size:'+(+fs-1)+'px">'+label+': </span>'+val : '';
+      const lines = [];
+      if (catName)                lines.push('<div style="font-weight:800;line-height:1.35">'+catName+'</div>');
+      if (c.levelLabel)           lines.push('<div style="line-height:1.35">'+lbl('רמה',c.levelLabel)+'</div>');
+      if (c.ageLabel)             lines.push('<div style="line-height:1.35">'+lbl('גיל',c.ageLabel)+'</div>');
+      if (c.instructor)           lines.push('<div style="line-height:1.35">'+lbl('מדריך',c.instructor)+'</div>');
+      if (c.timeStart&&c.timeEnd) lines.push('<div style="line-height:1.35">'+lbl('שעות',c.timeStart+'–'+c.timeEnd)+'</div>');
+      daysHtml += '<div onclick="window._weeklyClassPopup(\''+c.id+'\')" ' +
+        'style="position:absolute;top:'+top+'px;left:calc('+(lane/numLanes*100)+'% + 2px);' +
+        'width:calc('+(100/numLanes)+'% - 4px);height:'+height+'px;background:'+color+';' +
+        'border-radius:6px;padding:3px 5px;font-size:'+fs+'px;cursor:pointer;box-sizing:border-box;overflow:hidden;' +
+        'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:white;word-break:break-word">' +
+        lines.join('') +
+        '</div>';
+    });
+    daysHtml += '</div></div>';
+  });
+
+  return '<div style="overflow-x:auto"><div style="display:flex;min-width:max-content">'+hourHtml+daysHtml+'</div></div>';
+}
+
+function _buildFilterRow(allFilters, activeFilters, toggleFn, activeColor) {
+  if (!allFilters || !allFilters.length) return '';
+  const active = activeFilters instanceof Set ? activeFilters : new Set();
+  const allBtn = '<button onclick="'+toggleFn+'(null)" style="' +
+    (active.size===0?'background:white;color:#0d2137':'background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.75)') +
+    ';border:none;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">הכל</button>';
+  const btns = allFilters.map(f => {
+    const on = active.has(f.id);
+    return '<button onclick="'+toggleFn+'(\''+f.id+'\')" style="' +
+      (on?'background:'+f.color+';color:white':'background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.75)') +
+      ';border:none;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:'+f.color+';display:inline-block;flex-shrink:0"></span>' +
+      f.name+'</button>';
+  }).join('');
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+allBtn+btns+'</div>';
+}
+
+function _renderWeeklyAdminSection(allClasses, allFilters) {
+  return _buildScheduleWeeklyGrid(allClasses, allFilters, new Set());
+}
+window._renderWeeklyAdminSection = _renderWeeklyAdminSection;
+
+function _renderWeeklyPublicSection(allClasses, allFilters) {
+  return _buildScheduleWeeklyGrid(allClasses, allFilters, new Set());
+}
+window._renderWeeklyPublicSection = _renderWeeklyPublicSection;
+
+window._toggleSchFilter = function(filterId) {
+  if (!window._activeSchFilters) window._activeSchFilters = new Set();
+  if (filterId===null) { window._activeSchFilters.clear(); }
+  else if (window._activeSchFilters.has(filterId)) { window._activeSchFilters.delete(filterId); }
+  else { window._activeSchFilters.add(filterId); }
+  const el = document.getElementById('schedule-editor-content');
+  if (el) el.innerHTML = _renderWeeklyAdminSection(window._schedClasses||[], window._schedFilters||[]);
+};
+
+window._togglePubFilter = function(filterId) {
+  if (!window._activePubFilters) window._activePubFilters = new Set();
+  if (filterId===null) { window._activePubFilters.clear(); }
+  else if (window._activePubFilters.has(filterId)) { window._activePubFilters.delete(filterId); }
+  else { window._activePubFilters.add(filterId); }
+  const el = document.getElementById('clubs-schedule-container');
+  if (el) el.innerHTML = _renderWeeklyPublicSection(window._pubScheduleClasses||[], window._pubScheduleFilters||[]);
+};
+
+window._schSetView = function(view) {
+  window._schedView = view;
+  const onSt  = 'background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit';
+  const offSt = 'background:none;color:var(--text-muted);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit';
+  const detBtn = document.getElementById('sch-view-detail');
+  const wkBtn  = document.getElementById('sch-view-weekly');
+  const addCatBtn = document.getElementById('sch-add-cat-btn');
+  if (detBtn) detBtn.style.cssText = view==='detail'?onSt:offSt;
+  if (wkBtn)  wkBtn.style.cssText  = view==='weekly'?onSt:offSt;
+  if (addCatBtn) addCatBtn.style.display = view==='detail'?'':'none';
+  const el = document.getElementById('schedule-editor-content');
+  if (!el) return;
+  if (view==='weekly') {
+    el.innerHTML = _renderWeeklyAdminSection(window._schedClasses||[], window._schedFilters||[]);
+  } else {
+    el.innerHTML = renderDetailViewHtml(window._schedCats||[], window._schedClasses||[]);
+  }
+};
+
+window._weeklyClassPopup = function(classId) {
+  const all = (window._schedClasses||[]).concat(window._pubScheduleClasses||[]);
+  const c = all.find(x => x.id===classId);
+  if (!c) return;
+  document.getElementById('weekly-popup')?.remove();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="weekly-popup" onclick="if(event.target===this)this.remove()" ' +
+    'style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">' +
+    '<div style="background:#0d2137;border:1px solid rgba(255,255,255,0.15);border-radius:14px;padding:24px;max-width:320px;width:100%;direction:rtl">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+    '<span style="font-size:15px;font-weight:800">'+(c.levelLabel||'חוג')+'</span>' +
+    '<button onclick="document.getElementById(\'weekly-popup\').remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:22px;cursor:pointer;line-height:1">×</button>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:7px;font-size:13px">' +
+    '<div>📅 <b>יום:</b> '+(c.day||'–')+'</div>' +
+    '<div>🕐 <b>שעות:</b> '+(c.timeStart||'')+'–'+(c.timeEnd||'')+'</div>' +
+    (c.ageLabel?'<div>👦 <b>גיל:</b> '+c.ageLabel+'</div>':'') +
+    (c.instructor?'<div>👤 <b>מדריך:</b> '+c.instructor+'</div>':'') +
+    (c.price?'<div>💰 <b>מחיר:</b> '+c.price+' ₪ לחודש</div>':'') +
+    '</div></div></div>'
+  );
+};
+
 function showSitePage(page) {
   document.querySelectorAll('.site-page').forEach(function(el){ el.classList.remove('active'); });
   document.querySelectorAll('.nav-tab').forEach(function(el){ el.classList.remove('active'); });
@@ -7261,10 +7667,15 @@ function initAuth() {
 
 function switchTab(id) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelector(`[data-tab="${id}"]`).classList.add('active');
-  document.getElementById('panel-' + id).classList.add('active');
-  toggleSidebar(false); // close on mobile after selection
+  const panel = document.getElementById('panel-' + id);
+  if (panel) panel.classList.add('active');
+  const tabBtn = document.querySelector('.tab-btn[data-tab="' + id + '"]');
+  if (tabBtn) tabBtn.classList.add('active');
+  const catId = (window._tabCatMap && window._tabCatMap[id]) || id;
+  const catBtn = document.querySelector('.cat-btn[data-tab="' + catId + '"]');
+  if (catBtn) catBtn.classList.add('active');
 }
 
 function toggleSidebar(forceOpen) {
@@ -7407,7 +7818,7 @@ if (teams.length > 0 || currentUser.role === 'admin') {
     regions.forEach(region => {
       // Sub-label for each region
       const regionLabel = document.createElement('div');
-      regionLabel.style.cssText = 'padding:10px 16px 3px;font-size:10px;font-weight:700;letter-spacing:0.8px;color:rgba(255,255,255,0.45);text-transform:uppercase';
+      regionLabel.style.cssText = 'padding:10px 16px 3px;font-size:10px;font-weight:700;letter-spacing:0.8px;color:var(--text-muted);text-transform:uppercase';
       regionLabel.textContent = '― ' + region + ' ―';
       tabsBar.appendChild(regionLabel);
       addTeamTabs(teams.filter(t => t.region === region));
@@ -7644,7 +8055,7 @@ if (currentUser?.role === 'admin') {
   content.appendChild(peopleAdminPanel);
 const settingsBtn = document.createElement('button');
   settingsBtn.className = 'tab-btn'; settingsBtn.dataset.tab = 'settings'; settingsBtn.textContent = '⚙️ הגדרות';
-  settingsBtn.onclick = () => { switchTab('settings'); loadInstructorsList(); if (currentUser?.role === 'admin') loadAllUsersList(); };
+  settingsBtn.onclick = () => { switchTab('settings'); };
   tabsBar.appendChild(settingsBtn);
   const settingsPanel = document.createElement('div');
   settingsPanel.className = 'tab-panel'; settingsPanel.id = 'panel-settings'; settingsPanel.innerHTML = renderSettingsPanel();
@@ -7678,6 +8089,206 @@ const settingsBtn = document.createElement('button');
   initData();
 } // end buildApp
 
+function buildTopNav() {
+  const tabsBar = document.getElementById('tabsBar');
+  const content = document.getElementById('content');
+  if (!tabsBar || !content) return;
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Move existing tabsBar children (tab-btns + labels) to a hidden store so
+  // their onclick handlers remain callable, but they don't appear in the top bar
+  let store = document.getElementById('_tab-btn-store');
+  if (!store) {
+    store = document.createElement('div');
+    store.id = '_tab-btn-store';
+    store.style.display = 'none';
+    document.body.appendChild(store);
+  } else {
+    store.innerHTML = '';
+  }
+  while (tabsBar.firstChild) store.appendChild(tabsBar.firstChild);
+
+  // Helper to fire a tab's existing init logic via its hidden tab-btn onclick
+  window._firTabInit = function(id) {
+    const btn = document.querySelector('.tab-btn[data-tab="' + id + '"]');
+    if (btn && btn.onclick) btn.onclick.call(btn);
+    else switchTab(id);
+  };
+
+  // Build tab→category map
+  window._tabCatMap = {};
+  const mapCat = (tabIds, catKey) => tabIds.forEach(id => { window._tabCatMap[id] = catKey; });
+  window._tabCatMap['home'] = 'home';
+  window._tabCatMap['settings'] = 'settings';
+  window._tabCatMap['guide'] = 'cat-management';
+
+  const catDefs = [];
+
+  // Home (direct)
+  catDefs.push({ key: 'home', label: '🏠 בית', direct: 'home' });
+
+  // Groups hub
+  if (groups.length > 0 || isAdmin) {
+    const groupCards = groups.map(g => ({ icon: '🏫', label: g.name, tab: g.id }));
+    groups.forEach(g => { window._tabCatMap[g.id] = 'cat-groups'; });
+    catDefs.push({ key: 'groups', label: '🏫 חוגים', cards: groupCards });
+  }
+
+  // Teams hub — grouped by coach
+  if (teams.length > 0 || isAdmin) {
+    teams.forEach(t => { window._tabCatMap['team-' + t.id] = 'cat-nteams'; });
+    if (isAdmin) {
+      // Group by coach name
+      const coachMap = {};
+      const noCoach = [];
+      teams.forEach(t => {
+        const card = { icon: '🏅', label: t.name, tab: 'team-' + t.id };
+        const coach = (t.coach || '').trim();
+        if (coach) {
+          if (!coachMap[coach]) coachMap[coach] = [];
+          coachMap[coach].push(card);
+        } else {
+          noCoach.push(card);
+        }
+      });
+      const cardGroups = Object.entries(coachMap).map(([coach, cards]) => ({ label: coach, cards }));
+      if (noCoach.length > 0) cardGroups.push({ label: '', cards: noCoach });
+      catDefs.push({ key: 'nteams', label: '🏅 נבחרות', cardGroups });
+    } else {
+      const teamCards = teams.map(t => ({ icon: '🏅', label: t.name, tab: 'team-' + t.id }));
+      catDefs.push({ key: 'nteams', label: '🏅 נבחרות', cards: teamCards });
+    }
+  }
+
+  // Management hub
+  const managCards = [];
+  if (hasTabPerm('attendance')) managCards.push({ icon: '🗓', label: 'נוכחות', tab: 'attendance' });
+  if (hasTabPerm('payments')) managCards.push({ icon: '💳', label: 'תשלומים', tab: 'payments' });
+  if (hasTabPerm('reports')) managCards.push({ icon: '📊', label: 'דוחות', tab: 'reports' });
+  if (hasTabPerm('calendar')) managCards.push({ icon: '📅', label: 'לוח שנה', tab: 'calendar' });
+  if (isAdmin) managCards.push({ icon: '⏱️', label: 'שעות', tab: 'hours' });
+  managCards.push({ icon: '❓', label: 'מדריך', tab: 'guide' });
+  mapCat(managCards.map(c => c.tab), 'cat-management');
+  catDefs.push({ key: 'management', label: '⚙️ ניהול שוטף', cards: managCards });
+
+  // Leagues/Tournaments hub
+  const leagueCards = [];
+  if (isAdmin || hasTabPerm('club-tournaments')) leagueCards.push({ icon: '🏆', label: 'תחרויות', tab: 'club-tournaments' });
+  if (isAdmin || hasTabPerm('friday')) leagueCards.push({ icon: '♟', label: 'ליגות שישי', tab: 'friday' });
+  if (isAdmin || hasTabPerm('league-adults')) leagueCards.push({ icon: '♟', label: 'ליגות בוגרים', tab: 'league-adults' });
+  if (isAdmin || hasTabPerm('league-women')) leagueCards.push({ icon: '♛', label: 'ליגות נשים', tab: 'league-women' });
+  if (isAdmin || hasTabPerm('league-youth')) leagueCards.push({ icon: '🎓', label: 'ליגות נוער', tab: 'league-youth' });
+  if (isAdmin || hasTabPerm('league-stars')) leagueCards.push({ icon: '⭐', label: 'מצטיינים', tab: 'league-stars' });
+  if (isAdmin || hasTabPerm('saturday')) leagueCards.push({ icon: '🏅', label: 'מפגשי ליגה', tab: 'saturday' });
+  if (leagueCards.length > 0) {
+    mapCat(leagueCards.map(c => c.tab), 'cat-leagues');
+    catDefs.push({ key: 'leagues', label: '🏆 תחרויות', cards: leagueCards });
+  }
+
+  // Players hub
+  const playerCards = [];
+  if (isAdmin || hasTabPerm('youth-players')) playerCards.push({ icon: '👦', label: 'שחקני נוער', tab: 'youth-players' });
+  if (isAdmin || hasTabPerm('prospects')) playerCards.push({ icon: '🌟', label: 'מצטייני גנים', tab: 'prospects' });
+  if (playerCards.length > 0) {
+    mapCat(playerCards.map(c => c.tab), 'cat-players');
+    catDefs.push({ key: 'players', label: '👦 שחקנים', cards: playerCards });
+  }
+
+  // System hub
+  const systemCards = [];
+  if (isAdmin || hasTabPerm('schedule-editor')) systemCards.push({ icon: '📅', label: 'לוח חוגים', tab: 'schedule-editor' });
+  if (isAdmin || hasTabPerm('site-content')) systemCards.push({ icon: '📝', label: 'עמוד הבית', tab: 'site-content' });
+  if (isAdmin || hasTabPerm('news-posts')) systemCards.push({ icon: '📰', label: 'כתבות', tab: 'news-posts' });
+  if (isAdmin || hasTabPerm('club-people')) systemCards.push({ icon: '👥', label: 'אנשי המועדון', tab: 'club-people' });
+  if (isAdmin || hasTabPerm('audit')) systemCards.push({ icon: '📊', label: 'פעילות מדריכים', tab: 'audit' });
+  if (isAdmin || hasTabPerm('tourn-cal')) systemCards.push({ icon: '📅', label: 'גאנט תחרויות', tab: 'tourn-cal' });
+  if (isAdmin || hasTabPerm('monthly-cal')) systemCards.push({ icon: '📅', label: 'לוח חודשי', tab: 'monthly-cal' });
+  if (systemCards.length > 0) {
+    mapCat(systemCards.map(c => c.tab), 'cat-system');
+    catDefs.push({ key: 'system', label: '🖥 מערכת', cards: systemCards });
+  }
+
+  // Settings (direct) — admin only
+  if (isAdmin) catDefs.push({ key: 'settings', label: '⚙️ הגדרות', direct: 'settings' });
+
+  // Map hub panels to their own cat key for self-highlighting
+  catDefs.filter(c => !c.direct).forEach(c => { window._tabCatMap['cat-' + c.key] = 'cat-' + c.key; });
+
+  // Build category buttons in tabsBar
+  catDefs.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn';
+    btn.textContent = cat.label;
+    if (cat.direct) {
+      btn.dataset.tab = cat.direct;
+      btn.onclick = () => {
+        switchTab(cat.direct);
+        // settings sections are opened via modals; no pre-load needed
+      };
+    } else {
+      btn.dataset.tab = 'cat-' + cat.key;
+      btn.onclick = () => switchTab('cat-' + cat.key);
+    }
+    tabsBar.appendChild(btn);
+  });
+
+  // Theme toggle button — pinned to left end of top nav
+  const themeBtn = document.createElement('button');
+  themeBtn.id = 'portal-theme-toggle';
+  const isLight = document.body.classList.contains('light-mode');
+  themeBtn.textContent = isLight ? '🌙' : '☀️';
+  themeBtn.title = isLight ? 'מצב כהה' : 'מצב בהיר';
+  themeBtn.style.cssText = 'margin-right:auto;background:none;border:none;cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px;line-height:1;flex-shrink:0;opacity:0.7;transition:opacity 0.15s';
+  themeBtn.onmouseenter = () => { themeBtn.style.opacity = '1'; };
+  themeBtn.onmouseleave = () => { themeBtn.style.opacity = '0.7'; };
+  themeBtn.onclick = () => {
+    const light = document.body.classList.toggle('light-mode');
+    themeBtn.textContent = light ? '🌙' : '☀️';
+    themeBtn.title = light ? 'מצב כהה' : 'מצב בהיר';
+    localStorage.setItem('theme', light ? 'light' : 'dark');
+    const pubBtn = document.getElementById('theme-toggle');
+    if (pubBtn) pubBtn.textContent = light ? '🌙 מצב כהה' : '☀️ מצב בהיר';
+  };
+  tabsBar.appendChild(themeBtn);
+
+  // Helper: render cards grid HTML
+  const renderCards = (cards) =>
+    '<div class="hub-grid" style="padding-top:10px">' +
+    cards.map(card =>
+      '<button class="hub-card" onclick="window._firTabInit(\'' + card.tab + '\')">' +
+      '<div class="hub-card-icon">' + card.icon + '</div>' +
+      '<div class="hub-card-title">' + card.label + '</div>' +
+      '</button>'
+    ).join('') +
+    '</div>';
+
+  // Build hub panels and append to content
+  catDefs.filter(c => !c.direct).forEach(cat => {
+    if (document.getElementById('panel-cat-' + cat.key)) return;
+    const hubPanel = document.createElement('div');
+    hubPanel.className = 'tab-panel';
+    hubPanel.id = 'panel-cat-' + cat.key;
+    let bodyHtml;
+    if (cat.cardGroups) {
+      bodyHtml = cat.cardGroups.map(g =>
+        '<div style="margin-bottom:28px">' +
+        (g.label ? '<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px;direction:rtl">🧑‍🏫 ' + g.label + '</div>' : '') +
+        renderCards(g.cards) +
+        '</div>'
+      ).join('');
+    } else {
+      bodyHtml = renderCards(cat.cards || []);
+    }
+    hubPanel.innerHTML =
+      '<div style="font-size:22px;font-weight:800;color:var(--text-primary);direction:rtl;margin-bottom:16px">' + cat.label + '</div>' +
+      bodyHtml;
+    content.appendChild(hubPanel);
+  });
+
+  // Start on home
+  switchTab('home');
+}
+
 function injectPermissionTabs() {
   if (!currentUser || currentUser.role === 'admin') return;
   const perms = currentUser.permissions || {};
@@ -7700,7 +8311,7 @@ function injectPermissionTabs() {
 
   const addLabel = (lbl) => {
     const d = document.createElement('div');
-    d.style.cssText = 'padding:20px 16px 6px;font-size:10px;font-weight:700;letter-spacing:0.8px;color:rgba(255,255,255,0.45);text-transform:uppercase;user-select:none';
+    d.style.cssText = 'padding:20px 16px 6px;font-size:10px;font-weight:700;letter-spacing:0.8px;color:var(--text-muted);text-transform:uppercase;user-select:none';
     d.textContent = lbl; tabsBar.appendChild(d);
   };
 
@@ -9898,105 +10509,148 @@ async function loadSettings() {
 }
 
 function renderSettingsPanel() {
-  const groupRows = groups.map((g, i) => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:6px">
-      <div style="flex:1;min-width:0">
-        <span style="font-weight:600;font-size:14px;color:#2d3748">${g.name}</span>
-        ${g.instructor ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${g.instructor}</span>` : ''}
-        <span style="font-size:12px;color:#a0aec0"> · ${g.subGroups.length} קבוצות</span>
-        ${(g.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(g.meetings)}</span>` : ''}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-        <button onclick="openEditGroupModal(${i})" style="background:#ebf8ff;border:1px solid #bee3f8;color:#2b6cb0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
-        <button onclick="deleteDbGroup('${g.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק חוג">🗑</button>
-      </div>
-    </div>`).join('');
+  const isAdmin = currentUser?.role === 'admin';
+  const cards = [
+    { icon: '⚙️', label: 'הגדרות שנה',    key: 'year' },
+    { icon: '🏫', label: 'ניהול חוגים',   key: 'groups' },
+    { icon: '🏅', label: 'ניהול נבחרות',  key: 'teams' },
+    { icon: '👥', label: 'ניהול מדריכים', key: 'instructors' },
+    ...(isAdmin ? [{ icon: '🔐', label: 'ניהול משתמשים', key: 'users' }] : []),
+    { icon: '🏁', label: 'סיום שנה',      key: 'endyear', danger: true },
+  ];
   return `
-  <div style="display:flex;flex-direction:column;gap:20px;max-width:560px">
-    <div class="att-card">
-      <div class="att-card-header">⚙️ הגדרות שנה</div>
-      <div style="padding:20px">
-        <div class="modal-field"><label>תחילת שנה</label><input type="date" id="set-year-start" value="${YEAR_START}"></div>
-        <div class="modal-field"><label>סוף שנה</label><input type="date" id="set-year-end" value="${YEAR_END}"></div>
-        <div style="margin-top:16px"><button class="btn-form-submit" onclick="saveSettings()">💾 שמור הגדרות</button></div>
+    <div style="direction:rtl;max-width:700px">
+      <h3 style="font-size:20px;font-weight:800;margin:0 0 24px;color:var(--text-primary)">⚙️ הגדרות</h3>
+      <div class="hub-grid">
+        ${cards.map(c => `
+          <button class="hub-card" onclick="openSettingsSection('${c.key}')"
+            ${c.danger ? 'style="border-color:rgba(197,48,48,0.35)"' : ''}>
+            <div class="hub-card-icon">${c.icon}</div>
+            <div class="hub-card-title" ${c.danger ? 'style="color:#fc8181"' : ''}>${c.label}</div>
+          </button>`).join('')}
       </div>
-    </div>
+    </div>`;
+}
 
-    <div class="att-card">
-      <div class="att-card-header">🏫 ניהול חוגים</div>
-      <div style="padding:20px">
-        <div style="margin-bottom:14px">${groupRows || '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">אין חוגים — צור את הראשון</div>'}</div>
-        <button onclick="openCreateGroupModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור חוג חדש</button>
-      </div>
-    </div>
+window.openSettingsSection = function(key) {
+  if (key === 'endyear') { openEndYearModal(); return; }
 
-    <div class="att-card">
-      <div class="att-card-header">🏅 ניהול נבחרות</div>
-      <div style="padding:20px">
-        <div style="margin-bottom:14px">${(() => {
-          if (teams.length === 0) return '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">אין נבחרות — צור את הראשונה</div>';
-          const regions = [...new Set(teams.map(t => t.region || ''))];
-          return regions.map(region => {
-            const regionTeams = teams.filter(t => (t.region || '') === region);
-            const regionHeader = region ? `<div style="font-size:11px;font-weight:700;color:#718096;letter-spacing:0.8px;text-transform:uppercase;padding:8px 4px 4px">― ${region} ―</div>` : '';
-            return regionHeader + regionTeams.map(t => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f7fafc;margin-bottom:4px">
-                <div style="flex:1;min-width:0">
-                  <span style="font-weight:600;font-size:14px;color:#2d3748">🏅 ${t.name}</span>
-                  ${t.coach ? `<span style="font-size:12px;color:#718096;margin-right:8px"> · ${t.coach}</span>` : ''}
-                  <span style="font-size:11px;color:#a0aec0;margin-right:6px">${t.subGroups.length} קטגורי${t.subGroups.length===1?'ה':'ות'}</span>
-                  ${(t.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(t.meetings)}</span>` : ''}
-                </div>
-                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                  <button onclick="openEditTeamModal('${t.id}')" style="background:#ebf8ff;border:1px solid #bee3f8;color:#2b6cb0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
-                  <button onclick="deleteDbTeam('${t.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px" title="מחק נבחרת">🗑</button>
-                </div>
-              </div>`).join('');
-          }).join('');
-        })()}</div>
-        <button onclick="openCreateTeamModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור נבחרת חדשה</button>
-      </div>
-    </div>
+  const titles = {
+    year:        '⚙️ הגדרות שנה',
+    groups:      '🏫 ניהול חוגים',
+    teams:       '🏅 ניהול נבחרות',
+    instructors: '👥 ניהול מדריכים',
+    users:       '🔐 ניהול משתמשים',
+  };
 
-    <div class="att-card">
-      <div class="att-card-header">👥 ניהול מדריכים</div>
-      <div style="padding:20px">
+  function getBody() {
+    if (key === 'year') {
+      return `
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="modal-field"><label>תחילת שנה</label><input type="date" id="set-year-start" value="${YEAR_START}"></div>
+          <div class="modal-field"><label>סוף שנה</label><input type="date" id="set-year-end" value="${YEAR_END}"></div>
+          <div style="margin-top:4px"><button class="btn-form-submit" onclick="saveSettings()">💾 שמור הגדרות</button></div>
+        </div>`;
+    }
+    if (key === 'groups') {
+      const rows = groups.map((g, i) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:6px">
+          <div style="flex:1;min-width:0">
+            <span style="font-weight:600;font-size:14px;color:var(--text-primary)">${g.name}</span>
+            ${g.instructor ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${g.instructor}</span>` : ''}
+            <span style="font-size:12px;color:var(--text-muted)"> · ${g.subGroups.length} קבוצות</span>
+            ${(g.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(g.meetings)}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+            <button onclick="openEditGroupModal(${i})" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+            <button onclick="deleteDbGroup('${g.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
+          </div>
+        </div>`).join('');
+      return `
+        <div>${rows || '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין חוגים — צור את הראשון</div>'}</div>
+        <div style="margin-top:14px">
+          <button onclick="openCreateGroupModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור חוג חדש</button>
+        </div>`;
+    }
+    if (key === 'teams') {
+      let teamsHtml = '';
+      if (teams.length === 0) {
+        teamsHtml = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין נבחרות — צור את הראשונה</div>';
+      } else {
+        const regions = [...new Set(teams.map(t => t.region || ''))];
+        teamsHtml = regions.map(region => {
+          const regionTeams = teams.filter(t => (t.region || '') === region);
+          const header = region ? `<div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;padding:8px 4px 4px">― ${region} ―</div>` : '';
+          return header + regionTeams.map(t => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:4px">
+              <div style="flex:1;min-width:0">
+                <span style="font-weight:600;font-size:14px;color:var(--text-primary)">🏅 ${t.name}</span>
+                ${t.coach ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${t.coach}</span>` : ''}
+                <span style="font-size:11px;color:var(--text-muted);margin-right:6px">${t.subGroups.length} קטגורי${t.subGroups.length===1?'ה':'ות'}</span>
+                ${(t.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(t.meetings)}</span>` : ''}
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                <button onclick="openEditTeamModal('${t.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+                <button onclick="deleteDbTeam('${t.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
+              </div>
+            </div>`).join('');
+        }).join('');
+      }
+      return `
+        <div>${teamsHtml}</div>
+        <div style="margin-top:14px">
+          <button onclick="openCreateTeamModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור נבחרת חדשה</button>
+        </div>`;
+    }
+    if (key === 'instructors') {
+      return `
         <div id="instructors-list">
-          <div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">טוען מדריכים...</div>
+          <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">טוען מדריכים...</div>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px">
           <button onclick="openAddInstructorModal()" style="background:#276749;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף מדריך</button>
-          <button onclick="loadInstructorsList()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
-        </div>
-      </div>
-    </div>
-
-    ${currentUser?.role === "admin" ? `
-    <div class="att-card" style="border:1px solid #d6bcfa">
-      <div class="att-card-header" style="background:#faf5ff;color:#553c9a">🔐 ניהול משתמשים</div>
-      <div style="padding:20px">
+          <button onclick="loadInstructorsList()" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
+        </div>`;
+    }
+    if (key === 'users') {
+      return `
         <div id="all-users-list">
-          <div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">טוען...</div>
+          <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">טוען...</div>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button onclick="openAddAdminModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף מנהל</button>
-          <button onclick="loadAllUsersList()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
-        </div>
-      </div>
-    </div>` : ''}
+          <button onclick="loadAllUsersList()" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
+        </div>`;
+    }
+    return '';
+  }
 
-    <div class="att-card" style="border:1px solid #fed7d7">
-      <div class="att-card-header" style="background:#fff5f5;color:#c53030">🏁 סיום שנה</div>
-      <div style="padding:20px">
-        <div style="font-size:13px;color:#4a5568;margin-bottom:16px">
-          כל נתוני השנה (חוגים, שחקנים, נוכחות, תשלומים) יועברו לארכיון.<br>
-          לאחר מכן תוכל לצור חוגים חדשים לשנה הבאה.
-        </div>
-        <button onclick="openEndYearModal()" style="background:#c53030;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🏁 סיים שנה ועבור לארכיון</button>
+  document.getElementById('settings-section-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'settings-section-modal';
+  modal.className = 'modal-overlay open';
+  modal.style.cssText = 'z-index:9999;padding:20px';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:var(--bg-card);border-radius:16px;max-width:620px;width:100%;padding:28px;direction:rtl;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px">
+        <h3 style="margin:0;font-size:18px;font-weight:800;color:var(--text-primary)">${titles[key]||''}</h3>
+        <button onclick="document.getElementById('settings-section-modal')?.remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted)">✕</button>
       </div>
-    </div>
-  </div>`;
-}
+      <div id="settings-section-body">${getBody()}</div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  window._refreshSettingsModal = () => {
+    const body = document.getElementById('settings-section-body');
+    if (body) body.innerHTML = getBody();
+    if (key === 'instructors') loadInstructorsList();
+    if (key === 'users') loadAllUsersList();
+  };
+
+  if (key === 'instructors') loadInstructorsList();
+  if (key === 'users') loadAllUsersList();
+};
 
 async function saveSettings() {
   const startEl = document.getElementById('set-year-start');
@@ -10188,7 +10842,7 @@ async function saveNewGroup() {
     content.appendChild(panel);
     // Refresh settings panel
     const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel();
+    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
     // Remove "no groups" empty state if present
     const ng = content.querySelector('#panel-home:not(#panel-home)');
     // Switch to new group
@@ -10306,7 +10960,7 @@ async function saveEditGroup(groupIdx) {
   const tabBtn = document.querySelector(`[data-tab="${group.id}"]`);
   if (tabBtn) tabBtn.textContent = name;
   const sp = document.getElementById('panel-settings');
-  if (sp) { sp.innerHTML = renderSettingsPanel(); loadInstructorsList(); }
+  if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
   const calP = document.getElementById('panel-calendar');
   if (calP && calP.classList.contains('active')) calP.innerHTML = renderCalendarPanel();
   showToast('החוג עודכן ✅');
@@ -10326,7 +10980,7 @@ async function deleteDbGroup(groupId) {
     const panel = document.getElementById('panel-' + groupId);
     if (panel) panel.remove();
     const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel();
+    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
     showToast('החוג נמחק');
     switchTab('home');
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
@@ -11230,7 +11884,7 @@ async function saveEditedTeam(teamId) {
   const btn = document.querySelector(`[data-tab="team-${teamId}"]`);
   if (btn) btn.textContent = '🏅 ' + name + (coach ? ' — ' + coach : '');
   const sp = document.getElementById('panel-settings');
-  if (sp) { sp.innerHTML = renderSettingsPanel(); loadInstructorsList(); }
+  if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
   const calP = document.getElementById('panel-calendar');
   if (calP && calP.classList.contains('active')) calP.innerHTML = renderCalendarPanel();
 
@@ -11323,7 +11977,7 @@ async function saveNewTeam() {
     panel.innerHTML = renderTeamGroup(newTeam, tIdx);
     content.appendChild(panel);
     const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel();
+    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
     switchTab('team-' + id);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -11338,7 +11992,7 @@ async function deleteDbTeam(teamId) {
     document.querySelector(`[data-tab="team-${teamId}"]`)?.remove();
     document.getElementById('panel-team-' + teamId)?.remove();
     const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel();
+    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
     showToast('הנבחרת נמחקה');
     switchTab('home');
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
@@ -15197,33 +15851,53 @@ window.loadPeopleAdmin = async function() {
     if (snap.exists()) snap.forEach(c => { people.push({id:c.key,...c.val()}); });
     people.sort((a,b)=>(a.order||99)-(b.order||99));
   } catch(e) { el.innerHTML = '<div style="color:#fc8181">שגיאה: '+e.message+'</div>'; return; }
-  const catLabels = {management:'חברי הנהלה',staff:'בעלי תפקידים',instructors:'מדריכים'};
+
+  const cats = [
+    { key: 'management', label: '🏛️ חברי הנהלה' },
+    { key: 'instructors', label: '♟️ מדריכים' },
+    { key: 'staff',       label: '⭐ בעלי תפקידים' },
+  ];
+
+  const personRow = p => `
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:10px;background:var(--bg-subtle);margin-bottom:8px;direction:rtl">
+      <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--border)">
+        ${p.photoData?`<img src="${p.photoData}" style="width:100%;height:100%;object-fit:cover">`:'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>'}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:var(--text-primary)">${p.name||''}</div>
+        <div style="font-size:12px;color:#f97316">${p.role||''}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="openPersonModal('${p.id}')" style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:7px 12px;cursor:pointer;color:inherit;font-size:13px">✏️</button>
+        <button onclick="deletePerson('${p.id}')" style="background:rgba(252,129,129,.15);border:none;border-radius:8px;padding:7px 12px;cursor:pointer;color:#fc8181;font-size:13px">🗑️</button>
+      </div>
+    </div>`;
+
+  const sectionsHtml = cats.map(cat => {
+    const group = people.filter(p => p.category === cat.key);
+    return `
+      <div style="margin-bottom:32px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+          <h4 style="margin:0;font-size:16px;font-weight:800;color:var(--text-primary)">${cat.label}</h4>
+          <button onclick="openPersonModal(null,'${cat.key}')" style="background:#f97316;color:white;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;font-weight:700;font-size:13px">+ הוסף</button>
+        </div>
+        ${group.length===0
+          ? `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">אין אנשים בקטגוריה זו</div>`
+          : group.map(personRow).join('')}
+      </div>`;
+  }).join('');
+
   el.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <h3 style="margin:0;font-size:18px">👥 ניהול אנשי המועדון</h3>
-      <button onclick="openPersonModal(null)" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-weight:700;font-size:14px">+ הוסף אדם</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:10px">
+      <h3 style="margin:0;font-size:18px;color:var(--text-primary)">👥 ניהול אנשי המועדון</h3>
     </div>
-    ${people.length===0
-      ? '<div style="text-align:center;padding:40px;opacity:.5">אין אנשים עדיין. הוסף את הראשון!</div>'
-      : people.map(p=>`
-      <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.05);margin-bottom:8px;direction:rtl">
-        <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,.1)">
-          ${p.photoData?`<img src="${p.photoData}" style="width:100%;height:100%;object-fit:cover">`:'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>'}
-        </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700">${p.name||''}</div>
-          <div style="font-size:12px;color:#f97316">${p.role||''} · ${catLabels[p.category]||p.category||''}</div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="openPersonModal('${p.id}')" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:7px 12px;cursor:pointer;color:inherit;font-size:13px">✏️</button>
-          <button onclick="deletePerson('${p.id}')" style="background:rgba(252,129,129,.15);border:none;border-radius:8px;padding:7px 12px;cursor:pointer;color:#fc8181;font-size:13px">🗑️</button>
-        </div>
-      </div>`).join('')}`;
+    ${sectionsHtml}`;
 };
 
-window.openPersonModal = async function(personId) {
+window.openPersonModal = async function(personId, defaultCat) {
   let person = {};
   if (personId) { const s = await db.ref('clubPeople/'+personId).get(); if (s.exists()) person = s.val(); }
+  if (!personId && defaultCat && !person.category) person.category = defaultCat;
   const existPhoto = person.photoData || '';
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open'; modal.style.cssText = 'z-index:9999;padding:20px';

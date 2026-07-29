@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -ExecutionPolicy Bypass -File \"c:\\\\Users\\\\EranL\\\\.claude\\\\ChessClubManager\\\\read_excel.ps1\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"c:\\\\Users\\\\EranL\\\\.claude\\\\ChessClubManager\\\\apply_joinDates.ps1\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"c:\\\\Users\\\\EranL\\\\.claude\\\\ChessClubManager\\\\check_endings.ps1\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"c:\\\\Users\\\\EranL\\\\.claude\\\\ChessClubManager\\\\debug_match.ps1\")",
+      "Bash(npm --version)",
+      "Bash(where node:*)",
+      "Bash(where npm:*)",
+      "Bash(powershell -Command \"node --version; npm --version\")"
+    ]
+  }
+}
