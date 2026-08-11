@@ -6763,11 +6763,11 @@ window.loadPublicSchedule = async function() {
   container.innerHTML = '<div style="text-align:center;padding:32px;color:rgba(255,255,255,0.45)">⏳ טוען...</div>';
   catTabs.innerHTML = '';
   try {
-    // Check if schedule is hidden by admin
-    const settingsSnap = await db.ref('settings').once('value');
-    const sSettings = settingsSnap.val() || {};
-    if (sSettings.scheduleHidden) {
-      const msg = sSettings.scheduleMessage || 'לוח החוגים יתעדכן בקרוב — נשמח לראותכם!';
+    const snap = await db.ref('clubSchedule').once('value');
+    const data = snap.val() || {};
+    // Check if schedule is hidden by admin (stored inside clubSchedule to allow public read)
+    if (data.scheduleHidden) {
+      const msg = data.scheduleMessage || 'לוח החוגים יתעדכן בקרוב — נשמח לראותכם!';
       container.innerHTML = `
         <div style="text-align:center;padding:60px 24px;direction:rtl">
           <div style="font-size:48px;margin-bottom:16px">🚧</div>
@@ -6775,8 +6775,6 @@ window.loadPublicSchedule = async function() {
         </div>`;
       return;
     }
-    const snap = await db.ref('clubSchedule').once('value');
-    const data = snap.val() || {};
     const cats = Object.entries(data.categories || {})
       .map(([id,v]) => ({id,...v}))
       .sort((a,b) => (a.order||0)-(b.order||0));
@@ -10717,7 +10715,7 @@ window.openSettingsSection = function(key) {
 async function _loadSchedVisModal() {
   const el = document.getElementById('sched-vis-body');
   if (!el) return;
-  const snap = await db.ref('settings').get();
+  const snap = await db.ref('clubSchedule').get();
   const s = snap.val() || {};
   const hidden  = !!s.scheduleHidden;
   const message = s.scheduleMessage || 'לוח החוגים יתעדכן בקרוב — נשמח לראותכם!';
@@ -10762,7 +10760,7 @@ window._onSchedHiddenToggle = function() {
 window._saveSchedVisSettings = async function() {
   const hidden  = document.getElementById('sched-hidden-toggle').checked;
   const message = (document.getElementById('sched-msg-input')?.value || '').trim();
-  await db.ref('settings').update({ scheduleHidden: hidden, scheduleMessage: message });
+  await db.ref('clubSchedule').update({ scheduleHidden: hidden, scheduleMessage: message });
   showToast(hidden ? '🚧 לוח החוגים מוסתר באתר' : '✅ לוח החוגים גלוי באתר');
   document.getElementById('settings-section-modal')?.remove();
 };
