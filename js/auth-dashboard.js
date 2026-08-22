@@ -1855,10 +1855,17 @@ function buildTopNav() {
   if (hasTabPerm('payments')) managCards.push({ icon: '💳', label: 'תשלומים', tab: 'payments' });
   if (hasTabPerm('reports')) managCards.push({ icon: '📊', label: 'דוחות', tab: 'reports' });
   if (hasTabPerm('calendar')) managCards.push({ icon: '📅', label: 'לוח שנה', tab: 'calendar' });
-  if (isAdmin) managCards.push({ icon: '⏱️', label: 'שעות', tab: 'hours' });
   managCards.push({ icon: '❓', label: 'מדריך', tab: 'guide' });
   mapCat(managCards.map(c => c.tab), 'cat-management');
-  catDefs.push({ key: 'management', label: '⚙️ ניהול שוטף', cards: managCards });
+  const hasG = groups.length > 0, hasT = teams.length > 0;
+  const managLabel = hasT && hasG ? '⚙️ ניהול נבחרות / חוגים' : hasT ? '⚙️ ניהול נבחרות' : hasG ? '⚙️ ניהול חוגים' : '⚙️ ניהול שוטף';
+  catDefs.push({ key: 'management', label: managLabel, cards: managCards });
+
+  // Hours reporting (own tab)
+  if (isAdmin || hasTabPerm('hours')) {
+    window._tabCatMap['hours'] = 'hours';
+    catDefs.push({ key: 'hours', label: '⏱️ דיווח שעות', direct: 'hours', onOpen: loadHoursHistory });
+  }
 
   // Leagues/Tournaments hub
   const leagueCards = [];
@@ -1885,16 +1892,15 @@ function buildTopNav() {
 
   // System hub
   const systemCards = [];
-  if (isAdmin || hasTabPerm('schedule-editor')) systemCards.push({ icon: '📅', label: 'לוח חוגים', tab: 'schedule-editor' });
   if (isAdmin || hasTabPerm('site-content')) systemCards.push({ icon: '📝', label: 'עמוד הבית', tab: 'site-content' });
+  if (isAdmin || hasTabPerm('schedule-editor')) systemCards.push({ icon: '📅', label: 'לוח חוגים', tab: 'schedule-editor' });
   if (isAdmin || hasTabPerm('news-posts')) systemCards.push({ icon: '📰', label: 'כתבות', tab: 'news-posts' });
   if (isAdmin || hasTabPerm('club-people')) systemCards.push({ icon: '👥', label: 'אנשי המועדון', tab: 'club-people' });
-  if (isAdmin || hasTabPerm('audit')) systemCards.push({ icon: '📊', label: 'פעילות מדריכים', tab: 'audit' });
   if (isAdmin || hasTabPerm('tourn-cal')) systemCards.push({ icon: '📅', label: 'גאנט תחרויות', tab: 'tourn-cal' });
   if (isAdmin || hasTabPerm('monthly-cal')) systemCards.push({ icon: '📅', label: 'לוח חודשי', tab: 'monthly-cal' });
   if (systemCards.length > 0) {
     mapCat(systemCards.map(c => c.tab), 'cat-system');
-    catDefs.push({ key: 'system', label: '🖥 מערכת', cards: systemCards });
+    catDefs.push({ key: 'system', label: '🖥 ניהול אתר', cards: systemCards });
   }
 
   // Settings (direct) — admin only
@@ -1912,7 +1918,7 @@ function buildTopNav() {
       btn.dataset.tab = cat.direct;
       btn.onclick = () => {
         switchTab(cat.direct);
-        // settings sections are opened via modals; no pre-load needed
+        if (cat.onOpen) cat.onOpen();
       };
     } else {
       btn.dataset.tab = 'cat-' + cat.key;

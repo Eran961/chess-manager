@@ -590,6 +590,7 @@ function renderSettingsPanel() {
     { icon: '🏕️', label: 'ניהול מחנות',   key: 'camps' },
     { icon: '👥', label: 'ניהול מדריכים', key: 'instructors' },
     ...(isAdmin ? [{ icon: '🔐', label: 'ניהול משתמשים', key: 'users' }] : []),
+    { icon: '📊', label: 'פעילות מדריכים', key: 'audit' },
     { icon: '📂', label: 'ארכיון שנים קודמות', key: 'viewarchive' },
     { icon: '🏁', label: 'סיום שנה',      key: 'endyear', danger: true },
   ];
@@ -610,6 +611,13 @@ function renderSettingsPanel() {
 window.openSettingsSection = function(key) {
   if (key === 'endyear') { openEndYearModal(); return; }
   if (key === 'viewarchive') { openArchiveBrowser(); return; }
+  if (key === 'audit') {
+    document.getElementById('settings-section-modal')?.remove();
+    if (window._tabCatMap) window._tabCatMap['audit'] = 'settings';
+    switchTab('audit');
+    loadAuditLog();
+    return;
+  }
   if (key === 'camps') {
     switchTab('camps');
     loadDbCamps().then(loadCampPlayers).then(() => { document.getElementById('panel-camps').innerHTML = renderCampsPanel(); });
