@@ -392,6 +392,7 @@ async function loadDbTeams() {
         coach:    t.coach    || '',
         coachWa:  t.coachWa  || '',
         region:   t.region   || '',
+        dayOfWeek: t.dayOfWeek ?? 0,
         meetings: t.meetings  || [],
         subGroups: (t.subGroups || [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }])
                     .map(sg => ({ time: sg.time || '', day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '', players: [] }))
@@ -1506,10 +1507,13 @@ async function saveAttendance() {
 // ===== TEAM ATTENDANCE =====
 
 function getTeamMeetingDates(team) {
-  if (!team || !team.meetings || team.meetings.length === 0) return [];
-  const days = [...new Set(team.meetings.map(m => Number(m.day)).filter(d => d >= 0 && d <= 6))];
-  const all = days.flatMap(day => getGroupDates(day));
-  return [...new Set(all)].sort();
+  if (!team) return [];
+  if (team.meetings && team.meetings.length > 0) {
+    const days = [...new Set(team.meetings.map(m => Number(m.day)).filter(d => d >= 0 && d <= 6))];
+    const all = days.flatMap(day => getGroupDates(day));
+    return [...new Set(all)].sort();
+  }
+  return getGroupDates(team.dayOfWeek ?? 0);
 }
 
 function defaultDateForTeam(team) {

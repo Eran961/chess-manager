@@ -1007,6 +1007,8 @@ function openEditTeamModal(teamId) {
   const teamIdx = teams.indexOf(team);
 
   const sgRows = () => document.getElementById('et-subgroups')?.querySelectorAll('.et-sg-row') || [];
+  const dayDisplayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
+  const dayOpts = dayDisplayNames.map((d,i) => `<option value="${i}"${(team.dayOfWeek||0)===i?' selected':''}>${d}</option>`).join('');
 
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open" id="editTeamOverlay" onclick="if(event.target===this)this.remove()">
@@ -1035,6 +1037,11 @@ function openEditTeamModal(teamId) {
           <div class="modal-field">
             <label>מאמן</label>
             <input type="text" id="et-coach" value="${team.coach||''}" class="modal-input" placeholder="שם המאמן">
+          </div>
+
+          <div class="modal-field">
+            <label>יום בשבוע (לנוכחות)</label>
+            <select id="et-day" class="modal-input">${dayOpts}</select>
           </div>
 
           <div>
@@ -1099,6 +1106,7 @@ async function saveEditedTeam(teamId) {
   const name  = document.getElementById('et-name')?.value?.trim();
   const coach = document.getElementById('et-coach')?.value?.trim() || '';
   const region = document.getElementById('et-region')?.value || '';
+  const dayOfWeek = parseInt(document.getElementById('et-day')?.value || '0');
 
   if (!name) { showToast('יש להזין שם נבחרת', 'error'); return; }
 
@@ -1117,13 +1125,13 @@ async function saveEditedTeam(teamId) {
 
   if (newSubGroups.length === 0) { showToast('חייבת להיות לפחות קטגוריה אחת', 'error'); return; }
 
-  team.name = name; team.coach = coach; team.region = region;
+  team.name = name; team.coach = coach; team.region = region; team.dayOfWeek = dayOfWeek;
   team.subGroups = newSubGroups;
 
   if (db && teamId) {
     try {
       await db.ref(`dbTeams/${teamId}`).update({
-        name, coach, region,
+        name, coach, region, dayOfWeek,
         subGroups: newSubGroups.map(sg => ({ time: sg.time, day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '' }))
       });
     } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); return; }
@@ -1201,8 +1209,9 @@ async function saveNewTeam() {
     return { time: t, day: (dv !== '' && dv != null) ? parseInt(dv) : null, meetingTime: row.querySelector('.ct-sg-mtime')?.value?.trim() || '', location: row.querySelector('.ct-sg-loc')?.value?.trim() || '' };
   }).filter(Boolean);
   if (subGroups.length === 0) subGroups = [{ time: 'שחקנים', day: null, meetingTime: '', location: '' }];
+  const dayOfWeek = subGroups.find(sg => sg.day != null)?.day ?? 0;
   const id = 'team-' + name.replace(/[^a-zA-Z0-9א-ת]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
-  const teamDef = { name, coach, coachWa: wa, region, subGroups };
+  const teamDef = { name, coach, coachWa: wa, region, dayOfWeek, subGroups };
   try {
     await db.ref(`dbTeams/${id}`).set(teamDef);
     _useDbTeams = true;
