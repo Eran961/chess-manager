@@ -1357,30 +1357,33 @@ function renderCampsPanel() {
 window.renderCampsPanel = renderCampsPanel;
 
 function renderCampsListView() {
-  const cards = camps.map(c => {
+  const rows = camps.map(c => {
     const levelCount = c.levels.length;
     const playerCount = c.levels.reduce((s, lv) => s + lv.players.filter(p => !p.hidden).length, 0);
     const instructors = [...new Set(c.levels.map(lv => lv.instructor).filter(Boolean))];
     const dates = c.startDate ? `${formatDate(c.startDate)}${c.endDate ? ' – ' + formatDate(c.endDate) : ''}` : '';
     return `
-      <div class="hub-card" style="text-align:right;cursor:pointer" onclick="viewCamp('${c.id}')">
-        <div class="hub-card-icon">🏕️</div>
-        <div class="hub-card-title">${c.name}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-          ${dates ? dates + ' · ' : ''}${levelCount} רמ${levelCount===1?'ה':'ות'} · ${playerCount} ילדים
-          ${instructors.length ? '<br>' + instructors.join(', ') : ''}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:6px;cursor:pointer" onclick="viewCamp('${c.id}')">
+        <div style="flex:1;min-width:0">
+          <span style="font-weight:600;font-size:14px;color:var(--text-primary)">🏕️ ${c.name}</span>
+          ${dates ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${dates}</span>` : ''}
+          <span style="font-size:12px;color:var(--text-muted)"> · ${levelCount} רמ${levelCount===1?'ה':'ות'} · ${playerCount} ילדים</span>
+          ${instructors.length ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${instructors.join(', ')}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <button onclick="event.stopPropagation();openEditCampModal('${c.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+          <button onclick="event.stopPropagation();deleteDbCamp('${c.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
         </div>
       </div>`;
   }).join('');
   return `
     <div style="direction:rtl;max-width:900px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:10px">
-        <h3 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">🏕️ מחנות</h3>
+      <button onclick="switchTab('settings')" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ חזרה להגדרות</button>
+      <h3 style="font-size:20px;font-weight:800;margin:0 0 20px;color:var(--text-primary)">🏕️ ניהול מחנות</h3>
+      <div>${rows || '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין מחנות עדיין — צור את המחנה הראשון (מחנה קיץ, סוכות, פסח...)</div>'}</div>
+      <div style="margin-top:14px">
         <button onclick="openCreateCampModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור מחנה חדש</button>
       </div>
-      ${camps.length === 0
-        ? '<div style="color:var(--text-muted);font-size:14px;text-align:center;padding:40px 20px">אין מחנות עדיין — צור את המחנה הראשון (מחנה קיץ, סוכות, פסח...)</div>'
-        : `<div class="hub-grid">${cards}</div>`}
     </div>`;
 }
 
