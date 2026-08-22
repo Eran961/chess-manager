@@ -834,6 +834,7 @@ function openEndYearModal() {
             <b>מה יועבר לארכיון:</b><br>
             ✓ ${groups.length} חוגים עם כל השחקנים<br>
             ✓ ${teams.length} נבחרות עם כל השחקנים<br>
+            ✓ ${camps.length} מחנות עם כל השחקנים<br>
             ✓ נוכחות, תשלומים, הערות<br>
             ✓ היסטוריה ושעות
           </div>
@@ -852,7 +853,7 @@ async function doEndYear() {
   const btn = document.querySelector('.friday-modal button[onclick="doEndYear()"]');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ שומר...'; }
   try {
-    const paths = ['extra_players','player_overrides','hidden_players','attendance','notes','payment','player_contacts','group_names','subgroup_names','history','vacations','dbGroups','dbTeams','team_players','team_attendance','teamVacations'];
+    const paths = ['extra_players','player_overrides','hidden_players','attendance','notes','payment','player_contacts','group_names','subgroup_names','history','vacations','dbGroups','dbTeams','team_players','team_attendance','teamVacations','dbCamps','camp_players','camp_attendance'];
     const results = await Promise.all(paths.map(p => db.ref(p).get()));
     const archiveData = { name: archiveName, archivedAt: new Date().toISOString(), yearStart: YEAR_START, yearEnd: YEAR_END };
     paths.forEach((p, i) => { if (results[i].val()) archiveData[p] = results[i].val(); });
@@ -866,16 +867,23 @@ async function doEndYear() {
       id: t.id, name: t.name, coach: t.coach, region: t.region,
       subGroups: t.subGroups.map(sg => ({ time: sg.time, players: sg.players || [] }))
     }));
+    // Also archive the camp definitions (instructor is per level, not per camp)
+    archiveData.campDefinitions = camps.map(c => ({
+      id: c.id, name: c.name, startDate: c.startDate, endDate: c.endDate,
+      subGroups: c.levels.map(lv => ({ time: lv.name, instructor: lv.instructor, players: lv.players || [] }))
+    }));
     await db.ref(`yearArchive/${yearKey}`).set(archiveData);
     // Clear all active data
     await Promise.all(paths.map(p => db.ref(p).remove()));
     document.querySelector('.friday-modal')?.remove();
-    showToast(`השנה הועברה לארכיון ✅ — ניתן לצור חוגים ונבחרות חדשות`);
+    showToast(`השנה הועברה לארכיון ✅ — ניתן לצור חוגים, נבחרות ומחנות חדשים`);
     // Rebuild app fresh
     _useDbGroups = true;
     groups = [];
     _useDbTeams = true;
     teams = [];
+    _useDbCamps = true;
+    camps = [];
     document.getElementById('tabsBar').innerHTML = '';
     document.getElementById('content').innerHTML = '';
     buildApp();
@@ -885,10 +893,26 @@ async function doEndYear() {
 window.doEndYear = doEndYear;
 
 async function openArchiveBrowser() {
+  document.getElementById('settings-section-modal')?.remove();
+  let panel = document.getElementById('panel-archive');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.className = 'tab-panel'; panel.id = 'panel-archive';
+    document.getElementById('content').appendChild(panel);
+  }
+  panel.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">⏳ טוען ארכיון...</div>';
+  switchTab('archive');
   try {
     const snap = await db.ref('yearArchive').get();
     const archive = snap.val();
-    if (!archive) { showToast('אין ארכיון עדיין'); return; }
+    if (!archive) {
+      panel.innerHTML = `
+        <div style="direction:rtl;max-width:900px">
+          <button onclick="switchTab('settings')" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ חזרה להגדרות</button>
+          <div style="color:var(--text-muted);font-size:14px;text-align:center;padding:40px 20px">אין ארכיון עדיין</div>
+        </div>`;
+      return;
+    }
     const years = Object.entries(archive).sort((a, b) => (b[1].archivedAt || '').localeCompare(a[1].archivedAt || ''));
     const liveTeamsCount = teams.length;
     const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -898,88 +922,70 @@ async function openArchiveBrowser() {
       const allEmpty = subGroupsArr.length === 0 || subGroupsArr.every(sg => (sg.players || []).filter(p => !p.hidden).length === 0);
       const subHtml = subGroupsArr.map(sg => {
         const players = (sg.players || []).filter(p => !p.hidden);
+        const sgInstructorLine = sg.instructor !== undefined
+          ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">מדריך: ${sg.instructor ? esc(sg.instructor) : '<span style="color:#c53030">— לא משוייך</span>'}</div>` : '';
         if (players.length === 0) {
-          return `<div class="subgroup"><div class="subgroup-title">${esc(sg.time || 'קבוצה')}</div><div class="empty-note">⚠️ אין רשימת שחקנים</div></div>`;
+          return `<div style="margin-top:8px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px">${esc(sg.time || 'קבוצה')}</div>
+            ${sgInstructorLine}
+            <div style="font-size:12px;color:#c53030;background:rgba(197,48,48,0.08);border:1px dashed #feb2b2;border-radius:6px;padding:6px 10px">⚠️ אין רשימת שחקנים</div>
+          </div>`;
         }
-        const rows = players.map((p,i) => `<tr><td>${i+1}</td><td>${esc(p.name || `${p.firstName||''} ${p.lastName||''}`.trim() || '?')}</td><td>${esc(p.birthYear||'—')}</td></tr>`).join('');
-        return `<div class="subgroup"><div class="subgroup-title">${esc(sg.time || 'קבוצה')} <span class="count">(${players.length})</span></div>
-          <table><thead><tr><th>#</th><th>שם</th><th>שנת לידה</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        const rows = players.map((p,i) => `<tr><td style="padding:4px 10px;border-bottom:1px solid var(--border)">${i+1}</td><td style="padding:4px 10px;border-bottom:1px solid var(--border)">${esc(p.name || `${p.firstName||''} ${p.lastName||''}`.trim() || '?')}</td><td style="padding:4px 10px;border-bottom:1px solid var(--border)">${esc(p.birthYear||'—')}</td></tr>`).join('');
+        return `<div style="margin-top:8px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px">${esc(sg.time || 'קבוצה')} <span style="font-weight:400;color:var(--text-muted)">(${players.length})</span></div>
+          ${sgInstructorLine}
+          <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="background:#2b6cb0;color:white;padding:5px 10px;text-align:right;font-size:11px">#</th><th style="background:#2b6cb0;color:white;padding:5px 10px;text-align:right;font-size:11px">שם</th><th style="background:#2b6cb0;color:white;padding:5px 10px;text-align:right;font-size:11px">שנת לידה</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>`;
       }).join('');
-      return `<div class="unit-card${allEmpty ? ' unit-empty' : ''}">
-        <div class="unit-head">
-          <span class="unit-icon">${icon}</span>
-          <span class="unit-name">${esc(name)}</span>
-          <span class="unit-role${roleName ? '' : ' unit-role-missing'}">${roleLabel}: ${roleName ? esc(roleName) : '—'}</span>
-          ${allEmpty ? '<span class="badge-empty">⚠️ אין רשימת שחקנים כלל</span>' : ''}
+      const roleLine = roleLabel ? `<span style="font-size:12px;color:var(--text-muted);background:var(--bg-subtle);border-radius:6px;padding:2px 8px">${roleLabel}: ${roleName ? esc(roleName) : '—'}</span>` : '';
+      return `<div style="background:var(--bg-card);border:1px solid ${allEmpty ? '#feb2b2' : 'var(--border)'};border-radius:10px;padding:14px 16px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:16px">${icon}</span>
+          <span style="font-weight:700;font-size:15px;color:var(--text-primary)">${esc(name)}</span>
+          ${roleLine}
+          ${allEmpty ? '<span style="font-size:11px;font-weight:700;color:#c53030;background:#fed7d7;border-radius:6px;padding:2px 8px">⚠️ אין רשימת שחקנים כלל</span>' : ''}
         </div>
         ${subHtml}
       </div>`;
     };
 
     const yearSections = years.map(([yearKey, y]) => {
-      const groupsHtml = (y.groupDefinitions || []).map(g => renderUnit(g.name, 'מדריך', g.instructor, g.subGroups, '🏫')).join('') || '<div class="none-note">אין חוגים בארכיון זה</div>';
-      const teamsHtml = (y.teamDefinitions || []).map(t => renderUnit(t.name, 'מאמן', t.coach, t.subGroups, '🏅')).join('') || '<div class="none-note">אין נבחרות בארכיון זה</div>';
+      const groupsHtml = (y.groupDefinitions || []).map(g => renderUnit(g.name, 'מדריך', g.instructor, g.subGroups, '🏫')).join('') || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">אין חוגים בארכיון זה</div>';
+      const teamsHtml = (y.teamDefinitions || []).map(t => renderUnit(t.name, 'מאמן', t.coach, t.subGroups, '🏅')).join('') || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">אין נבחרות בארכיון זה</div>';
+      const campsHtml = (y.campDefinitions || []).map(c => renderUnit(c.name, '', null, c.subGroups, '🏕️')).join('') || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">אין מחנות בארכיון זה</div>';
       const dateStr = y.archivedAt ? new Date(y.archivedAt).toLocaleDateString('he-IL') : '';
       const missingTeams = !y.teamDefinitions || y.teamDefinitions.length === 0;
       const migrateBtn = (missingTeams && liveTeamsCount > 0) ? `
-        <button class="migrate-btn" onclick="
+        <button onclick="
           if(confirm('להעביר את ${liveTeamsCount} הנבחרות הנוכחיות (עם כל השחקנים) לארכיון? הנתונים הפעילים של הנבחרות יימחקו לאחר מכן. פעולה זו אינה הפיכה.')){
             this.disabled=true; this.textContent='⏳ מעביר...';
-            window.opener._doArchiveTeamsMerge('${yearKey}').then(()=>{ alert('✅ הנבחרות הועברו בהצלחה. הטאב ייסגר — פתח את הארכיון מחדש כדי לראות את העדכון.'); window.close(); }).catch(e=>{ alert('שגיאה: '+e.message); this.disabled=false; this.textContent='🗄 השלם — העבר את ${liveTeamsCount} הנבחרות הנוכחיות לשנה זו'; });
-          }">🗄 השלם — העבר את ${liveTeamsCount} הנבחרות הנוכחיות לשנה זו</button>` : '';
+            _doArchiveTeamsMerge('${yearKey}').then(()=>{ openArchiveBrowser(); }).catch(e=>{ alert('שגיאה: '+e.message); this.disabled=false; this.textContent='🗄 השלם — העבר את ${liveTeamsCount} הנבחרות הנוכחיות לשנה זו'; });
+          }" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;margin:8px 0 4px;font-family:inherit">🗄 השלם — העבר את ${liveTeamsCount} הנבחרות הנוכחיות לשנה זו</button>` : '';
       return `
-        <section class="year-section" id="year-${esc(yearKey)}">
-          <h2>📁 ${esc(y.name || yearKey)} <span class="year-date">${dateStr}</span></h2>
+        <section id="year-${esc(yearKey)}" style="margin-bottom:36px">
+          <h2 style="font-size:19px;border-bottom:2px solid #2b6cb0;padding-bottom:6px;margin-bottom:4px;color:var(--text-primary)">📁 ${esc(y.name || yearKey)} <span style="font-size:12px;color:var(--text-muted);font-weight:400;margin-right:8px">${dateStr}</span></h2>
           ${migrateBtn}
-          <h3>חוגים</h3>
+          <h3 style="font-size:14px;color:var(--text-muted);margin:18px 0 8px">חוגים</h3>
           ${groupsHtml}
-          <h3>נבחרות</h3>
+          <h3 style="font-size:14px;color:var(--text-muted);margin:18px 0 8px">נבחרות</h3>
           ${teamsHtml}
+          <h3 style="font-size:14px;color:var(--text-muted);margin:18px 0 8px">מחנות</h3>
+          ${campsHtml}
         </section>`;
     }).join('');
 
-    const toc = years.length > 1 ? `<nav class="toc">קפצו לשנה: ${years.map(([yearKey,y]) => `<a href="#year-${esc(yearKey)}">${esc(y.name || yearKey)}</a>`).join(' · ')}</nav>` : '';
+    const toc = years.length > 1 ? `<nav style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:24px;font-size:13px;color:var(--text-primary)">קפצו לשנה: ${years.map(([yearKey,y]) => `<a href="#year-${esc(yearKey)}" style="color:#4a90d9;text-decoration:none;margin:0 4px">${esc(y.name || yearKey)}</a>`).join(' · ')}</nav>` : '';
 
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
-      <title>ארכיון שנים קודמות — מועדון השחמט ראשל"צ</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:28px;max-width:900px;margin:0 auto;color:#1a1a2e;background:#f7fafc}
-        h1{font-size:24px;margin-bottom:4px}
-        .sub{font-size:13px;color:#718096;margin-bottom:20px}
-        .toc{background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:24px;font-size:13px}
-        .toc a{color:#2b6cb0;text-decoration:none;margin:0 4px}
-        .year-section{margin-bottom:36px}
-        .year-section h2{font-size:19px;border-bottom:2px solid #2b6cb0;padding-bottom:6px;margin-bottom:4px}
-        .year-date{font-size:12px;color:#718096;font-weight:400;margin-right:8px}
-        .year-section h3{font-size:14px;color:#4a5568;margin:18px 0 8px}
-        .migrate-btn{background:#553c9a;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;margin:8px 0 4px}
-        .unit-card{background:white;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px}
-        .unit-empty{border-color:#feb2b2;background:#fff5f5}
-        .unit-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
-        .unit-icon{font-size:16px}
-        .unit-name{font-weight:700;font-size:15px}
-        .unit-role{font-size:12px;color:#4a5568;background:#edf2f7;border-radius:6px;padding:2px 8px}
-        .unit-role-missing{color:#a0aec0}
-        .badge-empty{font-size:11px;font-weight:700;color:#c53030;background:#fed7d7;border-radius:6px;padding:2px 8px}
-        .subgroup{margin-top:8px}
-        .subgroup-title{font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px}
-        .subgroup-title .count{font-weight:400;color:#a0aec0}
-        .empty-note{font-size:12px;color:#c53030;background:#fff5f5;border:1px dashed #feb2b2;border-radius:6px;padding:6px 10px}
-        table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
-        th{background:#2b6cb0;color:white;padding:5px 10px;text-align:right;font-size:11px}
-        td{padding:4px 10px;border-bottom:1px solid #edf2f7}
-        tr:nth-child(even) td{background:#f7fafc}
-        .none-note{color:#a0aec0;font-size:13px;padding:8px 0}
-      </style>
-      </head><body>
-      <h1>📂 ארכיון שנים קודמות</h1>
-      <div class="sub">מועדון השחמט ראשון לציון · ${years.length} שנים בארכיון</div>
-      ${toc}
-      ${yearSections}
-      </body></html>`);
-    win.document.close();
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+    panel.innerHTML = `
+      <div style="direction:rtl;max-width:900px">
+        <button onclick="switchTab('settings')" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ חזרה להגדרות</button>
+        <h3 style="font-size:20px;font-weight:800;margin:0 0 4px;color:var(--text-primary)">📂 ארכיון שנים קודמות</h3>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${years.length} שנים בארכיון</div>
+        ${toc}
+        ${yearSections}
+      </div>`;
+  } catch(e) { panel.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה: ${e.message}</div>`; }
 }
 window.openArchiveBrowser = openArchiveBrowser;
 

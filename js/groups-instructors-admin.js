@@ -1344,3 +1344,397 @@ function pickArchivePlayer(p) {
 }
 window.pickArchivePlayer = pickArchivePlayer;
 
+// ===== CAMPS (מחנות) =====
+
+function renderCampsPanel() {
+  if (_campView.mode === 'detail' && _campView.campId) {
+    const camp = camps.find(c => c.id === _campView.campId);
+    if (camp) return renderCampDetailView(camp);
+    _campView = { mode: 'list', campId: null };
+  }
+  return renderCampsListView();
+}
+window.renderCampsPanel = renderCampsPanel;
+
+function renderCampsListView() {
+  const cards = camps.map(c => {
+    const levelCount = c.levels.length;
+    const playerCount = c.levels.reduce((s, lv) => s + lv.players.filter(p => !p.hidden).length, 0);
+    const instructors = [...new Set(c.levels.map(lv => lv.instructor).filter(Boolean))];
+    const dates = c.startDate ? `${formatDate(c.startDate)}${c.endDate ? ' – ' + formatDate(c.endDate) : ''}` : '';
+    return `
+      <div class="hub-card" style="text-align:right;cursor:pointer" onclick="viewCamp('${c.id}')">
+        <div class="hub-card-icon">🏕️</div>
+        <div class="hub-card-title">${c.name}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+          ${dates ? dates + ' · ' : ''}${levelCount} רמ${levelCount===1?'ה':'ות'} · ${playerCount} ילדים
+          ${instructors.length ? '<br>' + instructors.join(', ') : ''}
+        </div>
+      </div>`;
+  }).join('');
+  return `
+    <div style="direction:rtl;max-width:900px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:10px">
+        <h3 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">🏕️ מחנות</h3>
+        <button onclick="openCreateCampModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור מחנה חדש</button>
+      </div>
+      ${camps.length === 0
+        ? '<div style="color:var(--text-muted);font-size:14px;text-align:center;padding:40px 20px">אין מחנות עדיין — צור את המחנה הראשון (מחנה קיץ, סוכות, פסח...)</div>'
+        : `<div class="hub-grid">${cards}</div>`}
+    </div>`;
+}
+
+function viewCamp(campId) {
+  _campView = { mode: 'detail', campId };
+  const panel = document.getElementById('panel-camps');
+  if (panel) panel.innerHTML = renderCampsPanel();
+}
+window.viewCamp = viewCamp;
+
+function backToCampsList() {
+  _campView = { mode: 'list', campId: null };
+  const panel = document.getElementById('panel-camps');
+  if (panel) panel.innerHTML = renderCampsPanel();
+}
+window.backToCampsList = backToCampsList;
+
+function renderCampDetailView(camp) {
+  const dates = camp.startDate ? `${formatDate(camp.startDate)}${camp.endDate ? ' – ' + formatDate(camp.endDate) : ''}` : '';
+  const levelsHtml = camp.levels.map((lv, li) => renderCampLevelCard(camp, lv, li)).join('');
+  return `
+    <div style="direction:rtl;max-width:900px">
+      <button onclick="backToCampsList()" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ כל המחנות</button>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <div>
+          <h3 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">🏕️ ${camp.name}</h3>
+          ${dates ? `<div style="font-size:13px;color:var(--text-muted);margin-top:4px">${dates}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="openEditCampModal('${camp.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+          <button onclick="deleteDbCamp('${camp.id}')" style="background:none;border:1px solid #fc8181;color:#fc8181;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🗑 מחק מחנה</button>
+        </div>
+      </div>
+      ${levelsHtml}
+    </div>`;
+}
+
+function renderCampLevelCard(camp, lv, li) {
+  const players = sortedPlayers(lv.players);
+  const rows = players.map(({p}) => {
+    const { first, last } = splitName(p.name);
+    const age = p.birthYear ? `${p.birthYear} (גיל ${CURRENT_YEAR - p.birthYear})` : '—';
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:6px;background:var(--bg-subtle);margin-bottom:4px">
+        <div style="font-size:13px;color:var(--text-primary)">${last} ${first} <span style="color:var(--text-muted);font-size:11px">· ${age}</span></div>
+        <button onclick="removeCampPlayer('${camp.id}',${li},'${p._key}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button>
+      </div>`;
+  }).join('');
+  const attId = `camp-att-${camp.id}-${li}`;
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div>
+          <span style="font-weight:700;font-size:15px;color:var(--text-primary)">${lv.name || 'רמה'}</span>
+          <span style="font-size:12px;color:var(--text-muted);margin-right:8px">${lv.instructor ? '· מדריך: ' + lv.instructor : '· ⚠️ אין מדריך משוייך'}</span>
+        </div>
+        <button onclick="openAddCampPlayerModal('${camp.id}',${li})" style="background:#276749;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף ילד</button>
+      </div>
+      <div style="margin-bottom:12px">
+        ${rows || '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">אין שחקנים ברמה זו</div>'}
+      </div>
+      <div id="${attId}">${renderCampAttendanceWidget(camp, li)}</div>
+    </div>`;
+}
+
+function renderCampAttendanceWidget(camp, li, presentMap) {
+  presentMap = presentMap || {};
+  const lv = camp.levels[li];
+  const players = sortedPlayers(lv.players);
+  if (players.length === 0) return '';
+  const today = new Date().toISOString().slice(0,10);
+  const dateId = `camp-att-date-${camp.id}-${li}`;
+  const rows = players.map(({p}) => {
+    const { first, last } = splitName(p.name);
+    const key = p._key;
+    const isPresent = !!presentMap[key];
+    return `
+      <label class="att-player-row${isPresent ? ' present' : ''}" data-playerkey="${key}" onclick="_toggleCampAttRow(this)">
+        <input type="checkbox" ${isPresent ? 'checked' : ''} onclick="event.stopPropagation(); this.closest('.att-player-row').classList.toggle('present', this.checked)">
+        <span class="att-player-name">${last} ${first}</span>
+        <span class="att-present-badge">נוכח ✓</span>
+      </label>`;
+  }).join('');
+  return `
+    <div style="border-top:1px solid var(--border);padding-top:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">📋 נוכחות:</span>
+        <input type="date" id="${dateId}" value="${today}" onchange="loadCampAttendance('${camp.id}',${li})" style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;background:var(--bg-subtle);color:var(--text-primary)">
+        <button onclick="saveCampAttendance('${camp.id}',${li})" style="background:#2b6cb0;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:auto">💾 שמור</button>
+      </div>
+      <div class="att-list">${rows}</div>
+    </div>`;
+}
+
+function _toggleCampAttRow(row) {
+  const cb = row.querySelector('input[type=checkbox]');
+  cb.checked = !cb.checked;
+  row.classList.toggle('present', cb.checked);
+}
+window._toggleCampAttRow = _toggleCampAttRow;
+
+async function loadCampAttendance(campId, li) {
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  const dateId = `camp-att-date-${campId}-${li}`;
+  const date = document.getElementById(dateId)?.value;
+  let presentMap = {};
+  if (db && date) {
+    try {
+      const snap = await db.ref(`camp_attendance/${campId}/${li}/${date}`).get();
+      presentMap = snap.val() || {};
+    } catch(e) { console.error('loadCampAttendance error:', e); }
+  }
+  const container = document.getElementById(`camp-att-${campId}-${li}`);
+  if (container) container.innerHTML = renderCampAttendanceWidget(camp, li, presentMap);
+}
+window.loadCampAttendance = loadCampAttendance;
+
+async function saveCampAttendance(campId, li) {
+  const dateId = `camp-att-date-${campId}-${li}`;
+  const date = document.getElementById(dateId)?.value;
+  if (!date) { showToast('בחר תאריך', 'error'); return; }
+  const container = document.getElementById(`camp-att-${campId}-${li}`);
+  const presentMap = {};
+  container?.querySelectorAll('.att-player-row').forEach(row => {
+    if (row.querySelector('input[type=checkbox]').checked) presentMap[row.dataset.playerkey] = true;
+  });
+  try {
+    await db.ref(`camp_attendance/${campId}/${li}/${date}`).set(Object.keys(presentMap).length > 0 ? presentMap : null);
+    const camp = camps.find(c => c.id === campId);
+    logAudit('update_attendance', campId, camp?.name || campId, `מחנה · ${date} · ${Object.keys(presentMap).length} נוכחים`);
+    showToast('נוכחות נשמרה ✓');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveCampAttendance = saveCampAttendance;
+
+// ── Create / edit camp ──────────────────────────
+
+function _campLevelRow(lv) {
+  return `<div class="camp-lv-row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f0f4f8">
+    <input type="text" class="modal-input camp-lv-name" value="${lv.name||''}" placeholder="שם הרמה (למשל: מתחילים)" style="flex:1;min-width:110px">
+    <input type="text" class="modal-input camp-lv-instructor" value="${lv.instructor||''}" placeholder="מדריך אחראי" style="flex:1;min-width:110px">
+    <button onclick="this.closest('.camp-lv-row').remove()" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>
+  </div>`;
+}
+window._campLevelRow = _campLevelRow;
+
+function addCampLevelRow() {
+  const cont = document.getElementById('camp-levels');
+  if (!cont) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = _campLevelRow({});
+  cont.appendChild(tmp.firstElementChild);
+}
+window.addCampLevelRow = addCampLevelRow;
+
+function addCampLevelRowTo(containerId) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = _campLevelRow({});
+  cont.appendChild(tmp.firstElementChild);
+}
+window.addCampLevelRowTo = addCampLevelRowTo;
+
+function openCreateCampModal() {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+          <span class="modal-title">➕ יצירת מחנה חדש</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div class="modal-field"><label>שם המחנה <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="cc-name" placeholder='לדוגמה: מחנה סוכות 2026' class="modal-input"></div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>תאריך התחלה</label><input type="date" id="cc-start" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>תאריך סיום</label><input type="date" id="cc-end" class="modal-input"></div>
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">רמות <span style="font-size:11px;color:#a0aec0;font-weight:400">— לכל רמה מדריך אחראי משלה</span></label>
+            <div id="camp-levels" style="display:flex;flex-direction:column">${_campLevelRow({})}</div>
+            <button onclick="addCampLevelRow()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;color:#4a5568;margin-top:6px">+ הוסף רמה</button>
+          </div>
+          <button onclick="saveNewCamp()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 צור מחנה</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openCreateCampModal = openCreateCampModal;
+
+function _readCampLevelRows(containerId) {
+  const rows = document.querySelectorAll(`#${containerId} .camp-lv-row`);
+  return [...rows].map(row => {
+    const name = row.querySelector('.camp-lv-name')?.value?.trim() || '';
+    const instructor = row.querySelector('.camp-lv-instructor')?.value?.trim() || '';
+    if (!name) return null;
+    return { name, instructor };
+  }).filter(Boolean);
+}
+
+async function saveNewCamp() {
+  const name = document.getElementById('cc-name')?.value?.trim();
+  if (!name) { showToast('יש להזין שם מחנה', 'error'); return; }
+  const startDate = document.getElementById('cc-start')?.value || null;
+  const endDate = document.getElementById('cc-end')?.value || null;
+  let levels = _readCampLevelRows('camp-levels');
+  if (levels.length === 0) levels = [{ name: 'שחקנים', instructor: '' }];
+  const id = 'camp-' + name.replace(/[^a-zA-Z0-9א-ת]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
+  const campDef = { name, startDate, endDate, levels };
+  try {
+    await db.ref(`dbCamps/${id}`).set(campDef);
+    _useDbCamps = true;
+    camps.push({ id, ...campDef, levels: levels.map(lv => ({ ...lv, players: [] })) });
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`המחנה "${name}" נוצר ✅`);
+    viewCamp(id);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveNewCamp = saveNewCamp;
+
+function openEditCampModal(campId) {
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+          <span class="modal-title">✎ עריכת מחנה</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div class="modal-field"><label>שם המחנה <span style="color:#e53e3e">*</span></label>
+            <input type="text" id="ec-name" value="${camp.name}" class="modal-input"></div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>תאריך התחלה</label><input type="date" id="ec-start" value="${camp.startDate||''}" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>תאריך סיום</label><input type="date" id="ec-end" value="${camp.endDate||''}" class="modal-input"></div>
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">רמות <span style="font-size:11px;color:#a0aec0;font-weight:400">— הסרת רמה לא מוחקת שחקנים שכבר נרשמו אליה</span></label>
+            <div id="camp-levels-edit" style="display:flex;flex-direction:column">${camp.levels.map(_campLevelRow).join('')}</div>
+            <button onclick="addCampLevelRowTo('camp-levels-edit')" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;color:#4a5568;margin-top:6px">+ הוסף רמה</button>
+          </div>
+          <button onclick="saveEditCamp('${campId}')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור שינויים</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openEditCampModal = openEditCampModal;
+
+async function saveEditCamp(campId) {
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  const name = document.getElementById('ec-name')?.value?.trim();
+  if (!name) { showToast('יש להזין שם מחנה', 'error'); return; }
+  const startDate = document.getElementById('ec-start')?.value || null;
+  const endDate = document.getElementById('ec-end')?.value || null;
+  let levels = _readCampLevelRows('camp-levels-edit');
+  if (levels.length === 0) levels = [{ name: 'שחקנים', instructor: '' }];
+  try {
+    await db.ref(`dbCamps/${campId}`).update({ name, startDate, endDate, levels });
+    camp.name = name; camp.startDate = startDate; camp.endDate = endDate;
+    // Preserve players for levels that still exist by matching name; new/renamed levels start empty
+    const oldLevels = camp.levels;
+    camp.levels = levels.map(lv => {
+      const match = oldLevels.find(ol => ol.name === lv.name);
+      return { ...lv, players: match ? match.players : [] };
+    });
+    document.querySelector('.friday-modal')?.remove();
+    showToast('המחנה עודכן ✅');
+    viewCamp(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveEditCamp = saveEditCamp;
+
+async function deleteDbCamp(campId) {
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  if (!confirm(`למחוק את המחנה "${camp.name}" לצמיתות? כל השחקנים והנוכחות שלו יימחקו.`)) return;
+  try {
+    await db.ref(`dbCamps/${campId}`).remove();
+    await db.ref(`camp_players/${campId}`).remove();
+    await db.ref(`camp_attendance/${campId}`).remove();
+    camps = camps.filter(c => c.id !== campId);
+    showToast('המחנה נמחק');
+    backToCampsList();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteDbCamp = deleteDbCamp;
+
+// ── Add / remove camp players ───────────────────
+
+function openAddCampPlayerModal(campId, li) {
+  const camp = camps.find(c => c.id === campId);
+  const lv = camp?.levels[li];
+  if (!camp || !lv) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+          <span class="modal-title">➕ הוספת ילד — ${lv.name}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>שם פרטי <span style="color:#e53e3e">*</span></label><input type="text" id="cp-first" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>שם משפחה</label><input type="text" id="cp-last" class="modal-input"></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>שנת לידה</label><input type="number" id="cp-year" class="modal-input" placeholder="2015"></div>
+            <div class="modal-field" style="flex:1"><label>מספר שחקן (איגוד)</label><input type="text" id="cp-fed" class="modal-input"></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>טלפון הורה</label><input type="text" id="cp-phone" class="modal-input" dir="ltr"></div>
+            <div class="modal-field" style="flex:1"><label>אימייל הורה</label><input type="text" id="cp-email" class="modal-input" dir="ltr"></div>
+          </div>
+          <button onclick="saveCampPlayer('${campId}',${li})" style="background:#276749;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 הוסף</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openAddCampPlayerModal = openAddCampPlayerModal;
+
+async function saveCampPlayer(campId, li) {
+  const firstName = document.getElementById('cp-first')?.value?.trim();
+  if (!firstName) { showToast('יש להזין שם פרטי', 'error'); return; }
+  const lastName    = document.getElementById('cp-last')?.value?.trim()  || '';
+  const birthYear   = parseInt(document.getElementById('cp-year')?.value) || null;
+  const fedId       = document.getElementById('cp-fed')?.value?.trim()   || null;
+  const parentPhone = document.getElementById('cp-phone')?.value?.trim() || null;
+  const parentEmail = document.getElementById('cp-email')?.value?.trim() || null;
+  const playerDef = { firstName, lastName, birthYear, fedId, parentPhone, parentEmail, paymentStatus: 'trial' };
+  try {
+    const ref = await db.ref(`camp_players/${campId}/${li}`).push(playerDef);
+    const camp = camps.find(c => c.id === campId);
+    camp.levels[li].players.push({ name: `${firstName} ${lastName}`.trim(), ...playerDef, hidden: false, _key: ref.key });
+    document.querySelector('.friday-modal')?.remove();
+    showToast('השחקן נוסף ✅');
+    viewCamp(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveCampPlayer = saveCampPlayer;
+
+async function removeCampPlayer(campId, li, playerKey) {
+  if (!confirm('להסיר את השחקן מהמחנה?')) return;
+  try {
+    await db.ref(`camp_players/${campId}/${li}/${playerKey}/hidden`).set(true);
+    const camp = camps.find(c => c.id === campId);
+    const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
+    if (p) p.hidden = true;
+    showToast('השחקן הוסר');
+    viewCamp(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.removeCampPlayer = removeCampPlayer;
+

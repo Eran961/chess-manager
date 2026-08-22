@@ -287,6 +287,7 @@ let _deletedGroupIds = new Set(); // persisted in Firebase so ALL_GROUPS deletio
 let teams = [];
 
 const PERMISSION_TABS = [
+  { key: 'camps',            label: '🏕️ מחנות',            instructorDefault: false },
   { key: 'attendance',       label: '🗓 נוכחות',           instructorDefault: true  },
   { key: 'payments',         label: '💳 תשלומים',          instructorDefault: true  },
   { key: 'reports',          label: '📊 דוחות',            instructorDefault: true  },
@@ -321,6 +322,10 @@ function hasTabPerm(tabKey) {
 let _useDbTeams = false;
 let _addPlayerIsTeam = false;
 let _teamProfileState = { teamIdx: 0, subTeamIdx: 0, playerIdx: 0 };
+
+let camps = [];
+let _useDbCamps = false;
+let _campView = { mode: 'list', campId: null };
 
 async function loadDbGroups() {
   if (!db) return;
@@ -444,6 +449,47 @@ async function loadTeamPlayers() {
   } catch(e) { console.error('loadTeamPlayers error:', e); }
 }
 
+async function loadDbCamps() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('dbCamps').get();
+    const data = snap.val();
+    camps = data ? Object.entries(data).map(([id, c]) => ({
+      id,
+      name: c.name || '',
+      startDate: c.startDate || null,
+      endDate: c.endDate || null,
+      levels: (c.levels || []).map(lv => ({ name: lv.name || '', instructor: lv.instructor || '', players: [] }))
+    })) : [];
+  } catch(e) { console.error('loadDbCamps error:', e); camps = []; }
+}
+
+async function loadCampPlayers() {
+  if (!db || camps.length === 0) return;
+  try {
+    const snap = await db.ref('camp_players').get();
+    const playersData = snap.val() || {};
+    camps.forEach(camp => {
+      const cPlayers = playersData[camp.id] || {};
+      camp.levels.forEach((lv, li) => {
+        const lvPlayers = cPlayers[li] || {};
+        lv.players = Object.entries(lvPlayers).map(([key, p]) => ({
+          name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+          firstName:     p.firstName     || '',
+          lastName:      p.lastName      || '',
+          birthYear:     p.birthYear     || null,
+          fedId:         p.fedId         || null,
+          parentPhone:   p.parentPhone   || null,
+          parentEmail:   p.parentEmail   || null,
+          paymentStatus: p.paymentStatus || 'trial',
+          hidden:        !!p.hidden,
+          _key: key
+        }));
+      });
+    });
+  } catch(e) { console.error('loadCampPlayers error:', e); }
+}
+
 async function loadDeletedGroups() {
   if (!db) return;
   try {
@@ -454,7 +500,7 @@ async function loadDeletedGroups() {
 }
 
 async function initializeApp() {
-  if (db) { await loadDeletedGroups(); await loadDbGroups(); await loadDbTeams(); }
+  if (db) { await loadDeletedGroups(); await loadDbGroups(); await loadDbTeams(); await loadDbCamps(); }
   buildApp();
   injectPermissionTabs();
   buildTopNav();

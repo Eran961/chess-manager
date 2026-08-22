@@ -568,6 +568,7 @@ async function initData() {
   await loadSettings();
   await loadExtraPlayers();
   await loadTeamPlayers();
+  await loadCampPlayers();
   await loadPlayerOverrides();
   await loadHiddenPlayers();
   await loadPayments();

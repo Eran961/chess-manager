@@ -1672,6 +1672,14 @@ if (currentUser?.role === 'admin') {
 // ── כלים ────────────────────────────────────────
 addSidebarLabel('כלים');
 
+const campsBtn = document.createElement('button');
+campsBtn.className = 'tab-btn'; campsBtn.dataset.tab = 'camps'; campsBtn.textContent = '🏕️ מחנות';
+campsBtn.onclick = () => { switchTab('camps'); loadDbCamps().then(loadCampPlayers).then(() => { document.getElementById('panel-camps').innerHTML = renderCampsPanel(); }); };
+tabsBar.appendChild(campsBtn);
+const campsPanel = document.createElement('div');
+campsPanel.className = 'tab-panel'; campsPanel.id = 'panel-camps'; campsPanel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">לחץ על הלשונית לטעינת הנתונים</div>';
+content.appendChild(campsPanel);
+
 const hoursBtn = document.createElement('button');
 hoursBtn.className = 'tab-btn'; hoursBtn.dataset.tab = 'hours'; hoursBtn.textContent = '⏱️ שעות';
 hoursBtn.onclick = () => { switchTab('hours'); loadHoursHistory(); };
@@ -2004,6 +2012,7 @@ function injectPermissionTabs() {
   const hasGanim  = grantedExtras.includes('prospects');
   const hasShach  = grantedExtras.includes('youth-players');
   const hasKlim   = grantedExtras.includes('hours');
+  const hasCamps  = grantedExtras.includes('camps');
   const hasMaarechet = ['audit','schedule-editor','site-content','news-posts','club-people','tourn-cal','monthly-cal'].some(k => grantedExtras.includes(k));
 
   if (hasLeague) {
@@ -2049,9 +2058,14 @@ function injectPermissionTabs() {
     addTab('youth-players','👦 שחקני נוער', () => { switchTab('youth-players'); loadYouthPlayers(); }, buildYouthPlayersHTML());
   }
 
-  if (hasKlim) {
+  if (hasKlim || hasCamps) {
     addLabel('כלים');
-    addTab('hours','⏱️ שעות', () => { switchTab('hours'); loadHoursHistory(); }, renderHoursPanel());
+    if (hasCamps) {
+      addTab('camps','🏕️ מחנות', () => { switchTab('camps'); loadDbCamps().then(loadCampPlayers).then(() => { document.getElementById('panel-camps').innerHTML = renderCampsPanel(); }); }, '<div style="padding:32px;text-align:center;color:#888;">לחץ על הלשונית לטעינת הנתונים</div>');
+    }
+    if (hasKlim) {
+      addTab('hours','⏱️ שעות', () => { switchTab('hours'); loadHoursHistory(); }, renderHoursPanel());
+    }
   }
 
   if (hasMaarechet) {
