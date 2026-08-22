@@ -1546,6 +1546,7 @@ attBtn.onclick = () => {
     document.getElementById('att-content-teams').style.display='none';
   }
   if (teams.length > 0 && groups.length === 0) loadTeamAttendance();
+  if (camps.length > 0 && groups.length === 0 && teams.length === 0) loadCampAttendanceHub();
 };
 tabsBar.appendChild(attBtn);
 const attPanel = document.createElement('div');
