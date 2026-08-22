@@ -1312,6 +1312,10 @@ function initAuth() {
       return;
     }
     // Logged in
+    // Kick off the club-wide data fetch (groups/teams/camps) now, in parallel with
+    // loadUserRole — it's the same for every user, so it doesn't need to wait for
+    // the role lookup to finish before starting.
+    const clubDataPromise = db ? Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()]) : null;
     let roleData = await loadUserRole(firebaseUser.uid);
     if (!roleData && db) {
       // User exists in Auth but has no roles entry — auto-create as instructor
@@ -1342,7 +1346,7 @@ function initAuth() {
     // Build or rebuild app
     document.getElementById('tabsBar').innerHTML = '';
     document.getElementById('content').innerHTML = '';
-    await initializeApp();
+    await initializeApp(clubDataPromise);
   });
 }
 

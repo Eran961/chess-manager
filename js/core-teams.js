@@ -511,8 +511,8 @@ async function loadDeletedGroups() {
   } catch(e) { console.warn('loadDeletedGroups error:', e); }
 }
 
-async function initializeApp() {
-  if (db) { await Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()]); }
+async function initializeApp(clubDataPromise) {
+  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()])); }
   buildApp();
   injectPermissionTabs();
   buildTopNav();
