@@ -1715,39 +1715,44 @@ function rebuildSubGroupSelect() {
   sel.disabled = g.subGroups.length === 1;
 }
 
+function _attKindsAvailable() {
+  const kinds = [];
+  if (groups.length > 0) kinds.push({ key: 'groups', icon: '🗓', label: 'חוגים',  color: '#2b6cb0', render: renderGroupAttendanceContent });
+  if (teams.length  > 0) kinds.push({ key: 'teams',  icon: '🏅', label: 'נבחרות', color: '#553c9a', render: renderTeamAttendanceContent });
+  if (camps.length  > 0) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampAttendanceContent });
+  return kinds;
+}
+
 function renderAttendancePanel() {
-  const hasGroups = groups.length > 0;
-  const hasTeams  = teams.length > 0;
+  const kinds = _attKindsAvailable();
+  if (kinds.length === 0) return `
+    <div class="att-card" style="text-align:center;padding:40px;color:#a0aec0">
+      <div style="font-size:32px;margin-bottom:8px">🗓</div>
+      <div>אין חוגים, נבחרות או מחנות מוקצים</div>
+    </div>`;
+  if (kinds.length === 1) return kinds[0].render();
 
-  // Only one type — show directly without tabs
-  if (hasGroups && !hasTeams) return renderGroupAttendanceContent();
-  if (hasTeams  && !hasGroups) return renderTeamAttendanceContent();
-
-  // Both — show tabs
-  return `
-    <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
-      <button id="att-tab-btn-groups" onclick="switchAttTab('groups')"
-        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid #2b6cb0;color:#2b6cb0;margin-bottom:-2px">
-        🗓 חוגים
-      </button>
-      <button id="att-tab-btn-teams" onclick="switchAttTab('teams')"
-        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid transparent;color:#718096;margin-bottom:-2px">
-        🏅 נבחרות
-      </button>
-    </div>
-    <div id="att-content-groups">${renderGroupAttendanceContent()}</div>
-    <div id="att-content-teams" style="display:none">${renderTeamAttendanceContent()}</div>`;
+  window._attKinds = kinds;
+  const tabsHtml = kinds.map((k, i) => `
+    <button id="att-tab-btn-${k.key}" onclick="switchAttTab('${k.key}')"
+      style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${i===0?k.color:'transparent'};color:${i===0?k.color:'#718096'};margin-bottom:-2px">
+      ${k.icon} ${k.label}
+    </button>`).join('');
+  const contentHtml = kinds.map((k, i) => `<div id="att-content-${k.key}"${i===0?'':' style="display:none"'}>${k.render()}</div>`).join('');
+  return `<div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">${tabsHtml}</div>${contentHtml}`;
 }
 
 function switchAttTab(tab) {
-  const isGroups = tab === 'groups';
-  document.getElementById('att-content-groups').style.display = isGroups ? '' : 'none';
-  document.getElementById('att-content-teams').style.display  = isGroups ? 'none' : '';
-  const gBtn = document.getElementById('att-tab-btn-groups');
-  const tBtn = document.getElementById('att-tab-btn-teams');
-  if (gBtn) { gBtn.style.borderBottom = isGroups ? '3px solid #2b6cb0' : '3px solid transparent'; gBtn.style.color = isGroups ? '#2b6cb0' : '#718096'; }
-  if (tBtn) { tBtn.style.borderBottom = isGroups ? '3px solid transparent' : '3px solid #553c9a'; tBtn.style.color = isGroups ? '#718096' : '#553c9a'; }
-  if (!isGroups) loadTeamAttendance();
+  const kinds = window._attKinds || _attKindsAvailable();
+  kinds.forEach(k => {
+    const isActive = k.key === tab;
+    const content = document.getElementById('att-content-' + k.key);
+    if (content) content.style.display = isActive ? '' : 'none';
+    const btn = document.getElementById('att-tab-btn-' + k.key);
+    if (btn) { btn.style.borderBottom = isActive ? '3px solid ' + k.color : '3px solid transparent'; btn.style.color = isActive ? k.color : '#718096'; }
+  });
+  if (tab === 'teams') loadTeamAttendance();
+  if (tab === 'camps') loadCampAttendanceHub();
 }
 window.switchAttTab = switchAttTab;
 
@@ -1828,4 +1833,168 @@ function renderTeamAttendanceContent() {
       <div class="att-summary" id="teamAttSummary"></div>
     </div>`;
 }
+
+const campAttState = {
+  campId: null,
+  levelIdx: 0,
+  date: new Date().toISOString().split('T')[0],
+};
+
+function renderCampAttendanceContent() {
+  if (camps.length === 0) return '<div style="padding:24px;text-align:center;color:#888;">אין מחנות זמינים</div>';
+  if (!campAttState.campId || !camps.find(c => c.id === campAttState.campId)) campAttState.campId = camps[0].id;
+  const camp = camps.find(c => c.id === campAttState.campId);
+  const campOptions = camps.map(c => `<option value="${c.id}" ${c.id===campAttState.campId?'selected':''}>${c.name}</option>`).join('');
+  const levelOptions = camp.levels.map((lv, i) => `<option value="${i}" ${i===campAttState.levelIdx?'selected':''}>${lv.name || 'רמה'}</option>`).join('');
+  const levelDisabled = camp.levels.length === 1 ? 'disabled' : '';
+  return `
+    <div class="att-card">
+      <div class="att-card-header">🏕️ נוכחות מחנות</div>
+      <div class="att-controls">
+        <div class="att-control-row"><label>מחנה</label>
+          <select id="campAttSel" onchange="onCampAttChange(this.value)">${campOptions}</select></div>
+        <div class="att-control-row"><label>רמה</label>
+          <select id="campAttLevelSel" onchange="onCampAttLevelChange(this.value)" ${levelDisabled}>${levelOptions}</select></div>
+        <div class="att-control-row"><label>תאריך</label>
+          <input type="date" id="campAttDate" value="${campAttState.date}" onchange="onCampAttDateChange(this.value)"
+            style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit;width:100%"></div>
+      </div>
+      <div class="att-actions">
+        <button class="btn-att btn-check-all" onclick="campAttCheckAll()">✓ סמן הכל</button>
+        <button class="btn-att btn-clear-all" onclick="campAttClearAll()">✗ נקה הכל</button>
+        <button class="btn-att btn-save" id="btnCampSave" onclick="saveCampAttendanceHub()">💾 שמור נוכחות</button>
+        <span class="save-status" id="campSaveStatus"></span>
+      </div>
+      <div class="att-player-list" id="campAttPlayerList">
+        <div style="padding:20px;color:#718096;text-align:center">טוען...</div>
+      </div>
+      <div class="att-summary" id="campAttSummary"></div>
+    </div>`;
+}
+
+function onCampAttChange(campId) {
+  campAttState.campId = campId;
+  campAttState.levelIdx = 0;
+  const panel = document.getElementById('panel-attendance');
+  if (panel) { panel.innerHTML = renderAttendancePanel(); switchAttTab('camps'); }
+}
+window.onCampAttChange = onCampAttChange;
+
+function onCampAttLevelChange(val) {
+  campAttState.levelIdx = parseInt(val);
+  loadCampAttendanceHub();
+}
+window.onCampAttLevelChange = onCampAttLevelChange;
+
+function onCampAttDateChange(val) {
+  campAttState.date = val;
+  loadCampAttendanceHub();
+}
+window.onCampAttDateChange = onCampAttDateChange;
+
+async function loadCampAttendanceHub() {
+  const list = document.getElementById('campAttPlayerList');
+  if (!list) return;
+  const camp = camps.find(c => c.id === campAttState.campId);
+  const lv = camp?.levels[campAttState.levelIdx];
+  if (!camp || !lv) { list.innerHTML = '<div style="padding:20px;color:#a0aec0;text-align:center">אין שחקנים</div>'; return; }
+  list.innerHTML = '<div style="padding:20px;color:#718096;text-align:center">טוען...</div>';
+  let presentMap = {};
+  if (db && campAttState.date) {
+    try {
+      const snap = await db.ref(`camp_attendance/${camp.id}/${campAttState.levelIdx}/${campAttState.date}`).get();
+      presentMap = snap.val() || {};
+    } catch(e) { console.error('loadCampAttendanceHub error:', e); }
+  }
+  renderCampAttPlayerList(presentMap);
+}
+window.loadCampAttendanceHub = loadCampAttendanceHub;
+
+function renderCampAttPlayerList(presentMap) {
+  const list = document.getElementById('campAttPlayerList');
+  if (!list) return;
+  const camp = camps.find(c => c.id === campAttState.campId);
+  const lv = camp?.levels[campAttState.levelIdx];
+  if (!lv || lv.players.length === 0) {
+    list.innerHTML = '<div style="padding:20px;color:#a0aec0;text-align:center">אין שחקנים ברמה זו</div>';
+    return;
+  }
+  list.innerHTML = sortedPlayers(lv.players).map(({ p, i }) => {
+    const { first, last } = splitName(p.name);
+    const key = p._key || String(i);
+    const isPresent = !!presentMap[key];
+    return `
+      <label class="att-player-row${isPresent ? ' present' : ''}" data-playerkey="${key}" onclick="toggleCampAttPlayer(this)">
+        <input type="checkbox" ${isPresent ? 'checked' : ''} onclick="event.stopPropagation(); toggleCampAttPlayerByCheckbox(this)">
+        <span class="att-player-name">${last} ${first}</span>
+        <span class="att-present-badge">נוכח ✓</span>
+      </label>`;
+  }).join('');
+  updateCampAttSummary();
+}
+
+function toggleCampAttPlayer(row) {
+  const cb = row.querySelector('input[type=checkbox]');
+  cb.checked = !cb.checked;
+  row.classList.toggle('present', cb.checked);
+  updateCampAttSummary();
+}
+window.toggleCampAttPlayer = toggleCampAttPlayer;
+
+function toggleCampAttPlayerByCheckbox(cb) {
+  cb.closest('.att-player-row').classList.toggle('present', cb.checked);
+  updateCampAttSummary();
+}
+window.toggleCampAttPlayerByCheckbox = toggleCampAttPlayerByCheckbox;
+
+function updateCampAttSummary() {
+  const total   = document.querySelectorAll('#campAttPlayerList .att-player-row').length;
+  const present = document.querySelectorAll('#campAttPlayerList .att-player-row.present').length;
+  const summary = document.getElementById('campAttSummary');
+  if (summary) summary.textContent = `נוכחים: ${present} מתוך ${total}`;
+}
+
+function campAttCheckAll() {
+  document.querySelectorAll('#campAttPlayerList .att-player-row').forEach(row => {
+    row.querySelector('input').checked = true; row.classList.add('present');
+  });
+  updateCampAttSummary();
+}
+window.campAttCheckAll = campAttCheckAll;
+
+function campAttClearAll() {
+  document.querySelectorAll('#campAttPlayerList .att-player-row').forEach(row => {
+    row.querySelector('input').checked = false; row.classList.remove('present');
+  });
+  updateCampAttSummary();
+}
+window.campAttClearAll = campAttClearAll;
+
+async function saveCampAttendanceHub() {
+  const btn    = document.getElementById('btnCampSave');
+  const status = document.getElementById('campSaveStatus');
+  if (!campAttState.date) { showToast('בחר תאריך', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'שומר...';
+  const presentMap = {};
+  document.querySelectorAll('#campAttPlayerList .att-player-row').forEach(row => {
+    if (row.querySelector('input[type=checkbox]').checked)
+      presentMap[row.dataset.playerkey] = true;
+  });
+  try {
+    const camp = camps.find(c => c.id === campAttState.campId);
+    if (db && camp) {
+      await db.ref(`camp_attendance/${camp.id}/${campAttState.levelIdx}/${campAttState.date}`)
+        .set(Object.keys(presentMap).length > 0 ? presentMap : null);
+      logAudit('update_attendance', camp.id, camp.name,
+        `מחנה · ${campAttState.date} · ${Object.keys(presentMap).length} נוכחים`);
+    }
+    status.textContent = '✅ נשמר!'; status.classList.add('visible');
+    setTimeout(() => status.classList.remove('visible'), 2500);
+  } catch(e) {
+    status.textContent = '❌ שגיאה'; status.classList.add('visible');
+    setTimeout(() => status.classList.remove('visible'), 3000);
+  }
+  btn.disabled = false; btn.textContent = '💾 שמור נוכחות';
+}
+window.saveCampAttendanceHub = saveCampAttendanceHub;
 

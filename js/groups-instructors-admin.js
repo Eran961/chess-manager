@@ -1410,7 +1410,6 @@ function renderCampLevelCard(camp, lv, li) {
         <button onclick="removeCampPlayer('${camp.id}',${li},'${p._key}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button>
       </div>`;
   }).join('');
-  const attId = `camp-att-${camp.id}-${li}`;
   return `
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
@@ -1420,83 +1419,11 @@ function renderCampLevelCard(camp, lv, li) {
         </div>
         <button onclick="openAddCampPlayerModal('${camp.id}',${li})" style="background:#276749;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף ילד</button>
       </div>
-      <div style="margin-bottom:12px">
+      <div>
         ${rows || '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">אין שחקנים ברמה זו</div>'}
       </div>
-      <div id="${attId}">${renderCampAttendanceWidget(camp, li)}</div>
     </div>`;
 }
-
-function renderCampAttendanceWidget(camp, li, presentMap) {
-  presentMap = presentMap || {};
-  const lv = camp.levels[li];
-  const players = sortedPlayers(lv.players);
-  if (players.length === 0) return '';
-  const today = new Date().toISOString().slice(0,10);
-  const dateId = `camp-att-date-${camp.id}-${li}`;
-  const rows = players.map(({p}) => {
-    const { first, last } = splitName(p.name);
-    const key = p._key;
-    const isPresent = !!presentMap[key];
-    return `
-      <label class="att-player-row${isPresent ? ' present' : ''}" data-playerkey="${key}" onclick="_toggleCampAttRow(this)">
-        <input type="checkbox" ${isPresent ? 'checked' : ''} onclick="event.stopPropagation(); this.closest('.att-player-row').classList.toggle('present', this.checked)">
-        <span class="att-player-name">${last} ${first}</span>
-        <span class="att-present-badge">נוכח ✓</span>
-      </label>`;
-  }).join('');
-  return `
-    <div style="border-top:1px solid var(--border);padding-top:10px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">📋 נוכחות:</span>
-        <input type="date" id="${dateId}" value="${today}" onchange="loadCampAttendance('${camp.id}',${li})" style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;background:var(--bg-subtle);color:var(--text-primary)">
-        <button onclick="saveCampAttendance('${camp.id}',${li})" style="background:#2b6cb0;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:auto">💾 שמור</button>
-      </div>
-      <div class="att-list">${rows}</div>
-    </div>`;
-}
-
-function _toggleCampAttRow(row) {
-  const cb = row.querySelector('input[type=checkbox]');
-  cb.checked = !cb.checked;
-  row.classList.toggle('present', cb.checked);
-}
-window._toggleCampAttRow = _toggleCampAttRow;
-
-async function loadCampAttendance(campId, li) {
-  const camp = camps.find(c => c.id === campId);
-  if (!camp) return;
-  const dateId = `camp-att-date-${campId}-${li}`;
-  const date = document.getElementById(dateId)?.value;
-  let presentMap = {};
-  if (db && date) {
-    try {
-      const snap = await db.ref(`camp_attendance/${campId}/${li}/${date}`).get();
-      presentMap = snap.val() || {};
-    } catch(e) { console.error('loadCampAttendance error:', e); }
-  }
-  const container = document.getElementById(`camp-att-${campId}-${li}`);
-  if (container) container.innerHTML = renderCampAttendanceWidget(camp, li, presentMap);
-}
-window.loadCampAttendance = loadCampAttendance;
-
-async function saveCampAttendance(campId, li) {
-  const dateId = `camp-att-date-${campId}-${li}`;
-  const date = document.getElementById(dateId)?.value;
-  if (!date) { showToast('בחר תאריך', 'error'); return; }
-  const container = document.getElementById(`camp-att-${campId}-${li}`);
-  const presentMap = {};
-  container?.querySelectorAll('.att-player-row').forEach(row => {
-    if (row.querySelector('input[type=checkbox]').checked) presentMap[row.dataset.playerkey] = true;
-  });
-  try {
-    await db.ref(`camp_attendance/${campId}/${li}/${date}`).set(Object.keys(presentMap).length > 0 ? presentMap : null);
-    const camp = camps.find(c => c.id === campId);
-    logAudit('update_attendance', campId, camp?.name || campId, `מחנה · ${date} · ${Object.keys(presentMap).length} נוכחים`);
-    showToast('נוכחות נשמרה ✓');
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.saveCampAttendance = saveCampAttendance;
 
 // ── Create / edit camp ──────────────────────────
 

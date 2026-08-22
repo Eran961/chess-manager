@@ -408,40 +408,44 @@ const reportsState = {
 };
 let _reportsCache = { attendance: {}, notes: {} };
 
+function _repKindsAvailable() {
+  const kinds = [];
+  if (groups.length > 0) kinds.push({ key: 'groups', icon: '🗓', label: 'חוגים',  color: '#2b6cb0', render: renderGroupReportsContent });
+  if (teams.length  > 0) kinds.push({ key: 'teams',  icon: '🏅', label: 'נבחרות', color: '#553c9a', render: renderTeamReportsContent, onOpen: loadTeamReportsData });
+  if (camps.length  > 0) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampReportsContent, onOpen: loadCampReportsData });
+  return kinds;
+}
+
 function renderReportsPanel() {
   if (!_useDbGroups && (!groups || groups.length === 0) && currentUser?.role === 'admin') groups = ALL_GROUPS.filter(g => !_deletedGroupIds.has(g.id));
-  const hasGroups = groups.length > 0;
-  const hasTeams  = teams.length > 0;
-  if (!hasGroups && !hasTeams) return `
+  const kinds = _repKindsAvailable();
+  if (kinds.length === 0) return `
     <div class="att-card" style="text-align:center;padding:40px;color:#a0aec0">
       <div style="font-size:32px;margin-bottom:8px">📊</div>
-      <div>אין חוגים או נבחרות מוקצים</div>
+      <div>אין חוגים, נבחרות או מחנות מוקצים</div>
     </div>`;
-  if (!hasGroups) return renderTeamReportsContent();
-  if (!hasTeams)  return renderGroupReportsContent();
-  return `
-    <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
-      <button id="rep-tab-btn-groups" onclick="switchRepTab('groups')"
-        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid #2b6cb0;color:#2b6cb0;margin-bottom:-2px">
-        🗓 חוגים
-      </button>
-      <button id="rep-tab-btn-teams" onclick="switchRepTab('teams')"
-        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid transparent;color:#718096;margin-bottom:-2px">
-        🏅 נבחרות
-      </button>
-    </div>
-    <div id="rep-content-groups">${renderGroupReportsContent()}</div>
-    <div id="rep-content-teams" style="display:none">${renderTeamReportsContent()}</div>`;
+  if (kinds.length === 1) return kinds[0].render();
+
+  window._repKinds = kinds;
+  const tabsHtml = kinds.map((k, i) => `
+    <button id="rep-tab-btn-${k.key}" onclick="switchRepTab('${k.key}')"
+      style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${i===0?k.color:'transparent'};color:${i===0?k.color:'#718096'};margin-bottom:-2px">
+      ${k.icon} ${k.label}
+    </button>`).join('');
+  const contentHtml = kinds.map((k, i) => `<div id="rep-content-${k.key}"${i===0?'':' style="display:none"'}>${k.render()}</div>`).join('');
+  return `<div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">${tabsHtml}</div>${contentHtml}`;
 }
 window.switchRepTab = function(tab) {
-  const isGroups = tab === 'groups';
-  document.getElementById('rep-content-groups').style.display = isGroups ? '' : 'none';
-  document.getElementById('rep-content-teams').style.display  = isGroups ? 'none' : '';
-  const gBtn = document.getElementById('rep-tab-btn-groups');
-  const tBtn = document.getElementById('rep-tab-btn-teams');
-  if (gBtn) { gBtn.style.borderBottom = isGroups ? '3px solid #2b6cb0' : '3px solid transparent'; gBtn.style.color = isGroups ? '#2b6cb0' : '#718096'; }
-  if (tBtn) { tBtn.style.borderBottom = isGroups ? '3px solid transparent' : '3px solid #553c9a'; tBtn.style.color = isGroups ? '#718096' : '#553c9a'; }
-  if (!isGroups) loadTeamReportsData();
+  const kinds = window._repKinds || _repKindsAvailable();
+  kinds.forEach(k => {
+    const isActive = k.key === tab;
+    const content = document.getElementById('rep-content-' + k.key);
+    if (content) content.style.display = isActive ? '' : 'none';
+    const btn = document.getElementById('rep-tab-btn-' + k.key);
+    if (btn) { btn.style.borderBottom = isActive ? '3px solid ' + k.color : '3px solid transparent'; btn.style.color = isActive ? k.color : '#718096'; }
+  });
+  const activeKind = kinds.find(k => k.key === tab);
+  if (activeKind?.onOpen) activeKind.onOpen();
 };
 
 function renderGroupReportsContent() {
@@ -574,6 +578,83 @@ async function loadTeamReportsData() {
   } catch(e) { content.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה: ${e.message}</div>`; }
 }
 window.loadTeamReportsData = loadTeamReportsData;
+
+let _campRepState = { campId: null, levelIdx: 0 };
+
+function renderCampReportsContent() {
+  if (!camps || camps.length === 0) return '<div style="padding:24px;text-align:center;color:#a0aec0">אין מחנות מוקצים</div>';
+  if (!_campRepState.campId || !camps.find(c => c.id === _campRepState.campId)) _campRepState.campId = camps[0].id;
+  const c = camps.find(cc => cc.id === _campRepState.campId);
+  const campOptions = camps.map(cc => `<option value="${cc.id}" ${cc.id===_campRepState.campId?'selected':''}>${cc.name}</option>`).join('');
+  const levelOptions = c.levels.map((lv, i) => `<option value="${i}" ${i===_campRepState.levelIdx?'selected':''}>${lv.name||'רמה'}</option>`).join('');
+  return `
+    <div class="att-card">
+      <div class="att-card-header">📊 דוחות נוכחות — מחנות</div>
+      <div class="att-controls">
+        <div class="att-control-row"><label>מחנה</label>
+          <select onchange="onCampRepChange(this.value)">${campOptions}</select></div>
+        <div class="att-control-row"><label>רמה</label>
+          <select onchange="onCampRepLevelChange(this.value)" ${c.levels.length===1?'disabled':''}>${levelOptions}</select></div>
+      </div>
+      <div id="campReportsContent">
+        <div style="padding:24px;text-align:center;color:#718096">⏳ טוען נתונים...</div>
+      </div>
+    </div>`;
+}
+
+function onCampRepChange(val) {
+  _campRepState.campId = val;
+  _campRepState.levelIdx = 0;
+  const panel = document.getElementById('panel-reports');
+  if (panel) { panel.innerHTML = renderReportsPanel(); window.switchRepTab('camps'); }
+  loadCampReportsData();
+}
+window.onCampRepChange = onCampRepChange;
+
+function onCampRepLevelChange(val) {
+  _campRepState.levelIdx = parseInt(val);
+  loadCampReportsData();
+}
+window.onCampRepLevelChange = onCampRepLevelChange;
+
+async function loadCampReportsData() {
+  const content = document.getElementById('campReportsContent');
+  if (!content || !db) return;
+  content.innerHTML = '<div style="padding:24px;text-align:center;color:#718096">⏳ טוען נתונים...</div>';
+  const c  = camps.find(cc => cc.id === _campRepState.campId);
+  const lv = c?.levels[_campRepState.levelIdx];
+  if (!c || !lv) return;
+  try {
+    const snap = await db.ref(`camp_attendance/${c.id}/${_campRepState.levelIdx}`).get();
+    const attData = snap.val() || {};
+    const dates = Object.keys(attData).sort();
+    const players = lv.players.filter(p => !p.hidden);
+    if (!dates.length) { content.innerHTML = '<div style="padding:24px;text-align:center;color:#a0aec0">אין נתוני נוכחות עדיין</div>'; return; }
+    const rows = players.map(p => {
+      const key = p._key;
+      const presentCount = dates.filter(d => key ? attData[d]?.[key] : false).length;
+      const pct = Math.round(presentCount / dates.length * 100);
+      const color = pct >= 80 ? '#276749' : pct >= 60 ? '#d69e2e' : '#c53030';
+      const { first, last } = splitName(p.name);
+      return `<tr>
+        <td style="padding:8px 12px;font-weight:600">${last} ${first}</td>
+        <td style="text-align:center;padding:8px">${presentCount}/${dates.length}</td>
+        <td style="text-align:center;padding:8px;font-weight:700;color:${color}">${pct}%</td>
+        <td style="padding:8px">${dates.slice(-5).map(d => `<span class="att-dot ${attData[d]?.[key] ? 'present' : 'absent'}" title="${formatDate(d)}">${attData[d]?.[key] ? '✓' : '✗'}</span>`).join('')}</td>
+      </tr>`;
+    }).join('');
+    content.innerHTML = `
+      <div style="font-size:12px;color:#718096;padding:8px 12px">${dates.length} ימי מחנה מתועדים</div>
+      <div class="table-scroll"><table>
+        <thead><tr>
+          <th>שחקן</th><th style="text-align:center">נוכחות</th>
+          <th style="text-align:center">אחוז</th><th>5 אחרונים</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#a0aec0">אין שחקנים</td></tr>'}</tbody>
+      </table></div>`;
+  } catch(e) { content.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה: ${e.message}</div>`; }
+}
+window.loadCampReportsData = loadCampReportsData;
 
 async function loadReportsData() {
   const content = document.getElementById('reportsContent');
@@ -870,38 +951,41 @@ const GROUP_COLORS = ['#3182ce','#2c5282','#276749','#c05621','#6b46c1','#b7791f
 let _payFilter = 'all';
 let _payGroupFilter = 'all';
 
+function _payKindsAvailable() {
+  const kinds = [];
+  if (groups.length > 0) kinds.push({ key: 'groups', icon: '🗓', label: 'חוגים',  color: '#2b6cb0', render: renderGroupPaymentsContent });
+  if (teams.length  > 0) kinds.push({ key: 'teams',  icon: '🏅', label: 'נבחרות', color: '#553c9a', render: renderTeamPaymentsContent });
+  if (camps.length  > 0) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampPaymentsContent });
+  return kinds;
+}
+
 function renderPaymentsPanel() {
-  const hasGroups = groups.length > 0;
-  const hasTeams  = teams.length > 0;
-  if (!hasGroups && !hasTeams) return `
+  const kinds = _payKindsAvailable();
+  if (kinds.length === 0) return `
     <div class="att-card" style="text-align:center;padding:40px;color:#a0aec0">
       <div style="font-size:32px;margin-bottom:8px">💳</div>
-      <div>אין חוגים או נבחרות מוקצים</div>
+      <div>אין חוגים, נבחרות או מחנות מוקצים</div>
     </div>`;
-  if (!hasGroups) return renderTeamPaymentsContent();
-  if (!hasTeams)  return renderGroupPaymentsContent();
-  return `
-    <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
-      <button id="pay-tab-btn-groups" onclick="switchPayTab('groups')"
-        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid #2b6cb0;color:#2b6cb0;margin-bottom:-2px">
-        🗓 חוגים
-      </button>
-      <button id="pay-tab-btn-teams" onclick="switchPayTab('teams')"
-        style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid transparent;color:#718096;margin-bottom:-2px">
-        🏅 נבחרות
-      </button>
-    </div>
-    <div id="pay-content-groups">${renderGroupPaymentsContent()}</div>
-    <div id="pay-content-teams" style="display:none">${renderTeamPaymentsContent()}</div>`;
+  if (kinds.length === 1) return kinds[0].render();
+
+  window._payKinds = kinds;
+  const tabsHtml = kinds.map((k, i) => `
+    <button id="pay-tab-btn-${k.key}" onclick="switchPayTab('${k.key}')"
+      style="padding:10px 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${i===0?k.color:'transparent'};color:${i===0?k.color:'#718096'};margin-bottom:-2px">
+      ${k.icon} ${k.label}
+    </button>`).join('');
+  const contentHtml = kinds.map((k, i) => `<div id="pay-content-${k.key}"${i===0?'':' style="display:none"'}>${k.render()}</div>`).join('');
+  return `<div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">${tabsHtml}</div>${contentHtml}`;
 }
 window.switchPayTab = function(tab) {
-  const isGroups = tab === 'groups';
-  document.getElementById('pay-content-groups').style.display = isGroups ? '' : 'none';
-  document.getElementById('pay-content-teams').style.display  = isGroups ? 'none' : '';
-  const gBtn = document.getElementById('pay-tab-btn-groups');
-  const tBtn = document.getElementById('pay-tab-btn-teams');
-  if (gBtn) { gBtn.style.borderBottom = isGroups ? '3px solid #2b6cb0' : '3px solid transparent'; gBtn.style.color = isGroups ? '#2b6cb0' : '#718096'; }
-  if (tBtn) { tBtn.style.borderBottom = isGroups ? '3px solid transparent' : '3px solid #553c9a'; tBtn.style.color = isGroups ? '#718096' : '#553c9a'; }
+  const kinds = window._payKinds || _payKindsAvailable();
+  kinds.forEach(k => {
+    const isActive = k.key === tab;
+    const content = document.getElementById('pay-content-' + k.key);
+    if (content) content.style.display = isActive ? '' : 'none';
+    const btn = document.getElementById('pay-tab-btn-' + k.key);
+    if (btn) { btn.style.borderBottom = isActive ? '3px solid ' + k.color : '3px solid transparent'; btn.style.color = isActive ? k.color : '#718096'; }
+  });
 };
 
 function renderGroupPaymentsContent() {
@@ -1126,6 +1210,127 @@ function renderTeamPaymentsContent() {
   </div>`;
 }
 window.renderTeamPaymentsContent = renderTeamPaymentsContent;
+
+let _campPayFilter = 'all';
+let _campPayGroupFilter = 'all';
+
+function setCampPayFilter(f) {
+  _campPayFilter = f;
+  const panel = document.getElementById('panel-payments');
+  if (panel) {
+    if (_payKindsAvailable().length > 1) {
+      const el = document.getElementById('pay-content-camps');
+      if (el) el.innerHTML = renderCampPaymentsContent();
+    } else {
+      panel.innerHTML = renderPaymentsPanel();
+    }
+  }
+}
+window.setCampPayFilter = setCampPayFilter;
+
+function setCampPayGroupFilter(f) {
+  _campPayGroupFilter = f;
+  _campPayFilter = 'all';
+  setCampPayFilter('all');
+}
+window.setCampPayGroupFilter = setCampPayGroupFilter;
+
+function renderCampPaymentsContent() {
+  if (!camps || camps.length === 0) return '<div style="padding:24px;text-align:center;color:#a0aec0">אין מחנות מוקצים</div>';
+
+  const all = [];
+  camps.forEach((c, ci) => c.levels.forEach((lv, li) => {
+    sortedPlayers(lv.players).forEach(({ p }) => {
+      if (p.hidden) return;
+      all.push({ p, c, ci, li, campName: c.name, levelName: lv.name || '' });
+    });
+  }));
+
+  const globalCounts = { trial: 0, pending: 0, paid: 0 };
+  all.forEach(({ p }) => globalCounts[p.paymentStatus || 'trial']++);
+
+  const levelCards = [];
+  camps.forEach((c, ci) => {
+    c.levels.forEach((lv, li) => {
+      const key = `${ci}-${li}`;
+      const lvPlayers = all.filter(x => x.ci === ci && x.li === li);
+      const cnt = { trial: 0, pending: 0, paid: 0 };
+      lvPlayers.forEach(({ p }) => cnt[p.paymentStatus || 'trial']++);
+      const isActive = _campPayGroupFilter === key;
+      const color = GROUP_COLORS[ci % GROUP_COLORS.length];
+      const paidPct = lvPlayers.length ? Math.round(cnt.paid / lvPlayers.length * 100) : 0;
+      const label = c.levels.length > 1 ? `${c.name} · ${lv.name}` : c.name;
+      levelCards.push(`
+        <div onclick="setCampPayGroupFilter('${isActive ? 'all' : key}')" style="cursor:pointer;background:white;border:2px solid ${isActive ? color : '#e2e8f0'};border-radius:10px;padding:12px 14px;min-width:150px;flex:1;transition:border .15s">
+          <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:8px">${label}</div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <div style="flex:1;background:#e2e8f0;border-radius:4px;height:6px">
+              <div style="width:${paidPct}%;background:${color};height:6px;border-radius:4px"></div>
+            </div>
+            <span style="font-size:11px;color:#718096;white-space:nowrap">${cnt.paid}/${lvPlayers.length}</span>
+          </div>
+          <div style="display:flex;gap:6px;font-size:11px;flex-wrap:wrap">
+            ${cnt.paid    ? `<span style="background:#f0fff4;color:#276749;padding:1px 7px;border-radius:8px">שילם: ${cnt.paid}</span>`    : ''}
+            ${cnt.pending ? `<span style="background:#fff5f5;color:#e53e3e;padding:1px 7px;border-radius:8px">ממתין: ${cnt.pending}</span>` : ''}
+            ${cnt.trial   ? `<span style="background:#fffbeb;color:#b7791f;padding:1px 7px;border-radius:8px">ניסיון: ${cnt.trial}</span>`   : ''}
+          </div>
+        </div>`);
+    });
+  });
+
+  let filtered = all;
+  if (_campPayGroupFilter !== 'all') {
+    const [fci, fli] = _campPayGroupFilter.split('-').map(Number);
+    filtered = all.filter(x => x.ci === fci && x.li === fli);
+  }
+  filtered = _campPayFilter === 'all' ? filtered : filtered.filter(({ p }) => (p.paymentStatus || 'trial') === _campPayFilter);
+
+  const filteredCounts = { trial: 0, pending: 0, paid: 0 };
+  filtered.forEach(({ p }) => filteredCounts[p.paymentStatus || 'trial']++);
+
+  const showCampCol = _campPayGroupFilter === 'all';
+  const rows = filtered.map(({ p, campName, levelName }, i) => {
+    const { first, last } = splitName(p.name);
+    const status = p.paymentStatus || 'trial';
+    const badge = `<span class="pay-badge pay-${status}">${{trial:'ניסיון',pending:'ממתין לתשלום',paid:'שילם ✓'}[status]}</span>`;
+    return `<tr>
+      <td class="idx">${i+1}</td>
+      <td style="font-weight:600">${last} ${first}</td>
+      ${showCampCol ? `<td style="color:#4a5568;font-size:13px">${campName}${levelName ? ' · '+levelName : ''}</td>` : ''}
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="pay-panel-card">
+    <div style="padding:16px 20px;font-size:16px;font-weight:700;border-bottom:1px solid #e2e8f0">🏕️ מעקב תשלומים — מחנות</div>
+
+    <div style="padding:14px 20px;border-bottom:1px solid #e2e8f0">
+      <div style="font-size:12px;font-weight:600;color:#718096;margin-bottom:10px">סיכום לפי רמה — לחץ לסינון:</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${levelCards.join('')}</div>
+    </div>
+
+    <div class="pay-summary-bar">
+      <div class="pay-summary-box"><div class="psb-num" style="color:#d69e2e">${globalCounts.trial}</div><div class="psb-label">ניסיון</div></div>
+      <div class="pay-summary-box"><div class="psb-num" style="color:#e53e3e">${globalCounts.pending}</div><div class="psb-label">ממתין לתשלום</div></div>
+      <div class="pay-summary-box"><div class="psb-num" style="color:#276749">${globalCounts.paid}</div><div class="psb-label">שילם</div></div>
+      <div class="pay-summary-box"><div class="psb-num" style="color:#2b6cb0">${all.length}</div><div class="psb-label">סה"כ שחקנים</div></div>
+    </div>
+
+    <div class="pay-filter-bar">
+      <button class="pay-filter-btn${_campPayFilter==='all'?' active':''}" onclick="setCampPayFilter('all')">הכל (${filtered.length})</button>
+      <button class="pay-filter-btn${_campPayFilter==='trial'?' active':''}" onclick="setCampPayFilter('trial')">ניסיון (${filteredCounts.trial})</button>
+      <button class="pay-filter-btn${_campPayFilter==='pending'?' active':''}" onclick="setCampPayFilter('pending')">ממתין (${filteredCounts.pending})</button>
+      <button class="pay-filter-btn${_campPayFilter==='paid'?' active':''}" onclick="setCampPayFilter('paid')">שילם (${filteredCounts.paid})</button>
+    </div>
+
+    <div style="overflow-x:auto">
+    <table class="pay-table">
+      <thead><tr><th>#</th><th>שם</th>${showCampCol ? '<th>מחנה</th>' : ''}<th>סטטוס</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${showCampCol?4:3}" style="text-align:center;padding:20px;color:#718096">אין שחקנים</td></tr>`}</tbody>
+    </table></div>
+  </div>`;
+}
+window.renderCampPaymentsContent = renderCampPaymentsContent;
 
 function setPayFilter(f) {
   _payFilter = f;
