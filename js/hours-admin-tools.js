@@ -594,9 +594,9 @@ function renderSettingsPanel() {
     { icon: '🏁', label: 'סיום שנה',      key: 'endyear', danger: true },
   ];
   return `
-    <div style="direction:rtl;max-width:700px">
-      <h3 style="font-size:20px;font-weight:800;margin:0 0 24px;color:var(--text-primary)">⚙️ הגדרות</h3>
-      <div class="hub-grid">
+    <div style="direction:rtl">
+      <div style="font-size:22px;font-weight:800;color:var(--text-primary);direction:rtl;margin-bottom:16px">⚙️ הגדרות</div>
+      <div class="hub-grid" style="padding-top:10px">
         ${cards.map(c => `
           <button class="hub-card" onclick="openSettingsSection('${c.key}')"
             ${c.danger ? 'style="border-color:rgba(197,48,48,0.35)"' : ''}>
