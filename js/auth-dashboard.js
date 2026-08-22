@@ -1508,6 +1508,30 @@ if (teams.length > 0 || currentUser.role === 'admin') {
   }
 }
 
+// ── מחנות ──────────────────────────────────────
+if (camps.length > 0 || currentUser?.role === 'admin') {
+  addSidebarLabel('מחנות');
+  if (camps.length === 0) {
+    const emptyBtn = document.createElement('button');
+    emptyBtn.className = 'tab-btn'; emptyBtn.dataset.tab = 'camps-empty';
+    emptyBtn.style.cssText = 'color:#a0aec0;font-size:12px;cursor:default;font-style:italic';
+    emptyBtn.textContent = 'אין מחנות עדיין';
+    tabsBar.appendChild(emptyBtn);
+  } else {
+    camps.forEach(camp => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn'; btn.dataset.tab = 'camp-' + camp.id;
+      btn.textContent = '🏕️ ' + camp.name;
+      btn.onclick = () => switchTab('camp-' + camp.id);
+      tabsBar.appendChild(btn);
+      const panel = document.createElement('div');
+      panel.className = 'tab-panel'; panel.id = 'panel-camp-' + camp.id;
+      panel.innerHTML = renderCampOwnPage(camp);
+      content.appendChild(panel);
+    });
+  }
+}
+
 // ── ניהול ──────────────────────────────────────
 addSidebarLabel('ניהול');
 
@@ -1847,6 +1871,13 @@ function buildTopNav() {
       const teamCards = teams.map(t => ({ icon: '🏅', label: t.name, tab: 'team-' + t.id }));
       catDefs.push({ key: 'nteams', label: '🏅 נבחרות', cards: teamCards, emptyMessage: 'אין נבחרות זמינות' });
     }
+  }
+
+  // Camps hub
+  if (camps.length > 0 || isAdmin) {
+    const campCards = camps.map(c => ({ icon: '🏕️', label: c.name, tab: 'camp-' + c.id }));
+    camps.forEach(c => { window._tabCatMap['camp-' + c.id] = 'cat-camps'; });
+    catDefs.push({ key: 'camps', label: '🏕️ מחנות', cards: campCards, emptyMessage: 'אין מחנות זמינים' });
   }
 
   // Management hub

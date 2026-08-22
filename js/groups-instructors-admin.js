@@ -1343,23 +1343,13 @@ window.pickArchivePlayer = pickArchivePlayer;
 // ===== CAMPS (מחנות) =====
 
 function renderCampsPanel() {
-  if (_campView.mode === 'detail' && _campView.campId) {
-    const camp = camps.find(c => c.id === _campView.campId);
-    if (camp) return renderCampDetailView(camp);
-    _campView = { mode: 'list', campId: null };
-  }
-  return renderCampsListView();
-}
-window.renderCampsPanel = renderCampsPanel;
-
-function renderCampsListView() {
   const rows = camps.map(c => {
     const levelCount = c.levels.length;
     const playerCount = c.levels.reduce((s, lv) => s + lv.players.filter(p => !p.hidden).length, 0);
     const instructors = [...new Set(c.levels.map(lv => lv.instructor).filter(Boolean))];
     const dates = c.startDate ? `${formatDate(c.startDate)}${c.endDate ? ' – ' + formatDate(c.endDate) : ''}` : '';
     return `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:6px;cursor:pointer" onclick="viewCamp('${c.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:6px">
         <div style="flex:1;min-width:0">
           <span style="font-weight:600;font-size:14px;color:var(--text-primary)">🏕️ ${c.name}</span>
           ${dates ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${dates}</span>` : ''}
@@ -1367,8 +1357,8 @@ function renderCampsListView() {
           ${instructors.length ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${instructors.join(', ')}</span>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-          <button onclick="event.stopPropagation();openEditCampModal('${c.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
-          <button onclick="event.stopPropagation();deleteDbCamp('${c.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
+          <button onclick="openEditCampModal('${c.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+          <button onclick="deleteDbCamp('${c.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
         </div>
       </div>`;
   }).join('');
@@ -1382,40 +1372,32 @@ function renderCampsListView() {
       </div>
     </div>`;
 }
+window.renderCampsPanel = renderCampsPanel;
 
-function viewCamp(campId) {
-  _campView = { mode: 'detail', campId };
-  const panel = document.getElementById('panel-camps');
-  if (panel) panel.innerHTML = renderCampsPanel();
-}
-window.viewCamp = viewCamp;
-
-function backToCampsList() {
-  _campView = { mode: 'list', campId: null };
-  const panel = document.getElementById('panel-camps');
-  if (panel) panel.innerHTML = renderCampsPanel();
-}
-window.backToCampsList = backToCampsList;
-
-function renderCampDetailView(camp) {
+// The operational page for one camp — reached via its own top-nav tab (like a group/team page)
+function renderCampOwnPage(camp) {
   const dates = camp.startDate ? `${formatDate(camp.startDate)}${camp.endDate ? ' – ' + formatDate(camp.endDate) : ''}` : '';
   const levelsHtml = camp.levels.map((lv, li) => renderCampLevelCard(camp, lv, li)).join('');
   return `
-    <div style="direction:rtl;max-width:900px">
-      <button onclick="backToCampsList()" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ כל המחנות</button>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-        <div>
-          <h3 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">🏕️ ${camp.name}</h3>
-          ${dates ? `<div style="font-size:13px;color:var(--text-muted);margin-top:4px">${dates}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="openEditCampModal('${camp.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
-          <button onclick="deleteDbCamp('${camp.id}')" style="background:none;border:1px solid #fc8181;color:#fc8181;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🗑 מחק מחנה</button>
-        </div>
+    <div style="direction:rtl;max-width:900px;padding:20px">
+      <div style="margin-bottom:20px">
+        <h3 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">🏕️ ${camp.name}</h3>
+        ${dates ? `<div style="font-size:13px;color:var(--text-muted);margin-top:4px">${dates}</div>` : ''}
       </div>
       ${levelsHtml}
     </div>`;
 }
+window.renderCampOwnPage = renderCampOwnPage;
+
+// Refreshes whichever camp UI is currently on screen after a data change
+function refreshCampPanel(campId) {
+  const camp = camps.find(c => c.id === campId);
+  const ownPanel = document.getElementById('panel-camp-' + campId);
+  if (ownPanel && camp) ownPanel.innerHTML = renderCampOwnPage(camp);
+  const settingsPanel = document.getElementById('panel-camps');
+  if (settingsPanel) settingsPanel.innerHTML = renderCampsPanel();
+}
+window.refreshCampPanel = refreshCampPanel;
 
 function renderCampLevelCard(camp, lv, li) {
   const players = sortedPlayers(lv.players);
@@ -1594,10 +1576,35 @@ async function saveNewCamp() {
   try {
     await db.ref(`dbCamps/${id}`).set(campDef);
     _useDbCamps = true;
-    camps.push({ id, ...campDef, levels: levels.map(lv => ({ ...lv, players: [] })) });
+    const newCamp = { id, ...campDef, levels: levels.map(lv => ({ ...lv, players: [] })) };
+    camps.push(newCamp);
     document.querySelector('.friday-modal')?.remove();
     showToast(`המחנה "${name}" נוצר ✅`);
-    viewCamp(id);
+
+    // Create its own tab/panel, same as a new group/team gets
+    const btnHost = document.getElementById('_tab-btn-store') || document.getElementById('tabsBar');
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn'; btn.dataset.tab = 'camp-' + id;
+    btn.textContent = '🏕️ ' + name;
+    btn.onclick = () => switchTab('camp-' + id);
+    btnHost?.appendChild(btn);
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel'; panel.id = 'panel-camp-' + id;
+    panel.innerHTML = renderCampOwnPage(newCamp);
+    document.getElementById('content')?.appendChild(panel);
+    if (window._tabCatMap) window._tabCatMap['camp-' + id] = 'cat-camps';
+
+    // Best-effort: add a card to the live מחנות hub grid if it's already built
+    const grid = document.querySelector('#panel-cat-camps .hub-grid');
+    if (grid) {
+      const card = document.createElement('button');
+      card.className = 'hub-card';
+      card.onclick = () => window._firTabInit('camp-' + id);
+      card.innerHTML = `<div class="hub-card-icon">🏕️</div><div class="hub-card-title">${name}</div>`;
+      grid.appendChild(card);
+    }
+
+    refreshCampPanel(id);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.saveNewCamp = saveNewCamp;
@@ -1651,7 +1658,9 @@ async function saveEditCamp(campId) {
     });
     document.querySelector('.friday-modal')?.remove();
     showToast('המחנה עודכן ✅');
-    viewCamp(campId);
+    const tabBtn = document.querySelector(`[data-tab="camp-${campId}"]`);
+    if (tabBtn) tabBtn.textContent = '🏕️ ' + name;
+    refreshCampPanel(campId);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.saveEditCamp = saveEditCamp;
@@ -1665,8 +1674,12 @@ async function deleteDbCamp(campId) {
     await db.ref(`camp_players/${campId}`).remove();
     await db.ref(`camp_attendance/${campId}`).remove();
     camps = camps.filter(c => c.id !== campId);
+    document.querySelector(`[data-tab="camp-${campId}"]`)?.remove();
+    document.getElementById('panel-camp-' + campId)?.remove();
     showToast('המחנה נמחק');
-    backToCampsList();
+    switchTab('camps');
+    const panel = document.getElementById('panel-camps');
+    if (panel) panel.innerHTML = renderCampsPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.deleteDbCamp = deleteDbCamp;
@@ -1719,7 +1732,7 @@ async function saveCampPlayer(campId, li) {
     camp.levels[li].players.push({ name: `${firstName} ${lastName}`.trim(), ...playerDef, hidden: false, _key: ref.key });
     document.querySelector('.friday-modal')?.remove();
     showToast('השחקן נוסף ✅');
-    viewCamp(campId);
+    refreshCampPanel(campId);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.saveCampPlayer = saveCampPlayer;
@@ -1732,7 +1745,7 @@ async function removeCampPlayer(campId, li, playerKey) {
     const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
     if (p) p.hidden = true;
     showToast('השחקן הוסר');
-    viewCamp(campId);
+    refreshCampPanel(campId);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.removeCampPlayer = removeCampPlayer;

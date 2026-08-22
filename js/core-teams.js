@@ -325,7 +325,6 @@ let _teamProfileState = { teamIdx: 0, subTeamIdx: 0, playerIdx: 0 };
 
 let camps = [];
 let _useDbCamps = false;
-let _campView = { mode: 'list', campId: null };
 
 async function loadDbGroups() {
   if (!db) return;
@@ -498,6 +497,8 @@ async function loadCampPlayers() {
           _key: key
         }));
       });
+      const panel = document.getElementById('panel-camp-' + camp.id);
+      if (panel) panel.innerHTML = renderCampOwnPage(camp);
     });
   } catch(e) { console.error('loadCampPlayers error:', e); }
 }
