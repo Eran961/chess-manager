@@ -804,7 +804,7 @@ window.deleteNewsPost = async function(postId) {
   } catch(e) { showToast('❌ שגיאה: ' + e.message); }
 };
 // ===== CLUB PEOPLE =====
-let _allPeople = [], _peopleTab = 'management';
+let _allPeople = [], _peopleTab = 'management', _adminPeople = [];
 
 async function loadPeopleSection() {
   const grid = document.getElementById('people-cards-grid');
@@ -856,7 +856,7 @@ window.loadPeopleAdmin = async function() {
   try {
     const snap = await db.ref('clubPeople').get();
     if (snap.exists()) snap.forEach(c => { people.push({id:c.key,...c.val()}); });
-    people.sort((a,b)=>(a.order||99)-(b.order||99));
+    people.sort((a,b)=>(a.order||0)-(b.order||0));
   } catch(e) { el.innerHTML = '<div style="color:#fc8181">שגיאה: '+e.message+'</div>'; return; }
 
   const cats = [
@@ -865,8 +865,23 @@ window.loadPeopleAdmin = async function() {
     { key: 'staff',       label: '⭐ בעלי תפקידים' },
   ];
 
-  const personRow = p => `
+  // Heal legacy/gappy order values into clean sequential order per category,
+  // so move-up/move-down always has distinct adjacent values to swap.
+  const updates = {};
+  cats.forEach(cat => {
+    people.filter(p => p.category === cat.key).forEach((p, i) => {
+      if (p.order !== i) { p.order = i; updates['clubPeople/'+p.id+'/order'] = i; }
+    });
+  });
+  if (Object.keys(updates).length) { try { await db.ref().update(updates); } catch(e) { console.warn('order heal failed:', e); } }
+  _adminPeople = people;
+
+  const personRow = (p, posInCat, catLen) => `
     <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:10px;background:var(--bg-subtle);margin-bottom:8px;direction:rtl">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <button onclick="movePerson('${p.id}','${p.category}','up')" ${posInCat===0?'disabled':''} style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;width:26px;height:22px;cursor:${posInCat===0?'default':'pointer'};opacity:${posInCat===0?'.3':'1'};color:inherit;font-size:11px;line-height:1">▲</button>
+        <button onclick="movePerson('${p.id}','${p.category}','down')" ${posInCat===catLen-1?'disabled':''} style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;width:26px;height:22px;cursor:${posInCat===catLen-1?'default':'pointer'};opacity:${posInCat===catLen-1?'.3':'1'};color:inherit;font-size:11px;line-height:1">▼</button>
+      </div>
       <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--border)">
         ${p.photoData?`<img src="${p.photoData}" style="width:100%;height:100%;object-fit:cover">`:'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>'}
       </div>
@@ -890,7 +905,7 @@ window.loadPeopleAdmin = async function() {
         </div>
         ${group.length===0
           ? `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">אין אנשים בקטגוריה זו</div>`
-          : group.map(personRow).join('')}
+          : group.map((p,i) => personRow(p, i, group.length)).join('')}
       </div>`;
   }).join('');
 
@@ -899,6 +914,21 @@ window.loadPeopleAdmin = async function() {
       <h3 style="margin:0;font-size:18px;color:var(--text-primary)">👥 ניהול אנשי המועדון</h3>
     </div>
     ${sectionsHtml}`;
+};
+
+window.movePerson = async function(personId, cat, direction) {
+  const group = _adminPeople.filter(p => p.category === cat).sort((a,b) => (a.order||0)-(b.order||0));
+  const idx = group.findIndex(p => p.id === personId);
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (idx === -1 || swapIdx < 0 || swapIdx >= group.length) return;
+  const a = group[idx], b = group[swapIdx];
+  try {
+    await db.ref().update({
+      ['clubPeople/'+a.id+'/order']: b.order,
+      ['clubPeople/'+b.id+'/order']: a.order,
+    });
+    loadPeopleAdmin();
+  } catch(e) { showToast('❌ שגיאה: '+e.message); }
 };
 
 window.openPersonModal = async function(personId, defaultCat) {
@@ -935,8 +965,6 @@ window.openPersonModal = async function(personId, defaultCat) {
           <input type="file" accept="image/*" onchange="previewPersonImg(this)" style="font-size:13px;color:inherit">
           <input type="hidden" id="pm-img-new" value="">
           <input type="hidden" id="pm-img-keep" value="${existPhoto?'1':''}"></div>
-        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">סדר הצגה (0 = ראשון)</label>
-          <input id="pm-order" type="number" value="${person.order||0}" min="0" style="width:80px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px"></div>
       </div>
       <div style="display:flex;gap:12px;margin-top:26px;justify-content:flex-end">
         <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:10px 20px;cursor:pointer;color:inherit;font-size:14px">ביטול</button>
@@ -962,14 +990,22 @@ window.savePersonData = async function(personId) {
   const bio   = (document.getElementById('pm-bio').value||'').trim();
   const imgNew  = document.getElementById('pm-img-new').value;
   const imgKeep = document.getElementById('pm-img-keep').value;
-  const order   = parseInt(document.getElementById('pm-order').value)||0;
   if (!name) { showToast('⚠️ יש להזין שם'); return; }
-  const data = { name, role, category: cat, bio, order, updatedAt: Date.now() };
+  const data = { name, role, category: cat, bio, updatedAt: Date.now() };
   if (imgNew) data.photoData = imgNew;
   else if (imgKeep && personId) { const s = await db.ref('clubPeople/'+personId+'/photoData').get(); if (s.exists()) data.photoData = s.val(); }
   try {
-    if (personId) await db.ref('clubPeople/'+personId).update(data);
-    else { data.createdAt = Date.now(); await db.ref('clubPeople').push(data); }
+    if (personId) {
+      await db.ref('clubPeople/'+personId).update(data);
+    } else {
+      // New person: append to the end of their category's order instead of asking for a number.
+      const snap = await db.ref('clubPeople').get();
+      let maxOrder = -1;
+      if (snap.exists()) snap.forEach(c => { if (c.val().category === cat && (c.val().order||0) > maxOrder) maxOrder = c.val().order||0; });
+      data.order = maxOrder + 1;
+      data.createdAt = Date.now();
+      await db.ref('clubPeople').push(data);
+    }
     document.querySelector('.modal-overlay.open')?.remove();
     loadPeopleAdmin();
     showToast('✅ נשמר!');
