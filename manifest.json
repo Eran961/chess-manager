@@ -1,0 +1,19 @@
+{
+  "name": "מועדון השחמט ראשון לציון",
+  "short_name": "שחמט ראשל\"צ",
+  "description": "מערכת ניהול מועדון השחמט ראשון לציון",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d2137",
+  "theme_color": "#0d2137",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

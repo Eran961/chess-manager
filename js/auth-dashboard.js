@@ -1858,7 +1858,7 @@ function buildTopNav() {
   managCards.push({ icon: '❓', label: 'מדריך', tab: 'guide' });
   mapCat(managCards.map(c => c.tab), 'cat-management');
   const hasG = groups.length > 0, hasT = teams.length > 0;
-  const managLabel = hasT && hasG ? '⚙️ ניהול נבחרות / חוגים' : hasT ? '⚙️ ניהול נבחרות' : hasG ? '⚙️ ניהול חוגים' : '⚙️ ניהול שוטף';
+  const managLabel = hasT && hasG ? '🧰 ניהול נבחרות / חוגים' : hasT ? '🧰 ניהול נבחרות' : hasG ? '🧰 ניהול חוגים' : '🧰 ניהול שוטף';
   catDefs.push({ key: 'management', label: managLabel, cards: managCards });
 
   // Hours reporting (own tab)
