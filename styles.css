@@ -485,6 +485,7 @@
       font-size: 15px;
       font-weight: 500;
       flex: 1;
+      color: #2d3748;
     }
     .att-player-row.present .att-player-name { font-weight: 700; color: #22543d; }
 
