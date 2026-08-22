@@ -616,11 +616,27 @@ window.openSettingsSection = function(key) {
     loadDbCamps().then(loadCampPlayers).then(() => { document.getElementById('panel-camps').innerHTML = renderCampsPanel(); });
     return;
   }
+  if (key === 'groups') {
+    document.getElementById('settings-section-modal')?.remove();
+    if (window._tabCatMap) window._tabCatMap['groups-admin'] = 'settings';
+    let gp = document.getElementById('panel-groups-admin');
+    if (!gp) { gp = document.createElement('div'); gp.className = 'tab-panel'; gp.id = 'panel-groups-admin'; document.getElementById('content').appendChild(gp); }
+    gp.innerHTML = renderGroupsAdminPanel();
+    switchTab('groups-admin');
+    return;
+  }
+  if (key === 'teams') {
+    document.getElementById('settings-section-modal')?.remove();
+    if (window._tabCatMap) window._tabCatMap['teams-admin'] = 'settings';
+    let tp = document.getElementById('panel-teams-admin');
+    if (!tp) { tp = document.createElement('div'); tp.className = 'tab-panel'; tp.id = 'panel-teams-admin'; document.getElementById('content').appendChild(tp); }
+    tp.innerHTML = renderTeamsAdminPanel();
+    switchTab('teams-admin');
+    return;
+  }
 
   const titles = {
     year:                 '⚙️ הגדרות שנה',
-    groups:               '🏫 ניהול חוגים',
-    teams:                '🏅 ניהול נבחרות',
     instructors:          '👥 ניהול מדריכים',
     users:                '🔐 ניהול משתמשים',
     'schedule-visibility':'🚧 לוח החוגים באתר',
@@ -633,56 +649,6 @@ window.openSettingsSection = function(key) {
           <div class="modal-field"><label>תחילת שנה</label><input type="date" id="set-year-start" value="${YEAR_START}"></div>
           <div class="modal-field"><label>סוף שנה</label><input type="date" id="set-year-end" value="${YEAR_END}"></div>
           <div style="margin-top:4px"><button class="btn-form-submit" onclick="saveSettings()">💾 שמור הגדרות</button></div>
-        </div>`;
-    }
-    if (key === 'groups') {
-      const rows = groups.map((g, i) => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:6px">
-          <div style="flex:1;min-width:0">
-            <span style="font-weight:600;font-size:14px;color:var(--text-primary)">${g.name}</span>
-            ${g.instructor ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${g.instructor}</span>` : ''}
-            <span style="font-size:12px;color:var(--text-muted)"> · ${g.subGroups.length} קבוצות</span>
-            ${(g.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(g.meetings)}</span>` : ''}
-          </div>
-          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-            <button onclick="openEditGroupModal(${i})" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
-            <button onclick="deleteDbGroup('${g.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
-          </div>
-        </div>`).join('');
-      return `
-        <div>${rows || '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין חוגים — צור את הראשון</div>'}</div>
-        <div style="margin-top:14px">
-          <button onclick="openCreateGroupModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור חוג חדש</button>
-        </div>`;
-    }
-    if (key === 'teams') {
-      let teamsHtml = '';
-      if (teams.length === 0) {
-        teamsHtml = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין נבחרות — צור את הראשונה</div>';
-      } else {
-        const regions = [...new Set(teams.map(t => t.region || ''))];
-        teamsHtml = regions.map(region => {
-          const regionTeams = teams.filter(t => (t.region || '') === region);
-          const header = region ? `<div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;padding:8px 4px 4px">― ${region} ―</div>` : '';
-          return header + regionTeams.map(t => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:4px">
-              <div style="flex:1;min-width:0">
-                <span style="font-weight:600;font-size:14px;color:var(--text-primary)">🏅 ${t.name}</span>
-                ${t.coach ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${t.coach}</span>` : ''}
-                <span style="font-size:11px;color:var(--text-muted);margin-right:6px">${t.subGroups.length} קטגורי${t.subGroups.length===1?'ה':'ות'}</span>
-                ${(t.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(t.meetings)}</span>` : ''}
-              </div>
-              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                <button onclick="openEditTeamModal('${t.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
-                <button onclick="deleteDbTeam('${t.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
-              </div>
-            </div>`).join('');
-        }).join('');
-      }
-      return `
-        <div>${teamsHtml}</div>
-        <div style="margin-top:14px">
-          <button onclick="openCreateTeamModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור נבחרת חדשה</button>
         </div>`;
     }
     if (key === 'instructors') {
@@ -738,6 +704,68 @@ window.openSettingsSection = function(key) {
   if (key === 'users') loadAllUsersList();
   if (key === 'schedule-visibility') _loadSchedVisModal();
 };
+
+function renderGroupsAdminPanel() {
+  const rows = groups.map((g, i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:6px">
+      <div style="flex:1;min-width:0">
+        <span style="font-weight:600;font-size:14px;color:var(--text-primary)">${g.name}</span>
+        ${g.instructor ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${g.instructor}</span>` : ''}
+        <span style="font-size:12px;color:var(--text-muted)"> · ${g.subGroups.length} קבוצות</span>
+        ${(g.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(g.meetings)}</span>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        <button onclick="openEditGroupModal(${i})" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+        <button onclick="deleteDbGroup('${g.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
+      </div>
+    </div>`).join('');
+  return `
+    <div style="direction:rtl;max-width:900px">
+      <button onclick="switchTab('settings')" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ חזרה להגדרות</button>
+      <h3 style="font-size:20px;font-weight:800;margin:0 0 20px;color:var(--text-primary)">🏫 ניהול חוגים</h3>
+      <div>${rows || '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין חוגים — צור את הראשון</div>'}</div>
+      <div style="margin-top:14px">
+        <button onclick="openCreateGroupModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור חוג חדש</button>
+      </div>
+    </div>`;
+}
+window.renderGroupsAdminPanel = renderGroupsAdminPanel;
+
+function renderTeamsAdminPanel() {
+  let teamsHtml = '';
+  if (teams.length === 0) {
+    teamsHtml = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין נבחרות — צור את הראשונה</div>';
+  } else {
+    const regions = [...new Set(teams.map(t => t.region || ''))];
+    teamsHtml = regions.map(region => {
+      const regionTeams = teams.filter(t => (t.region || '') === region);
+      const header = region ? `<div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;padding:8px 4px 4px">― ${region} ―</div>` : '';
+      return header + regionTeams.map(t => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:4px">
+          <div style="flex:1;min-width:0">
+            <span style="font-weight:600;font-size:14px;color:var(--text-primary)">🏅 ${t.name}</span>
+            ${t.coach ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${t.coach}</span>` : ''}
+            <span style="font-size:11px;color:var(--text-muted);margin-right:6px">${t.subGroups.length} קטגורי${t.subGroups.length===1?'ה':'ות'}</span>
+            ${(t.meetings||[]).length > 0 ? `<span style="font-size:11px;color:#4a90d9;margin-right:6px">${formatTeamMeetingsSummary(t.meetings)}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+            <button onclick="openEditTeamModal('${t.id}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ערוך</button>
+            <button onclick="deleteDbTeam('${t.id}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
+          </div>
+        </div>`).join('');
+    }).join('');
+  }
+  return `
+    <div style="direction:rtl;max-width:900px">
+      <button onclick="switchTab('settings')" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ חזרה להגדרות</button>
+      <h3 style="font-size:20px;font-weight:800;margin:0 0 20px;color:var(--text-primary)">🏅 ניהול נבחרות</h3>
+      <div>${teamsHtml}</div>
+      <div style="margin-top:14px">
+        <button onclick="openCreateTeamModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ צור נבחרת חדשה</button>
+      </div>
+    </div>`;
+}
+window.renderTeamsAdminPanel = renderTeamsAdminPanel;
 
 async function _loadSchedVisModal() {
   const el = document.getElementById('sched-vis-body');

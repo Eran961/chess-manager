@@ -96,9 +96,9 @@ async function saveNewGroup() {
     panel.id = 'panel-' + g.id;
     panel.innerHTML = renderGroup(g, gIdx);
     content.appendChild(panel);
-    // Refresh settings panel
-    const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
+    // Refresh groups admin page, if open
+    const gp = document.getElementById('panel-groups-admin');
+    if (gp) gp.innerHTML = renderGroupsAdminPanel();
     // Remove "no groups" empty state if present
     const ng = content.querySelector('#panel-home:not(#panel-home)');
     // Switch to new group
@@ -215,8 +215,8 @@ async function saveEditGroup(groupIdx) {
   if (panel) panel.innerHTML = renderGroup(group, groupIdx);
   const tabBtn = document.querySelector(`[data-tab="${group.id}"]`);
   if (tabBtn) tabBtn.textContent = name;
-  const sp = document.getElementById('panel-settings');
-  if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
+  const gp = document.getElementById('panel-groups-admin');
+  if (gp) gp.innerHTML = renderGroupsAdminPanel();
   const calP = document.getElementById('panel-calendar');
   if (calP && calP.classList.contains('active')) calP.innerHTML = renderCalendarPanel();
   showToast('החוג עודכן ✅');
@@ -235,8 +235,8 @@ async function deleteDbGroup(groupId) {
     if (btn) btn.remove();
     const panel = document.getElementById('panel-' + groupId);
     if (panel) panel.remove();
-    const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
+    const gp = document.getElementById('panel-groups-admin');
+    if (gp) gp.innerHTML = renderGroupsAdminPanel();
     showToast('החוג נמחק');
     switchTab('home');
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
@@ -1139,8 +1139,8 @@ async function saveEditedTeam(teamId) {
   if (panel) panel.innerHTML = renderTeamGroup(team, teamIdx);
   const btn = document.querySelector(`[data-tab="team-${teamId}"]`);
   if (btn) btn.textContent = '🏅 ' + name + (coach ? ' — ' + coach : '');
-  const sp = document.getElementById('panel-settings');
-  if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
+  const tp = document.getElementById('panel-teams-admin');
+  if (tp) tp.innerHTML = renderTeamsAdminPanel();
   const calP = document.getElementById('panel-calendar');
   if (calP && calP.classList.contains('active')) calP.innerHTML = renderCalendarPanel();
 
@@ -1232,8 +1232,8 @@ async function saveNewTeam() {
     panel.className = 'tab-panel'; panel.id = 'panel-team-' + id;
     panel.innerHTML = renderTeamGroup(newTeam, tIdx);
     content.appendChild(panel);
-    const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
+    const tp = document.getElementById('panel-teams-admin');
+    if (tp) tp.innerHTML = renderTeamsAdminPanel();
     switchTab('team-' + id);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -1247,8 +1247,8 @@ async function deleteDbTeam(teamId) {
     teams = teams.filter(t => t.id !== teamId);
     document.querySelector(`[data-tab="team-${teamId}"]`)?.remove();
     document.getElementById('panel-team-' + teamId)?.remove();
-    const sp = document.getElementById('panel-settings');
-    if (sp) sp.innerHTML = renderSettingsPanel(); window._refreshSettingsModal?.();
+    const tp = document.getElementById('panel-teams-admin');
+    if (tp) tp.innerHTML = renderTeamsAdminPanel();
     showToast('הנבחרת נמחקה');
     switchTab('home');
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
