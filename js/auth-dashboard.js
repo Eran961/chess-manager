@@ -1820,13 +1820,13 @@ function buildTopNav() {
   if (groups.length > 0 || isAdmin) {
     const groupCards = groups.map(g => ({ icon: '🏫', label: g.name, tab: g.id }));
     groups.forEach(g => { window._tabCatMap[g.id] = 'cat-groups'; });
-    catDefs.push({ key: 'groups', label: '🏫 חוגים', cards: groupCards });
+    catDefs.push({ key: 'groups', label: '🏫 חוגים', cards: groupCards, emptyMessage: 'אין חוגים זמינים' });
   }
 
   // Teams hub — grouped by coach
   if (teams.length > 0 || isAdmin) {
     teams.forEach(t => { window._tabCatMap['team-' + t.id] = 'cat-nteams'; });
-    if (isAdmin) {
+    if (isAdmin && teams.length > 0) {
       // Group by coach name
       const coachMap = {};
       const noCoach = [];
@@ -1845,7 +1845,7 @@ function buildTopNav() {
       catDefs.push({ key: 'nteams', label: '🏅 נבחרות', cardGroups });
     } else {
       const teamCards = teams.map(t => ({ icon: '🏅', label: t.name, tab: 'team-' + t.id }));
-      catDefs.push({ key: 'nteams', label: '🏅 נבחרות', cards: teamCards });
+      catDefs.push({ key: 'nteams', label: '🏅 נבחרות', cards: teamCards, emptyMessage: 'אין נבחרות זמינות' });
     }
   }
 
@@ -1941,15 +1941,19 @@ function buildTopNav() {
   tabsBar.appendChild(themeBtn);
 
   // Helper: render cards grid HTML
-  const renderCards = (cards) =>
-    '<div class="hub-grid" style="padding-top:10px">' +
-    cards.map(card =>
-      '<button class="hub-card" onclick="window._firTabInit(\'' + card.tab + '\')">' +
-      '<div class="hub-card-icon">' + card.icon + '</div>' +
-      '<div class="hub-card-title">' + card.label + '</div>' +
-      '</button>'
-    ).join('') +
-    '</div>';
+  const renderCards = (cards, emptyMessage) => {
+    if (cards.length === 0 && emptyMessage) {
+      return '<div style="padding:24px;text-align:center;color:#888;">' + emptyMessage + '</div>';
+    }
+    return '<div class="hub-grid" style="padding-top:10px">' +
+      cards.map(card =>
+        '<button class="hub-card" onclick="window._firTabInit(\'' + card.tab + '\')">' +
+        '<div class="hub-card-icon">' + card.icon + '</div>' +
+        '<div class="hub-card-title">' + card.label + '</div>' +
+        '</button>'
+      ).join('') +
+      '</div>';
+  };
 
   // Build hub panels and append to content
   catDefs.filter(c => !c.direct).forEach(cat => {
@@ -1966,7 +1970,7 @@ function buildTopNav() {
         '</div>'
       ).join('');
     } else {
-      bodyHtml = renderCards(cat.cards || []);
+      bodyHtml = renderCards(cat.cards || [], cat.emptyMessage);
     }
     hubPanel.innerHTML =
       '<div style="font-size:22px;font-weight:800;color:var(--text-primary);direction:rtl;margin-bottom:16px">' + cat.label + '</div>' +
