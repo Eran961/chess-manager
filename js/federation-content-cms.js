@@ -814,7 +814,7 @@ async function loadPeopleSection() {
     const snap = await db.ref('clubPeople').get();
     _allPeople = [];
     if (snap.exists()) snap.forEach(c => { _allPeople.push({id: c.key, ...c.val()}); });
-    _allPeople.sort((a,b) => (a.order||99) - (b.order||99));
+    _allPeople.sort((a,b) => (a.order??99) - (b.order??99));
     renderPeopleCards(_peopleTab);
   } catch(e) { grid.innerHTML = '<div style="text-align:center;padding:40px;color:#fc8181;grid-column:1/-1">שגיאה בטעינה</div>'; }
 }
@@ -856,7 +856,7 @@ window.loadPeopleAdmin = async function() {
   try {
     const snap = await db.ref('clubPeople').get();
     if (snap.exists()) snap.forEach(c => { people.push({id:c.key,...c.val()}); });
-    people.sort((a,b)=>(a.order||0)-(b.order||0));
+    people.sort((a,b)=>(a.order??0)-(b.order??0));
   } catch(e) { el.innerHTML = '<div style="color:#fc8181">שגיאה: '+e.message+'</div>'; return; }
 
   const cats = [
@@ -917,7 +917,7 @@ window.loadPeopleAdmin = async function() {
 };
 
 window.movePerson = async function(personId, cat, direction) {
-  const group = _adminPeople.filter(p => p.category === cat).sort((a,b) => (a.order||0)-(b.order||0));
+  const group = _adminPeople.filter(p => p.category === cat).sort((a,b) => (a.order??0)-(b.order??0));
   const idx = group.findIndex(p => p.id === personId);
   const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
   if (idx === -1 || swapIdx < 0 || swapIdx >= group.length) return;
@@ -1001,7 +1001,7 @@ window.savePersonData = async function(personId) {
       // New person: append to the end of their category's order instead of asking for a number.
       const snap = await db.ref('clubPeople').get();
       let maxOrder = -1;
-      if (snap.exists()) snap.forEach(c => { if (c.val().category === cat && (c.val().order||0) > maxOrder) maxOrder = c.val().order||0; });
+      if (snap.exists()) snap.forEach(c => { if (c.val().category === cat && (c.val().order??0) > maxOrder) maxOrder = c.val().order??0; });
       data.order = maxOrder + 1;
       data.createdAt = Date.now();
       await db.ref('clubPeople').push(data);
