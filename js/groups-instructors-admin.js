@@ -314,7 +314,7 @@ async function openInstructorDetailModal(uid) {
     const mine  = isGroupAssigned(g);
     const taken = !mine && groupTakenBy(g);
     return `
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:var(--text-primary)"
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748"
              title="${taken ? `משויך ל${taken}` : ''}">
         <input type="checkbox" data-id="${g.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
         ${g.name}
@@ -328,12 +328,12 @@ async function openInstructorDetailModal(uid) {
     ...regions.map(region => {
       const regionTeams = teams.filter(t => t.region === region);
       return `
-        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;padding:6px 0 2px">― ${region} ―</div>
+        <div style="font-size:11px;font-weight:700;color:#4a5568;letter-spacing:0.8px;text-transform:uppercase;padding:6px 0 2px">― ${region} ―</div>
         ${regionTeams.map(t => {
           const mine  = assignedTeams.includes(t.id);
           const taken = !mine && teamTakenBy(t);
           return `
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:var(--text-primary)"
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748"
                    title="${taken ? `משויך ל${taken}` : ''}">
               <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
               <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
@@ -345,7 +345,7 @@ async function openInstructorDetailModal(uid) {
       const mine  = assignedTeams.includes(t.id);
       const taken = !mine && teamTakenBy(t);
       return `
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:var(--text-primary)">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748">
           <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
           <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
           ${taken ? `<span style="font-size:11px;color:#e53e3e">(${taken})</span>` : ''}
@@ -363,18 +363,18 @@ async function openInstructorDetailModal(uid) {
         </div>
         <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:16px;max-height:70vh;overflow-y:auto">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button onclick="openChangePasswordModal('${uid}','${safeName}')" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔑 שנה סיסמה</button>
-            <button onclick="openChangeUsernameModal('${uid}','${safeName}','${inst.email||''}')" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">👤 שנה שם משתמש</button>
+            <button onclick="openChangePasswordModal('${uid}','${safeName}')" style="background:#f7fafc;border:1px solid #e2e8f0;color:#2d3748;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔑 שנה סיסמה</button>
+            <button onclick="openChangeUsernameModal('${uid}','${safeName}','${inst.email||''}')" style="background:#f7fafc;border:1px solid #e2e8f0;color:#2d3748;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">👤 שנה שם משתמש</button>
           </div>
           <div id="inst-groups-${uid}">
             <div style="font-size:12px;font-weight:700;color:#2b6cb0;margin-bottom:8px">🏫 חוגים</div>
-            ${groupCheckboxes || '<div style="color:var(--text-muted);font-size:12px">אין חוגים</div>'}
+            ${groupCheckboxes || '<div style="color:#a0aec0;font-size:12px">אין חוגים</div>'}
           </div>
           <div id="inst-teams-${uid}">
             <div style="font-size:12px;font-weight:700;color:#553c9a;margin-bottom:8px">🏅 נבחרות</div>
-            ${teamCheckboxes || '<div style="color:var(--text-muted);font-size:12px">אין נבחרות</div>'}
+            ${teamCheckboxes || '<div style="color:#a0aec0;font-size:12px">אין נבחרות</div>'}
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:14px">
             <button onclick="clearInstructorAssignments('${uid}')"
               style="background:#fff5f5;color:#c53030;border:1px solid #fed7d7;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
               🗑 נקה הכל
