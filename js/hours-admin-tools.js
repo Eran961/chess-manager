@@ -633,11 +633,29 @@ window.openSettingsSection = function(key) {
     switchTab('teams-admin');
     return;
   }
+  if (key === 'instructors') {
+    document.getElementById('settings-section-modal')?.remove();
+    if (window._tabCatMap) window._tabCatMap['instructors-admin'] = 'settings';
+    let ip = document.getElementById('panel-instructors-admin');
+    if (!ip) { ip = document.createElement('div'); ip.className = 'tab-panel'; ip.id = 'panel-instructors-admin'; document.getElementById('content').appendChild(ip); }
+    ip.innerHTML = renderInstructorsAdminPanel();
+    switchTab('instructors-admin');
+    loadInstructorsList();
+    return;
+  }
+  if (key === 'users') {
+    document.getElementById('settings-section-modal')?.remove();
+    if (window._tabCatMap) window._tabCatMap['users-admin'] = 'settings';
+    let up = document.getElementById('panel-users-admin');
+    if (!up) { up = document.createElement('div'); up.className = 'tab-panel'; up.id = 'panel-users-admin'; document.getElementById('content').appendChild(up); }
+    up.innerHTML = renderUsersAdminPanel();
+    switchTab('users-admin');
+    loadAllUsersList();
+    return;
+  }
 
   const titles = {
-    year:                 '⚙️ הגדרות שנה',
-    instructors:          '👥 ניהול מדריכים',
-    users:                '🔐 ניהול משתמשים',
+    year: '⚙️ הגדרות שנה',
   };
 
   function getBody() {
@@ -647,26 +665,6 @@ window.openSettingsSection = function(key) {
           <div class="modal-field"><label>תחילת שנה</label><input type="date" id="set-year-start" value="${YEAR_START}"></div>
           <div class="modal-field"><label>סוף שנה</label><input type="date" id="set-year-end" value="${YEAR_END}"></div>
           <div style="margin-top:4px"><button class="btn-form-submit" onclick="saveSettings()">💾 שמור הגדרות</button></div>
-        </div>`;
-    }
-    if (key === 'instructors') {
-      return `
-        <div id="instructors-list">
-          <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">טוען מדריכים...</div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button onclick="openAddInstructorModal()" style="background:#276749;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף מדריך</button>
-          <button onclick="loadInstructorsList()" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
-        </div>`;
-    }
-    if (key === 'users') {
-      return `
-        <div id="all-users-list">
-          <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">טוען...</div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button onclick="openAddAdminModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף מנהל</button>
-          <button onclick="loadAllUsersList()" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
         </div>`;
     }
     return '';
@@ -691,12 +689,7 @@ window.openSettingsSection = function(key) {
   window._refreshSettingsModal = () => {
     const body = document.getElementById('settings-section-body');
     if (body) body.innerHTML = getBody();
-    if (key === 'instructors') loadInstructorsList();
-    if (key === 'users') loadAllUsersList();
   };
-
-  if (key === 'instructors') loadInstructorsList();
-  if (key === 'users') loadAllUsersList();
 };
 
 function renderGroupsAdminPanel() {
@@ -760,6 +753,36 @@ function renderTeamsAdminPanel() {
     </div>`;
 }
 window.renderTeamsAdminPanel = renderTeamsAdminPanel;
+
+function renderInstructorsAdminPanel() {
+  return `
+    <div style="direction:rtl;max-width:900px">
+      <button onclick="switchTab('settings')" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ חזרה להגדרות</button>
+      <h3 style="font-size:20px;font-weight:800;margin:0 0 20px;color:var(--text-primary)">👥 ניהול מדריכים</h3>
+      <div id="instructors-list">
+        <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">טוען מדריכים...</div>
+      </div>
+      <div style="margin-top:14px">
+        <button onclick="openAddInstructorModal()" style="background:#276749;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף מדריך</button>
+      </div>
+    </div>`;
+}
+window.renderInstructorsAdminPanel = renderInstructorsAdminPanel;
+
+function renderUsersAdminPanel() {
+  return `
+    <div style="direction:rtl;max-width:900px">
+      <button onclick="switchTab('settings')" style="background:none;border:none;color:#4a90d9;font-size:13px;cursor:pointer;padding:0 0 14px;font-family:inherit">‹ חזרה להגדרות</button>
+      <h3 style="font-size:20px;font-weight:800;margin:0 0 20px;color:var(--text-primary)">🔐 ניהול משתמשים</h3>
+      <div id="all-users-list">
+        <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">טוען...</div>
+      </div>
+      <div style="margin-top:14px">
+        <button onclick="openAddAdminModal()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף מנהל</button>
+      </div>
+    </div>`;
+}
+window.renderUsersAdminPanel = renderUsersAdminPanel;
 
 function _renderSchedVisInline(data) {
   const el = document.getElementById('sched-vis-inline');

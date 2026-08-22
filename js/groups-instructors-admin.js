@@ -248,8 +248,7 @@ window.deleteDbGroup = deleteDbGroup;
 async function loadInstructorsList() {
   const el = document.getElementById('instructors-list');
   if (!el || !db) return;
-  el.innerHTML = '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">טוען...</div>';
-  console.log('[Instructors] teams array:', teams.map(t => ({ id: t.id, name: t.name, keys: Object.keys(t) })));
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">טוען...</div>';
   try {
     const snap = await db.ref('roles').get();
     const allRoles = snap.val() || {};
@@ -257,51 +256,65 @@ async function loadInstructorsList() {
       .filter(([uid, r]) => r.role === 'instructor')
       .map(([uid, r]) => ({ uid, ...r }));
     if (instructors.length === 0) {
-      el.innerHTML = '<div style="color:#a0aec0;font-size:13px;text-align:center;padding:12px">אין מדריכים רשומים עדיין</div>';
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">אין מדריכים רשומים עדיין</div>';
       return;
     }
-    // Build lookup: groupId/teamId → instructor name (excluding self)
-    const groupOwners = {}, teamOwners = {};
-    instructors.forEach(inst => {
-      Object.keys(inst.groups || {}).forEach(gid => {
-        if (!groupOwners[gid]) groupOwners[gid] = inst.name || inst.username || inst.uid;
-      });
-      Object.keys(inst.teams || {}).forEach(tid => {
-        if (!teamOwners[tid]) teamOwners[tid] = inst.name || inst.username || inst.uid;
-      });
-    });
-    el.innerHTML = instructors.map(inst => buildInstructorRow(inst, groupOwners, teamOwners)).join('');
+    el.innerHTML = instructors.map(inst => buildInstructorRow(inst)).join('');
   } catch(e) { el.innerHTML = `<div style="color:#c53030;font-size:13px">שגיאה: ${e.message}</div>`; }
 }
 window.loadInstructorsList = loadInstructorsList;
 
-function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
+function buildInstructorRow(inst) {
+  const assignedGroups = Object.keys(inst.groups || {}).length;
+  const assignedTeams  = Object.keys(inst.teams  || {}).length;
+  const safeName = (inst.name || inst.email || inst.uid).replace(/'/g, "\\'");
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg-subtle);margin-bottom:6px">
+      <div style="flex:1;min-width:0">
+        <span style="font-weight:600;font-size:14px;color:var(--text-primary)">${inst.name || inst.email || inst.uid}</span>
+        ${inst.email ? `<span style="font-size:12px;color:var(--text-muted);margin-right:8px"> · ${inst.email}</span>` : ''}
+        <span style="font-size:12px;color:#2b6cb0;margin-right:6px">${assignedGroups} חוגים</span>
+        <span style="font-size:12px;color:#553c9a">${assignedTeams} נבחרות</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        <button onclick="openInstructorDetailModal('${inst.uid}')" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✎ ניהול</button>
+        <button onclick="removeInstructor('${inst.uid}','${safeName}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
+      </div>
+    </div>`;
+}
+window.buildInstructorRow = buildInstructorRow;
+
+async function openInstructorDetailModal(uid) {
+  document.getElementById('instDetailOverlay')?.remove();
+  let inst = { uid };
+  let groupOwners = {}, teamOwners = {};
+  try {
+    const [instSnap, allSnap] = await Promise.all([db.ref('roles/' + uid).get(), db.ref('roles').get()]);
+    inst = { uid, ...(instSnap.val() || {}) };
+    const allRoles = allSnap.val() || {};
+    Object.entries(allRoles).filter(([id, r]) => r.role === 'instructor').forEach(([id, r]) => {
+      Object.keys(r.groups || {}).forEach(gid => { if (!groupOwners[gid]) groupOwners[gid] = r.name || r.username || id; });
+      Object.keys(r.teams  || {}).forEach(tid => { if (!teamOwners[tid])  teamOwners[tid]  = r.name || r.username || id; });
+    });
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); return; }
+
   const assignedGroups = Object.keys(inst.groups || {});
   const assignedTeams  = Object.keys(inst.teams  || {});
+  const myName = inst.name || inst.username;
 
   function isGroupAssigned(g) {
     if (assignedGroups.includes(g.id)) return true;
     const legacy = ALL_GROUPS.find(ag => ag.name === g.name);
     return legacy ? assignedGroups.includes(legacy.id) : false;
   }
-
-  function groupTakenBy(g) {
-    const owner = groupOwners[g.id];
-    if (!owner || owner === (inst.name || inst.username)) return null;
-    return owner;
-  }
-
-  function teamTakenBy(t) {
-    const owner = teamOwners[t.id];
-    if (!owner || owner === (inst.name || inst.username)) return null;
-    return owner;
-  }
+  function groupTakenBy(g) { const o = groupOwners[g.id]; return (!o || o === myName) ? null : o; }
+  function teamTakenBy(t)  { const o = teamOwners[t.id];  return (!o || o === myName) ? null : o; }
 
   const groupCheckboxes = groups.map(g => {
     const mine  = isGroupAssigned(g);
     const taken = !mine && groupTakenBy(g);
     return `
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748"
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:var(--text-primary)"
              title="${taken ? `משויך ל${taken}` : ''}">
         <input type="checkbox" data-id="${g.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
         ${g.name}
@@ -315,15 +328,15 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
     ...regions.map(region => {
       const regionTeams = teams.filter(t => t.region === region);
       return `
-        <div style="font-size:11px;font-weight:700;color:#4a5568;letter-spacing:0.8px;text-transform:uppercase;padding:6px 0 2px">― ${region} ―</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;padding:6px 0 2px">― ${region} ―</div>
         ${regionTeams.map(t => {
           const mine  = assignedTeams.includes(t.id);
           const taken = !mine && teamTakenBy(t);
           return `
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748"
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:var(--text-primary)"
                    title="${taken ? `משויך ל${taken}` : ''}">
               <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
-              <span style="font-weight:600;color:#2d3748">${t.name || t.teamName || t.id}</span>
+              <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
               ${taken ? `<span style="font-size:11px;color:#e53e3e">(${taken})</span>` : ''}
             </label>`;
         }).join('')}`;
@@ -332,63 +345,50 @@ function buildInstructorRow(inst, groupOwners = {}, teamOwners = {}) {
       const mine  = assignedTeams.includes(t.id);
       const taken = !mine && teamTakenBy(t);
       return `
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:#2d3748">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:${taken ? 'not-allowed' : 'pointer'};opacity:${taken ? '0.5' : '1'};color:var(--text-primary)">
           <input type="checkbox" data-id="${t.id}" ${mine ? 'checked' : ''} ${taken ? 'disabled' : ''}>
-          <span style="font-weight:600;color:#2d3748">${t.name || t.teamName || t.id}</span>
+          <span style="font-weight:600">${t.name || t.teamName || t.id}</span>
           ${taken ? `<span style="font-size:11px;color:#e53e3e">(${taken})</span>` : ''}
         </label>`;
     })
   ].join('');
 
-  return `
-    <div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden">
-      <div style="background:#f7fafc;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
-           onclick="toggleInstructorExpand('${inst.uid}')">
-        <div>
-          <span style="font-weight:700;font-size:14px;color:#2d3748">${inst.name || inst.email || inst.uid}</span>
-          <span style="font-size:12px;color:#718096;margin-right:8px"> · ${inst.email || ''}</span>
+  const safeName = (inst.name || '').replace(/'/g, "\\'");
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" id="instDetailOverlay" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:520px">
+        <div class="modal-header">
+          <span class="modal-title">👤 ניהול מדריך — ${inst.name || inst.email || uid}</span>
+          <button class="modal-close" onclick="document.getElementById('instDetailOverlay').remove()">✕</button>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span style="font-size:12px;color:#2b6cb0">${assignedGroups.length} חוגים</span>
-          <span style="font-size:12px;color:#553c9a">${assignedTeams.length} נבחרות</span>
-          <span id="inst-arrow-${inst.uid}">▼</span>
-        </div>
-      </div>
-      <div id="inst-expand-${inst.uid}" style="display:none">
-        <!-- Assignments -->
-        <div style="padding:14px;display:flex;gap:24px;flex-wrap:wrap">
-          <div style="flex:1;min-width:180px" id="inst-groups-${inst.uid}">
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:16px;max-height:70vh;overflow-y:auto">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="openChangePasswordModal('${uid}','${safeName}')" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔑 שנה סיסמה</button>
+            <button onclick="openChangeUsernameModal('${uid}','${safeName}','${inst.email||''}')" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">👤 שנה שם משתמש</button>
+          </div>
+          <div id="inst-groups-${uid}">
             <div style="font-size:12px;font-weight:700;color:#2b6cb0;margin-bottom:8px">🏫 חוגים</div>
-            ${groupCheckboxes || '<div style="color:#a0aec0;font-size:12px">אין חוגים</div>'}
+            ${groupCheckboxes || '<div style="color:var(--text-muted);font-size:12px">אין חוגים</div>'}
           </div>
-          <div style="flex:2;min-width:220px" id="inst-teams-${inst.uid}">
+          <div id="inst-teams-${uid}">
             <div style="font-size:12px;font-weight:700;color:#553c9a;margin-bottom:8px">🏅 נבחרות</div>
-            ${teamCheckboxes || '<div style="color:#a0aec0;font-size:12px">אין נבחרות</div>'}
+            ${teamCheckboxes || '<div style="color:var(--text-muted);font-size:12px">אין נבחרות</div>'}
           </div>
-        </div>
-        <div style="padding:0 14px 14px;display:flex;justify-content:space-between;align-items:center">
-          <button onclick="clearInstructorAssignments('${inst.uid}')"
-            style="background:#fff5f5;color:#c53030;border:1px solid #fed7d7;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
-            🗑 נקה הכל
-          </button>
-          <button onclick="saveInstructorAssignments('${inst.uid}')"
-            style="background:#276749;color:white;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-            💾 שמור שינויים
-          </button>
+          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:14px">
+            <button onclick="clearInstructorAssignments('${uid}')"
+              style="background:#fff5f5;color:#c53030;border:1px solid #fed7d7;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+              🗑 נקה הכל
+            </button>
+            <button onclick="saveInstructorAssignments('${uid}')"
+              style="background:#276749;color:white;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+              💾 שמור הקצאות
+            </button>
+          </div>
         </div>
       </div>
-    </div>`;
+    </div>`);
 }
-
-function toggleInstructorExpand(uid) {
-  const el    = document.getElementById('inst-expand-' + uid);
-  const arrow = document.getElementById('inst-arrow-' + uid);
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  if (arrow) arrow.textContent = open ? '▼' : '▲';
-}
-window.toggleInstructorExpand = toggleInstructorExpand;
+window.openInstructorDetailModal = openInstructorDetailModal;
 
 async function clearInstructorAssignments(uid) {
   if (!confirm('לנקות את כל ההקצאות של מדריך זה?')) return;
@@ -396,6 +396,7 @@ async function clearInstructorAssignments(uid) {
     await db.ref(`roles/${uid}/groups`).set(null);
     await db.ref(`roles/${uid}/teams`).set(null);
     showToast('ההקצאות נוקו ✅');
+    document.getElementById('instDetailOverlay')?.remove();
     loadInstructorsList();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -415,14 +416,8 @@ async function saveInstructorAssignments(uid) {
     // Overwrite completely — fixes duplicates from legacy IDs
     await db.ref(`roles/${uid}/groups`).set(Object.keys(groupMap).length > 0 ? groupMap : null);
     await db.ref(`roles/${uid}/teams`).set(Object.keys(teamMap).length  > 0 ? teamMap  : null);
-    await db.ref(`roles/${uid}/permissions`).set(Object.keys(permMap).length > 0 ? permMap : null);
-    // Update displayed counts in header
-    const countEl = document.querySelector(`#inst-expand-${uid}`)?.previousElementSibling;
-    if (countEl) {
-      countEl.querySelector('span[style*="2b6cb0"]').textContent = `${Object.keys(groupMap).length} חוגים`;
-      countEl.querySelector('span[style*="553c9a"]').textContent = `${Object.keys(teamMap).length} נבחרות`;
-    }
     showToast('השינויים נשמרו ✅');
+    loadInstructorsList();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.saveInstructorAssignments = saveInstructorAssignments;
@@ -589,7 +584,7 @@ async function submitChangePassword(uid) {
     await secondaryApp.delete();
     // Save new password in DB
     await db.ref(`roles/${uid}/tempPassword`).set(pass);
-    document.querySelector('.friday-modal')?.remove();
+    document.getElementById('chpass-input')?.closest('.modal-overlay')?.remove();
     showToast('הסיסמה עודכנה ✅');
     loadInstructorsList();
   } catch(e) {
@@ -675,7 +670,7 @@ async function submitChangeUsername(uid, currentEmail) {
     // Update roles in DB
     await db.ref(`roles/${uid}/username`).set(newUsername);
     await db.ref(`roles/${uid}/email`).set(newEmail);
-    document.querySelector('.friday-modal')?.remove();
+    document.getElementById('chuser-new')?.closest('.modal-overlay')?.remove();
     showToast(`שם המשתמש עודכן ל-"${newUsername}" ✅`);
     loadInstructorsList();
   } catch(e) {
@@ -697,6 +692,7 @@ async function removeInstructor(uid, name) {
   try {
     await db.ref(`roles/${uid}`).remove();
     showToast(`${name} הוסר ✅`);
+    document.getElementById('instDetailOverlay')?.remove();
     loadInstructorsList();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
