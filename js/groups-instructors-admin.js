@@ -357,6 +357,10 @@ async function openInstructorDetailModal(uid) {
             <button onclick="openChangeUsernameModal('${uid}','${safeName}','${inst.email||''}')" style="background:#f7fafc;border:1px solid #e2e8f0;color:#2d3748;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">👤 שנה שם משתמש</button>
           </div>
           <div class="modal-field">
+            <label>שם מלא</label>
+            <input type="text" id="inst-name-${uid}" value="${inst.name||''}" class="modal-input" placeholder="שם המדריך">
+          </div>
+          <div class="modal-field">
             <label>טלפון (לתזכורות WhatsApp)</label>
             <input type="text" id="inst-phone-${uid}" value="${inst.phone||''}" class="modal-input" dir="ltr" placeholder="972501234567">
           </div>
@@ -407,7 +411,9 @@ async function saveInstructorAssignments(uid) {
     teamMap[cb.dataset.id] = true;
   });
   const phone = document.getElementById(`inst-phone-${uid}`)?.value?.trim().replace(/[^\d]/g,'') || null;
+  const name  = document.getElementById(`inst-name-${uid}`)?.value?.trim();
   try {
+    if (name) await db.ref(`roles/${uid}/name`).set(name);
     // Overwrite completely — fixes duplicates from legacy IDs
     await db.ref(`roles/${uid}/groups`).set(Object.keys(groupMap).length > 0 ? groupMap : null);
     await db.ref(`roles/${uid}/teams`).set(Object.keys(teamMap).length  > 0 ? teamMap  : null);
@@ -903,13 +909,17 @@ async function openSaEditModal(uid) {
         </div>
         <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
           <div class="modal-field">
-            <label>סיסמה נוכחית לאימות <span style="color:#e53e3e">*</span></label>
-            <input type="text" id="sa-edit-current-pass" class="modal-input" dir="ltr"
-              value="${currentPass}" placeholder="הזן סיסמה נוכחית לאימות">
-            ${!hasStored ? `<div style="font-size:11px;color:#e53e3e;margin-top:3px">לא נשמרה סיסמה — יש להזין ידנית</div>` : ''}
+            <label>שם מלא</label>
+            <input type="text" id="sa-edit-name" class="modal-input" value="${name}" placeholder="שם מלא">
           </div>
           <div style="border-top:1px solid #e2e8f0;padding-top:12px">
-            <div style="font-size:12px;color:#718096;margin-bottom:8px">שינויים (השאר ריק לא לשנות)</div>
+            <div style="font-size:12px;color:#718096;margin-bottom:8px">שינוי שם משתמש/סיסמה דורש אימות</div>
+          </div>
+          <div class="modal-field">
+            <label>סיסמה נוכחית לאימות</label>
+            <input type="text" id="sa-edit-current-pass" class="modal-input" dir="ltr"
+              value="${currentPass}" placeholder="נדרש רק אם משנים שם משתמש/סיסמה">
+            ${!hasStored ? `<div style="font-size:11px;color:#e53e3e;margin-top:3px">לא נשמרה סיסמה — יש להזין ידנית</div>` : ''}
           </div>
           <div class="modal-field">
             <label>שם משתמש חדש</label>
@@ -924,7 +934,7 @@ async function openSaEditModal(uid) {
             </div>
           </div>
           <div id="sa-edit-error" style="color:#c53030;font-size:13px;display:none"></div>
-          <button onclick="submitSaEdit('${uid}','${currentEmail}','${currentUsername}')"
+          <button onclick="submitSaEdit('${uid}','${currentEmail}','${currentUsername}','${name.replace(/'/g,"\\'")}')"
             style="background:#553c9a;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
             💾 שמור
           </button>
@@ -935,33 +945,40 @@ async function openSaEditModal(uid) {
 }
 window.openSaEditModal = openSaEditModal;
 
-async function submitSaEdit(uid, currentEmail, oldUsername) {
+async function submitSaEdit(uid, currentEmail, oldUsername, oldName) {
   const currentPass = document.getElementById('sa-edit-current-pass')?.value?.trim();
+  const newName     = document.getElementById('sa-edit-name')?.value?.trim();
   const newUsername = document.getElementById('sa-edit-user')?.value?.trim().replace(/\s+/g,'');
   const newPass     = document.getElementById('sa-edit-pass')?.value?.trim();
   const errEl       = document.getElementById('sa-edit-error');
   errEl.style.display = 'none';
-  if (!currentPass) { errEl.textContent = 'יש להזין סיסמה נוכחית לאימות'; errEl.style.display=''; return; }
-  if (!newUsername && !newPass) { errEl.textContent = 'לא הוזנו שינויים'; errEl.style.display=''; return; }
+  const nameChanged = newName && newName !== oldName;
+  const usernameChanged = newUsername && newUsername !== oldUsername;
+  const needsAuth = usernameChanged || newPass;
+  if (needsAuth && !currentPass) { errEl.textContent = 'יש להזין סיסמה נוכחית לאימות כדי לשנות שם משתמש/סיסמה'; errEl.style.display=''; return; }
+  if (!nameChanged && !usernameChanged && !newPass) { errEl.textContent = 'לא הוזנו שינויים'; errEl.style.display=''; return; }
   if (newPass && newPass.length < 6) { errEl.textContent = 'הסיסמה חייבת להכיל לפחות 6 תווים'; errEl.style.display=''; return; }
   const btn = document.querySelector('.friday-modal button[onclick*="submitSaEdit"]');
   if (btn) { btn.disabled=true; btn.textContent='⏳ שומר...'; }
   try {
-    const authEmail = currentEmail.includes('@') ? currentEmail : toFirebaseEmail(oldUsername);
-    const secApp  = firebase.initializeApp(FIREBASE_CONFIG, 'sa-edit-' + Date.now());
-    const secAuth = secApp.auth();
-    const cred    = await secAuth.signInWithEmailAndPassword(authEmail, currentPass);
-    if (newUsername && newUsername !== oldUsername) {
-      await db.ref(`roles/${uid}/username`).set(newUsername);
-      await db.ref(`loginIndex/${loginKey(newUsername)}`).set(authEmail);
-      if (oldUsername) await db.ref(`loginIndex/${loginKey(oldUsername)}`).remove();
+    if (nameChanged) await db.ref(`roles/${uid}/name`).set(newName);
+    if (needsAuth) {
+      const authEmail = currentEmail.includes('@') ? currentEmail : toFirebaseEmail(oldUsername);
+      const secApp  = firebase.initializeApp(FIREBASE_CONFIG, 'sa-edit-' + Date.now());
+      const secAuth = secApp.auth();
+      const cred    = await secAuth.signInWithEmailAndPassword(authEmail, currentPass);
+      if (usernameChanged) {
+        await db.ref(`roles/${uid}/username`).set(newUsername);
+        await db.ref(`loginIndex/${loginKey(newUsername)}`).set(authEmail);
+        if (oldUsername) await db.ref(`loginIndex/${loginKey(oldUsername)}`).remove();
+      }
+      if (newPass) {
+        await cred.user.updatePassword(newPass);
+        await db.ref(`roles/${uid}/tempPassword`).set(newPass);
+      }
+      await secAuth.signOut();
+      await secApp.delete();
     }
-    if (newPass) {
-      await cred.user.updatePassword(newPass);
-      await db.ref(`roles/${uid}/tempPassword`).set(newPass);
-    }
-    await secAuth.signOut();
-    await secApp.delete();
     document.querySelector('.friday-modal')?.remove();
     showToast('הפרטים עודכנו ✅');
     loadAllUsersList();
