@@ -1391,6 +1391,7 @@ function markCurrentDateInDropdown(hasData) {
 
 async function loadAttendanceFromFirebase() {
   if (!db) return;
+  if (!groups[attState.groupIdx]) return;
   try {
     const snap = await db.ref(attPath()).get();
     const presentMap = snap.val() || {};
@@ -1413,7 +1414,9 @@ async function loadAttendance() {
 
 function renderPlayerList(presentMap) {
   const g = groups[attState.groupIdx];
+  if (!g) return;
   const sg = g.subGroups[attState.subGroupIdx];
+  if (!sg) return;
   const list = document.getElementById('attPlayerList');
   if (!list) return;
 
