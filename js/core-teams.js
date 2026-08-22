@@ -397,8 +397,20 @@ async function loadDbTeams() {
         subGroups: (t.subGroups || [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }])
                     .map(sg => ({ time: sg.time || '', day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '', players: [] }))
       }));
-    } else if (db) {
-      await seedDefaultTeams();
+      await db.ref('settings/teamsSeeded').set(true);
+    } else {
+      const seededSnap = await db.ref('settings/teamsSeeded').get();
+      if (seededSnap.val()) {
+        // Teams were already initialized before (via Firebase) and are now
+        // genuinely empty — e.g. the admin deleted all of them, or year-end
+        // archiving cleared them. Don't silently repopulate the hardcoded
+        // default roster; leave it empty, same as groups behave.
+        _useDbTeams = true;
+        teams = [];
+      } else {
+        await seedDefaultTeams();
+        await db.ref('settings/teamsSeeded').set(true);
+      }
     }
   } catch(e) { console.error('loadDbTeams error:', e); }
 }
