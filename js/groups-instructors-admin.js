@@ -1521,16 +1521,7 @@ async function saveNewCamp() {
     document.getElementById('content')?.appendChild(panel);
     if (window._tabCatMap) window._tabCatMap['camp-' + id] = 'cat-camps';
 
-    // Best-effort: add a card to the live מחנות hub grid if it's already built
-    const grid = document.querySelector('#panel-cat-camps .hub-grid');
-    if (grid) {
-      const card = document.createElement('button');
-      card.className = 'hub-card';
-      card.onclick = () => window._firTabInit('camp-' + id);
-      card.innerHTML = `<div class="hub-card-icon">🏕️</div><div class="hub-card-title">${name}</div>`;
-      grid.appendChild(card);
-    }
-
+    refreshCampsHubPanel();
     refreshCampPanel(id);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -1587,6 +1578,7 @@ async function saveEditCamp(campId) {
     showToast('המחנה עודכן ✅');
     const tabBtn = document.querySelector(`[data-tab="camp-${campId}"]`);
     if (tabBtn) tabBtn.textContent = '🏕️ ' + name;
+    refreshCampsHubPanel();
     refreshCampPanel(campId);
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -1603,6 +1595,7 @@ async function deleteDbCamp(campId) {
     camps = camps.filter(c => c.id !== campId);
     document.querySelector(`[data-tab="camp-${campId}"]`)?.remove();
     document.getElementById('panel-camp-' + campId)?.remove();
+    refreshCampsHubPanel();
     showToast('המחנה נמחק');
     switchTab('camps');
     const panel = document.getElementById('panel-camps');

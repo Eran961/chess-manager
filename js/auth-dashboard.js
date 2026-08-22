@@ -2019,6 +2019,24 @@ function buildTopNav() {
   switchTab('home');
 }
 
+// Rebuilds the מחנות hub panel's card grid in place, without touching the
+// rest of the nav or resetting the active tab — used after a camp is
+// created/edited/deleted so it shows up without a full page reload.
+function refreshCampsHubPanel() {
+  const panel = document.getElementById('panel-cat-camps');
+  if (!panel) return;
+  const campCards = camps.map(c => ({ icon: '🏕️', label: c.name, tab: 'camp-' + c.id }));
+  const bodyHtml = campCards.length === 0
+    ? '<div style="padding:24px;text-align:center;color:#888;">אין מחנות זמינים</div>'
+    : '<div class="hub-grid" style="padding-top:10px">' + campCards.map(card =>
+        '<button class="hub-card" onclick="window._firTabInit(\'' + card.tab + '\')">' +
+        '<div class="hub-card-icon">' + card.icon + '</div>' +
+        '<div class="hub-card-title">' + card.label + '</div>' +
+        '</button>').join('') + '</div>';
+  panel.innerHTML = '<div style="font-size:22px;font-weight:800;color:var(--text-primary);direction:rtl;margin-bottom:16px">🏕️ מחנות</div>' + bodyHtml;
+}
+window.refreshCampsHubPanel = refreshCampsHubPanel;
+
 function injectPermissionTabs() {
   if (!currentUser || currentUser.role === 'admin') return;
   const perms = currentUser.permissions || {};
