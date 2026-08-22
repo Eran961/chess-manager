@@ -501,6 +501,7 @@ function renderScheduleEditorPanel() {
     '</div>' +
     '<button id="sch-add-cat-btn" onclick="window.addScheduleCategory()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ קטגוריה</button>' +
     '</div></div>' +
+    '<div id="sched-vis-inline"></div>' +
     '<div id="schedule-editor-content"><div style="text-align:center;padding:40px;color:#a0aec0">⏳ טוען...</div></div>' +
     '</div>';
 }
@@ -511,6 +512,7 @@ async function loadScheduleEditor() {
   try {
     const snap = await db.ref('clubSchedule').once('value');
     const data = snap.val() || {};
+    _renderSchedVisInline(data);
     const cats = Object.entries(data.categories || {})
       .map(([id,v]) => ({id,...v}))
       .sort((a,b) => (a.order||0)-(b.order||0));

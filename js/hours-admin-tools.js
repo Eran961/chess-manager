@@ -590,7 +590,6 @@ function renderSettingsPanel() {
     { icon: '🏕️', label: 'ניהול מחנות',   key: 'camps' },
     { icon: '👥', label: 'ניהול מדריכים', key: 'instructors' },
     ...(isAdmin ? [{ icon: '🔐', label: 'ניהול משתמשים', key: 'users' }] : []),
-    { icon: '🚧', label: 'לוח החוגים',    key: 'schedule-visibility' },
     { icon: '📂', label: 'ארכיון שנים קודמות', key: 'viewarchive' },
     { icon: '🏁', label: 'סיום שנה',      key: 'endyear', danger: true },
   ];
@@ -639,7 +638,6 @@ window.openSettingsSection = function(key) {
     year:                 '⚙️ הגדרות שנה',
     instructors:          '👥 ניהול מדריכים',
     users:                '🔐 ניהול משתמשים',
-    'schedule-visibility':'🚧 לוח החוגים באתר',
   };
 
   function getBody() {
@@ -671,9 +669,6 @@ window.openSettingsSection = function(key) {
           <button onclick="loadAllUsersList()" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
         </div>`;
     }
-    if (key === 'schedule-visibility') {
-      return '<div id="sched-vis-body"><div style="text-align:center;padding:20px;color:var(--text-muted)">⏳ טוען...</div></div>';
-    }
     return '';
   }
 
@@ -702,7 +697,6 @@ window.openSettingsSection = function(key) {
 
   if (key === 'instructors') loadInstructorsList();
   if (key === 'users') loadAllUsersList();
-  if (key === 'schedule-visibility') _loadSchedVisModal();
 };
 
 function renderGroupsAdminPanel() {
@@ -767,19 +761,17 @@ function renderTeamsAdminPanel() {
 }
 window.renderTeamsAdminPanel = renderTeamsAdminPanel;
 
-async function _loadSchedVisModal() {
-  const el = document.getElementById('sched-vis-body');
+function _renderSchedVisInline(data) {
+  const el = document.getElementById('sched-vis-inline');
   if (!el) return;
-  const snap = await db.ref('clubSchedule').get();
-  const s = snap.val() || {};
-  const hidden  = !!s.scheduleHidden;
-  const message = s.scheduleMessage || 'לוח החוגים יתעדכן בקרוב — נשמח לראותכם!';
+  const hidden  = !!data.scheduleHidden;
+  const message = data.scheduleMessage || 'לוח החוגים יתעדכן בקרוב — נשמח לראותכם!';
   el.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:18px">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:10px;background:var(--bg-subtle);border:1px solid var(--border)">
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px;padding:16px;border-radius:10px;background:var(--bg-subtle);border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
-          <div style="font-weight:700;font-size:14px;color:var(--text-primary)">הסתר לוח חוגים</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">במקומו יוצג הכיתוב שתבחר</div>
+          <div style="font-weight:700;font-size:14px;color:var(--text-primary)">🚧 הסתר לוח חוגים באתר</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">במקומו יוצג הכיתוב שתבחר למטה</div>
         </div>
         <label style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0">
           <input type="checkbox" id="sched-hidden-toggle" ${hidden ? 'checked' : ''} onchange="_onSchedHiddenToggle()"
@@ -793,17 +785,18 @@ async function _loadSchedVisModal() {
       </div>
       <div id="sched-msg-wrap" style="display:${hidden ? 'flex' : 'none'};flex-direction:column;gap:8px">
         <label style="font-size:13px;font-weight:600;color:var(--text-primary)">כיתוב שיופיע במקום לוח החוגים</label>
-        <textarea id="sched-msg-input" rows="3"
-          style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);
+        <textarea id="sched-msg-input" rows="2"
+          style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);
                  color:var(--text-primary);font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box;direction:rtl"
           placeholder="לדוגמה: לוח החוגים בבנייה — נחזור בקרוב!">${message}</textarea>
       </div>
       <button onclick="_saveSchedVisSettings()"
-        style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;align-self:flex-start">
+        style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;align-self:flex-start">
         💾 שמור
       </button>
     </div>`;
 }
+window._renderSchedVisInline = _renderSchedVisInline;
 
 window._onSchedHiddenToggle = function() {
   const hidden = document.getElementById('sched-hidden-toggle').checked;
@@ -817,7 +810,6 @@ window._saveSchedVisSettings = async function() {
   const message = (document.getElementById('sched-msg-input')?.value || '').trim();
   await db.ref('clubSchedule').update({ scheduleHidden: hidden, scheduleMessage: message });
   showToast(hidden ? '🚧 לוח החוגים מוסתר באתר' : '✅ לוח החוגים גלוי באתר');
-  document.getElementById('settings-section-modal')?.remove();
 };
 
 async function saveSettings() {
