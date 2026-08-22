@@ -894,6 +894,7 @@ window.doEndYear = doEndYear;
 
 async function openArchiveBrowser() {
   document.getElementById('settings-section-modal')?.remove();
+  if (window._tabCatMap) window._tabCatMap['archive'] = 'settings';
   let panel = document.getElementById('panel-archive');
   if (!panel) {
     panel = document.createElement('div');
