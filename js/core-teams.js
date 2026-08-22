@@ -512,7 +512,7 @@ async function loadDeletedGroups() {
 }
 
 async function initializeApp() {
-  if (db) { await loadDeletedGroups(); await loadDbGroups(); await loadDbTeams(); await loadDbCamps(); }
+  if (db) { await Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()]); }
   buildApp();
   injectPermissionTabs();
   buildTopNav();

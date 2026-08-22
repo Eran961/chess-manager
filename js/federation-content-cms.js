@@ -565,16 +565,21 @@ function showToast(msg) {
 }
 
 async function initData() {
-  await loadSettings();
+  // loadPlayerOverrides/loadHiddenPlayers/loadPayments/loadParentContacts index into
+  // sg.players[idx] by position, so loadExtraPlayers (which pushes those players) must
+  // finish first. Everything else here is independent and can run in parallel.
   await loadExtraPlayers();
-  await loadTeamPlayers();
-  await loadCampPlayers();
-  await loadPlayerOverrides();
-  await loadHiddenPlayers();
-  await loadPayments();
-  await loadParentContacts();
-  await loadGroupNames();
-  await loadVacations();
+  await Promise.all([
+    loadSettings(),
+    loadTeamPlayers(),
+    loadCampPlayers(),
+    loadPlayerOverrides(),
+    loadHiddenPlayers(),
+    loadPayments(),
+    loadParentContacts(),
+    loadGroupNames(),
+    loadVacations(),
+  ]);
   renderPlayerList({});
   loadAttendanceFromFirebase();
   loadTournaments();
