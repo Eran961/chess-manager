@@ -337,7 +337,6 @@ async function loadDbGroups() {
       id,
       name: g.name,
       instructor: g.instructor || '',
-      instructorWa: g.instructorWa || '',
       day: g.day || '',
       dayOfWeek: g.dayOfWeek ?? -1,
       meetings: Array.isArray(g.meetings) ? g.meetings : (g.meetings ? Object.values(g.meetings) : []),
@@ -390,7 +389,6 @@ async function loadDbTeams() {
         id,
         name:     t.name || t.teamName || t.label || id.replace(/^team-/,'').replace(/-\d{3,}$/,'').replace(/-/g,' ').trim(),
         coach:    t.coach    || '',
-        coachWa:  t.coachWa  || '',
         region:   t.region   || '',
         dayOfWeek: t.dayOfWeek ?? 0,
         meetings: t.meetings  || [],
@@ -420,7 +418,7 @@ async function seedDefaultTeams() {
   const subGroups = [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }];
   for (const t of ALL_TEAMS) {
     const id = 'team-' + t.name.replace(/[^א-תa-zA-Z0-9]/g, '-').replace(/-+/g,'-') + '-' + Date.now() % 100000;
-    const def = { name: t.name, coach: t.coach, coachWa: '', region: t.region, subGroups };
+    const def = { name: t.name, coach: t.coach, region: t.region, subGroups };
     try {
       await db.ref(`dbTeams/${id}`).set(def);
       teams.push({ id, ...def, subGroups: subGroups.map(sg => ({ time: sg.time, players: [] })) });

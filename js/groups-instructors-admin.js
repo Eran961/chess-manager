@@ -28,12 +28,8 @@ function openCreateGroupModal() {
         <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
           <div class="modal-field"><label>שם החוג <span style="color:#e53e3e">*</span></label>
             <input type="text" id="cg-name" placeholder="לדוגמה: ירון — יום שני" class="modal-input"></div>
-          <div style="display:flex;gap:10px">
-            <div class="modal-field" style="flex:1"><label>מדריך</label>
-              <input type="text" id="cg-instructor" placeholder="שם המדריך" class="modal-input"></div>
-            <div class="modal-field" style="flex:1"><label>WhatsApp</label>
-              <input type="text" id="cg-wa" placeholder="972501234567" class="modal-input"></div>
-          </div>
+          <div class="modal-field"><label>מדריך</label>
+            <input type="text" id="cg-instructor" placeholder="שם המדריך" class="modal-input"></div>
           <div>
             <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">קבוצות <span style="color:#e53e3e">*</span> <span style="font-size:11px;color:#a0aec0;font-weight:400">— לכל קבוצה ניתן להגדיר יום ושעה</span></label>
             <div id="cg-subgroups" style="display:flex;flex-direction:column">${_cgSgRow({})}</div>
@@ -59,7 +55,6 @@ async function saveNewGroup() {
   const name = document.getElementById('cg-name')?.value?.trim();
   if (!name) { showToast('יש להזין שם חוג', 'error'); return; }
   const instructor = document.getElementById('cg-instructor')?.value?.trim() || '';
-  const wa = document.getElementById('cg-wa')?.value?.trim() || '';
   const sgRows = document.querySelectorAll('#cg-subgroups .cg-sg-row');
   const subGroupsRaw = [...sgRows].map(row => {
     const t = row.querySelector('.cg-sg-name')?.value?.trim() || '';
@@ -71,7 +66,7 @@ async function saveNewGroup() {
   const dayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
   const dayOfWeek = subGroupsRaw.find(sg => sg.day != null)?.day ?? 0;
   const id = name.replace(/[^a-zA-Z0-9֐-׿]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
-  const groupDef = { name, instructor, instructorWa: wa, day: dayNames[dayOfWeek] || '', dayOfWeek, subGroups: subGroupsRaw };
+  const groupDef = { name, instructor, day: dayNames[dayOfWeek] || '', dayOfWeek, subGroups: subGroupsRaw };
   try {
     await db.ref(`dbGroups/${id}`).set(groupDef);
     _useDbGroups = true;
@@ -133,12 +128,8 @@ function openEditGroupModal(groupIdx) {
         <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
           <div class="modal-field"><label>שם החוג <span style="color:#e53e3e">*</span></label>
             <input type="text" id="eg-name" value="${group.name}" class="modal-input"></div>
-          <div style="display:flex;gap:10px">
-            <div class="modal-field" style="flex:1"><label>מדריך</label>
-              <input type="text" id="eg-instructor" value="${group.instructor||''}" class="modal-input"></div>
-            <div class="modal-field" style="flex:1"><label>WhatsApp</label>
-              <input type="text" id="eg-wa" value="${group.instructorWa||''}" class="modal-input"></div>
-          </div>
+          <div class="modal-field"><label>מדריך</label>
+            <input type="text" id="eg-instructor" value="${group.instructor||''}" class="modal-input"></div>
           <div class="modal-field"><label>יום בשבוע (לנוכחות)</label>
             <select id="eg-day" class="modal-input">${dayOpts}</select></div>
           <div>
@@ -177,7 +168,6 @@ async function saveEditGroup(groupIdx) {
   const name = document.getElementById('eg-name')?.value?.trim();
   if (!name) { showToast('יש להזין שם חוג', 'error'); return; }
   const instructor = document.getElementById('eg-instructor')?.value?.trim() || '';
-  const wa = document.getElementById('eg-wa')?.value?.trim() || '';
   const dayOfWeek = parseInt(document.getElementById('eg-day')?.value || '0');
   const dayDisplayNames = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי'];
 
@@ -196,14 +186,14 @@ async function saveEditGroup(groupIdx) {
   });
   if (newSubGroups.length === 0) { showToast('יש להוסיף לפחות קבוצה אחת', 'error'); return; }
 
-  group.name = name; group.instructor = instructor; group.instructorWa = wa;
+  group.name = name; group.instructor = instructor;
   group.dayOfWeek = dayOfWeek; group.day = dayDisplayNames[dayOfWeek];
   group.subGroups = newSubGroups;
 
   if (db && group.id) {
     try {
       await db.ref(`dbGroups/${group.id}`).update({
-        name, instructor, instructorWa: wa,
+        name, instructor,
         day: dayDisplayNames[dayOfWeek], dayOfWeek,
         subGroups: newSubGroups.map(sg => ({ time: sg.time, day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '' }))
       });
@@ -366,6 +356,10 @@ async function openInstructorDetailModal(uid) {
             <button onclick="openChangePasswordModal('${uid}','${safeName}')" style="background:#f7fafc;border:1px solid #e2e8f0;color:#2d3748;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔑 שנה סיסמה</button>
             <button onclick="openChangeUsernameModal('${uid}','${safeName}','${inst.email||''}')" style="background:#f7fafc;border:1px solid #e2e8f0;color:#2d3748;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">👤 שנה שם משתמש</button>
           </div>
+          <div class="modal-field">
+            <label>טלפון (לתזכורות WhatsApp)</label>
+            <input type="text" id="inst-phone-${uid}" value="${inst.phone||''}" class="modal-input" dir="ltr" placeholder="972501234567">
+          </div>
           <div id="inst-groups-${uid}">
             <div style="font-size:12px;font-weight:700;color:#2b6cb0;margin-bottom:8px">🏫 חוגים</div>
             ${groupCheckboxes || '<div style="color:#a0aec0;font-size:12px">אין חוגים</div>'}
@@ -381,7 +375,7 @@ async function openInstructorDetailModal(uid) {
             </button>
             <button onclick="saveInstructorAssignments('${uid}')"
               style="background:#276749;color:white;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-              💾 שמור הקצאות
+              💾 שמור שינויים
             </button>
           </div>
         </div>
@@ -412,10 +406,12 @@ async function saveInstructorAssignments(uid) {
   document.querySelectorAll(`#inst-teams-${uid} input[type=checkbox]:checked`).forEach(cb => {
     teamMap[cb.dataset.id] = true;
   });
+  const phone = document.getElementById(`inst-phone-${uid}`)?.value?.trim().replace(/[^\d]/g,'') || null;
   try {
     // Overwrite completely — fixes duplicates from legacy IDs
     await db.ref(`roles/${uid}/groups`).set(Object.keys(groupMap).length > 0 ? groupMap : null);
     await db.ref(`roles/${uid}/teams`).set(Object.keys(teamMap).length  > 0 ? teamMap  : null);
+    await db.ref(`roles/${uid}/phone`).set(phone);
     showToast('השינויים נשמרו ✅');
     loadInstructorsList();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
@@ -1199,7 +1195,6 @@ async function saveNewTeam() {
   const name  = document.getElementById('ct-name')?.value?.trim();
   if (!name) { showToast('יש להזין שם נבחרת', 'error'); return; }
   const coach  = document.getElementById('ct-coach')?.value?.trim()  || '';
-  const wa     = document.getElementById('ct-wa')?.value?.trim()     || '';
   const region = document.getElementById('ct-region')?.value         || '';
   const ctRows = document.querySelectorAll('#ct-subgroups .ct-sg-row');
   let subGroups = [...ctRows].map(row => {
@@ -1211,7 +1206,7 @@ async function saveNewTeam() {
   if (subGroups.length === 0) subGroups = [{ time: 'שחקנים', day: null, meetingTime: '', location: '' }];
   const dayOfWeek = subGroups.find(sg => sg.day != null)?.day ?? 0;
   const id = 'team-' + name.replace(/[^a-zA-Z0-9א-ת]/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + Date.now();
-  const teamDef = { name, coach, coachWa: wa, region, dayOfWeek, subGroups };
+  const teamDef = { name, coach, region, dayOfWeek, subGroups };
   try {
     await db.ref(`dbTeams/${id}`).set(teamDef);
     _useDbTeams = true;

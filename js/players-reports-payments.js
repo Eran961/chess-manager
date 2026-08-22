@@ -1909,6 +1909,18 @@ async function loadWeeklyAttendanceAlerts() {
   const toISO = d => d.toISOString().split('T')[0];
   const todayISO = toISO(today);
 
+  // Phone lives on the instructor's account now, not on the group/team —
+  // build a group/team id → phone lookup by scanning who's assigned to what.
+  let groupPhones = {}, teamPhones = {};
+  try {
+    const rolesSnap = await db.ref('roles').get();
+    const allRoles = rolesSnap.val() || {};
+    Object.values(allRoles).filter(r => r.role === 'instructor' && r.phone).forEach(r => {
+      Object.keys(r.groups || {}).forEach(gid => { if (!groupPhones[gid]) groupPhones[gid] = r.phone; });
+      Object.keys(r.teams  || {}).forEach(tid => { if (!teamPhones[tid])  teamPhones[tid]  = r.phone; });
+    });
+  } catch(e) { /* no phones available — reminders just won't show a button */ }
+
   const missingGroups = [];
   try {
     for (let gi = 0; gi < groups.length; gi++) {
@@ -1920,7 +1932,7 @@ async function loadWeeklyAttendanceAlerts() {
         for (let si = 0; si < g.subGroups.length; si++) {
           try {
             const snap = await db.ref(`attendance/${g.id}/${si}/${date}`).get();
-            if (!snap.val()) missingGroups.push({ groupName: g.name, subGroupName: g.subGroups[si].time || '', date: formatDate(date), instructor: g.instructor || '', instructorWa: g.instructorWa || '' });
+            if (!snap.val()) missingGroups.push({ groupName: g.name, subGroupName: g.subGroups[si].time || '', date: formatDate(date), instructor: g.instructor || '', instructorWa: groupPhones[g.id] || '' });
           } catch(e) { /* skip */ }
         }
       }
@@ -1940,7 +1952,7 @@ async function loadWeeklyAttendanceAlerts() {
         for (const date of weekDates) {
           try {
             const snap = await db.ref(`team_attendance/${t.id}/${si}/${date}`).get();
-            if (!snap.val()) missingTeams.push({ groupName: t.name, subGroupName: sg.time || '', date: formatDate(date), instructor: t.coach || '', instructorWa: '' });
+            if (!snap.val()) missingTeams.push({ groupName: t.name, subGroupName: sg.time || '', date: formatDate(date), instructor: t.coach || '', instructorWa: teamPhones[t.id] || '' });
           } catch(e) { /* skip */ }
         }
       }

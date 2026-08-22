@@ -1390,7 +1390,6 @@ if (!_useDbTeams && teams.length === 0) {
     id: 'default-team-' + i,
     name: t.name,
     coach: t.coach,
-    coachWa: '',
     region: t.region,
     subGroups: [{ time: 'נבחרת א', players: [] }, { time: 'נבחרת ב', players: [] }]
   }));
