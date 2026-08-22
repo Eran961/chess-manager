@@ -1789,11 +1789,7 @@ function renderGroupAttendanceContent() {
 }
 
 function renderTeamAttendanceContent() {
-  if (teams.length === 0) return `
-    <div class="att-card" style="text-align:center;padding:32px;color:#a0aec0">
-      <div style="font-size:32px;margin-bottom:8px">🏅</div>
-      אין נבחרות עדיין — צור נבחרת ב<a href="#" onclick="switchTab('settings');return false" style="color:#553c9a">הגדרות</a>
-    </div>`;
+  if (teams.length === 0) return '<div style="padding:24px;text-align:center;color:#888;">אין נבחרות זמינות</div>';
   const t = teams[teamAttState.teamIdx] || teams[0];
   const teamOptions  = teams.map((tm, i) => `<option value="${i}" ${i===teamAttState.teamIdx?'selected':''}>${tm.name}</option>`).join('');
   const subOptions   = t.subGroups.map((sg, i) => `<option value="${i}" ${i===teamAttState.subTeamIdx?'selected':''}>${sg.time || 'שחקנים'}</option>`).join('');
