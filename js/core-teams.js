@@ -1524,6 +1524,34 @@ function defaultDateForTeam(team) {
   return selected;
 }
 
+// Every day of a camp's date range, excluding Friday/Saturday (the Israeli weekend)
+function getCampDates(camp) {
+  if (!camp || !camp.startDate || !camp.endDate) return [];
+  const start = new Date(camp.startDate);
+  const end = new Date(camp.endDate);
+  const dates = [];
+  const d = new Date(start);
+  while (d <= end) {
+    const day = d.getDay(); // 0=Sunday ... 5=Friday, 6=Saturday
+    if (day !== 5 && day !== 6) dates.push(d.toISOString().split('T')[0]);
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
+function defaultDateForCamp(camp) {
+  const today = new Date().toISOString().split('T')[0];
+  const dates = getCampDates(camp);
+  if (!dates.length) return today;
+  if (dates.includes(today)) return today;
+  let selected = dates[0];
+  for (const d of dates) {
+    if (d <= today) selected = d;
+    else break;
+  }
+  return selected;
+}
+
 function rebuildTeamDateSelect() {
   const t = teams[teamAttState.teamIdx];
   if (!t) return;
@@ -1850,6 +1878,18 @@ function renderCampAttendanceContent() {
   const campOptions = camps.map(c => `<option value="${c.id}" ${c.id===campAttState.campId?'selected':''}>${c.name}</option>`).join('');
   const levelOptions = camp.levels.map((lv, i) => `<option value="${i}" ${i===campAttState.levelIdx?'selected':''}>${lv.name || 'רמה'}</option>`).join('');
   const levelDisabled = camp.levels.length === 1 ? 'disabled' : '';
+  const campDates = getCampDates(camp);
+  if (campDates.length > 0 && !campDates.includes(campAttState.date)) {
+    campAttState.date = defaultDateForCamp(camp);
+  }
+  const dateControl = campDates.length > 0
+    ? `<select id="campAttDate" onchange="onCampAttDateChange(this.value)"
+        style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit;width:100%">
+        ${campDates.map(d => `<option value="${d}"${d === campAttState.date ? ' selected' : ''}>${formatDate(d)}</option>`).join('')}
+       </select>`
+    : `<input type="date" id="campAttDate" value="${campAttState.date}"
+        onchange="onCampAttDateChange(this.value)"
+        style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit;width:100%">`;
   return `
     <div class="att-card">
       <div class="att-card-header">🏕️ נוכחות מחנות</div>
@@ -1859,8 +1899,7 @@ function renderCampAttendanceContent() {
         <div class="att-control-row"><label>רמה</label>
           <select id="campAttLevelSel" onchange="onCampAttLevelChange(this.value)" ${levelDisabled}>${levelOptions}</select></div>
         <div class="att-control-row"><label>תאריך</label>
-          <input type="date" id="campAttDate" value="${campAttState.date}" onchange="onCampAttDateChange(this.value)"
-            style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:14px;font-family:inherit;width:100%"></div>
+          <div id="campAttDateContainer" style="flex:1">${dateControl}</div></div>
       </div>
       <div class="att-actions">
         <button class="btn-att btn-check-all" onclick="campAttCheckAll()">✓ סמן הכל</button>
