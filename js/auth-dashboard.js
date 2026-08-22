@@ -1854,7 +1854,6 @@ function buildTopNav() {
   if (hasTabPerm('reports')) managCards.push({ icon: '📊', label: 'דוחות', tab: 'reports' });
   if (hasTabPerm('calendar')) managCards.push({ icon: '📅', label: 'לוח שנה', tab: 'calendar' });
   if (isAdmin) managCards.push({ icon: '⏱️', label: 'שעות', tab: 'hours' });
-  if (isAdmin || hasTabPerm('camps')) managCards.push({ icon: '🏕️', label: 'מחנות', tab: 'camps' });
   managCards.push({ icon: '❓', label: 'מדריך', tab: 'guide' });
   mapCat(managCards.map(c => c.tab), 'cat-management');
   catDefs.push({ key: 'management', label: '⚙️ ניהול שוטף', cards: managCards });

@@ -587,6 +587,7 @@ function renderSettingsPanel() {
     { icon: '⚙️', label: 'הגדרות שנה',    key: 'year' },
     { icon: '🏫', label: 'ניהול חוגים',   key: 'groups' },
     { icon: '🏅', label: 'ניהול נבחרות',  key: 'teams' },
+    { icon: '🏕️', label: 'ניהול מחנות',   key: 'camps' },
     { icon: '👥', label: 'ניהול מדריכים', key: 'instructors' },
     ...(isAdmin ? [{ icon: '🔐', label: 'ניהול משתמשים', key: 'users' }] : []),
     { icon: '🚧', label: 'לוח החוגים',    key: 'schedule-visibility' },
@@ -610,6 +611,11 @@ function renderSettingsPanel() {
 window.openSettingsSection = function(key) {
   if (key === 'endyear') { openEndYearModal(); return; }
   if (key === 'viewarchive') { openArchiveBrowser(); return; }
+  if (key === 'camps') {
+    switchTab('camps');
+    loadDbCamps().then(loadCampPlayers).then(() => { document.getElementById('panel-camps').innerHTML = renderCampsPanel(); });
+    return;
+  }
 
   const titles = {
     year:                 '⚙️ הגדרות שנה',
