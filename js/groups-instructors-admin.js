@@ -238,7 +238,7 @@ async function deleteDbGroup(groupId) {
     const gp = document.getElementById('panel-groups-admin');
     if (gp) gp.innerHTML = renderGroupsAdminPanel();
     showToast('החוג נמחק');
-    switchTab('home');
+    switchTab('groups-admin');
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.deleteDbGroup = deleteDbGroup;
@@ -1250,7 +1250,7 @@ async function deleteDbTeam(teamId) {
     const tp = document.getElementById('panel-teams-admin');
     if (tp) tp.innerHTML = renderTeamsAdminPanel();
     showToast('הנבחרת נמחקה');
-    switchTab('home');
+    switchTab('teams-admin');
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.deleteDbTeam = deleteDbTeam;
