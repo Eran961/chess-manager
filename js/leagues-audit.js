@@ -3,7 +3,7 @@
 let _tournaments = {};
 let _tournamentSubTab = {};
 
-const TOURNAMENT_TYPES = ['אליפות', 'ליגה', 'ידידות', 'פתוח', 'נוער', 'אחר'];
+const TOURNAMENT_TYPES = ['קצב מלא', 'אקטיבי', 'בזק'];
 const EXPENSE_CATEGORIES = ['שופטים', 'כיבוד', 'גביעים', 'קרן פרסים', 'ציוד', 'הדפסות', 'שכירות', 'פרסום', 'אחר'];
 const EXPENSE_ICONS = { 'שופטים':'⚖️', 'כיבוד':'🍫', 'גביעים':'🏆', 'קרן פרסים':'🥇', 'ציוד':'♟', 'הדפסות':'🖨', 'שכירות':'🏛', 'פרסום':'📢', 'אחר':'📌' };
 
@@ -61,7 +61,7 @@ function buildTournamentsHTML() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px">
           <div style="min-width:0">
             <div style="font-size:16px;font-weight:800;color:var(--text-primary)">${t.name}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">🗓 ${date}${t.location?' · 📍 '+t.location:''}${t.type?' · '+t.type:''}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">🗓 ${date}${t.type?' · '+t.type:''}</div>
           </div>
           <span style="background:${sm.color}22;color:${sm.color};border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;white-space:nowrap">${sm.label}</span>
         </div>
@@ -103,8 +103,6 @@ function openCreateTournamentModal() {
             <div class="modal-field" style="flex:1"><label>סוג</label>
               <select id="ct-type" class="modal-input">${TOURNAMENT_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
           </div>
-          <div class="modal-field"><label>מיקום</label>
-            <input type="text" id="ct-location" placeholder='מועדון ראשל"צ' class="modal-input"></div>
           <div class="modal-field"><label>הערות</label>
             <textarea id="ct-notes" rows="2" class="modal-input" style="resize:vertical;font-family:inherit"></textarea></div>
           <button onclick="saveNewTournament()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ צור תחרות</button>
@@ -119,8 +117,7 @@ async function saveNewTournament() {
   const date = document.getElementById('ct-date')?.value;
   if (!name) { showToast('יש להזין שם תחרות', 'error'); return; }
   if (!date) { showToast('יש לבחור תאריך', 'error'); return; }
-  const data = { name, date, type: document.getElementById('ct-type')?.value||'אחר',
-    location: document.getElementById('ct-location')?.value?.trim()||'',
+  const data = { name, date, type: document.getElementById('ct-type')?.value||TOURNAMENT_TYPES[0],
     notes: document.getElementById('ct-notes')?.value?.trim()||'',
     status: 'upcoming', createdAt: new Date().toISOString() };
   try {
@@ -195,8 +192,6 @@ function renderTournamentDetails(id, t) {
           <select id="te-type" class="modal-input">${TOURNAMENT_TYPES.map(tp=>`<option ${t.type===tp?'selected':''}>${tp}</option>`).join('')}</select></div>
         <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">סטטוס</label>
           <select id="te-status" class="modal-input">${statusOpts}</select></div>
-        <div class="modal-field" style="grid-column:1/-1"><label style="font-size:12px;color:#718096;font-weight:600">מיקום</label>
-          <input type="text" id="te-location" value="${t.location||''}" class="modal-input"></div>
       </div>
       <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">הערות</label>
         <textarea id="te-notes" rows="3" class="modal-input" style="resize:vertical;font-family:inherit">${t.notes||''}</textarea></div>
@@ -212,7 +207,6 @@ async function saveTournamentDetails(id) {
     date: document.getElementById('te-date')?.value||_tournaments[id].date,
     type: document.getElementById('te-type')?.value||_tournaments[id].type,
     status: document.getElementById('te-status')?.value||_tournaments[id].status,
-    location: document.getElementById('te-location')?.value?.trim()||'',
     notes: document.getElementById('te-notes')?.value?.trim()||'' };
   try {
     await db.ref(`clubTournaments/${id}`).update(updates);
