@@ -266,27 +266,27 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
 
   // Fee-category rows (label + fee + participant count, editable inline)
   const feeCategoryRows = feeCategories.map(([cid, c]) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f0f4f8">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #edf2f7">
       <input type="text" value="${(c.label||'').replace(/"/g,'&quot;')}" onchange="updateFeeCategory('${id}','${cid}','label',this.value)"
         style="flex:2;min-width:0;border:1px solid transparent;background:none;font-size:13px;font-weight:600;color:#2d3748;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
-      <div style="display:flex;align-items:center;gap:3px;color:#718096;font-size:12px">
+      <div style="display:flex;align-items:center;gap:3px;color:#718096;font-size:12px;flex-shrink:0">
         <input type="number" value="${c.fee||0}" min="0" onchange="updateFeeCategory('${id}','${cid}','fee',this.value)"
-          style="width:60px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
+          style="width:56px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
         <span>₪ ×</span>
         <input type="number" value="${c.count||0}" min="0" onchange="updateFeeCategory('${id}','${cid}','count',this.value)"
-          style="width:52px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
+          style="width:48px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
       </div>
-      <span style="width:74px;text-align:left;font-size:13px;font-weight:700;color:#276749">₪${((c.fee||0)*(c.count||0)).toLocaleString()}</span>
-      <button onclick="deleteFeeCategory('${id}','${cid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px">✕</button>
+      <span style="width:70px;text-align:left;font-size:13px;font-weight:700;color:#2f855a;flex-shrink:0">₪${((c.fee||0)*(c.count||0)).toLocaleString()}</span>
+      <button onclick="deleteFeeCategory('${id}','${cid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px;flex-shrink:0">✕</button>
     </div>`).join('');
 
   // Manual income entries
   const manualIncomeRows = manualIncome.map(([eid, e]) => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid #f0f4f8;font-size:13px">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid #edf2f7;font-size:13px">
       <span style="color:#4a5568">📌 ${e.description}</span>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-weight:700;color:#276749">₪${(e.amount||0).toLocaleString()}</span>
-        <button onclick="deleteTournamentEntry('${id}','income','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:12px" title="מחק">✕</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:700;color:#2f855a">₪${(e.amount||0).toLocaleString()}</span>
+        <button onclick="deleteTournamentEntry('${id}','income','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px" title="מחק">✕</button>
       </div>
     </div>`).join('');
 
@@ -301,16 +301,16 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
     const catTotal = entries.reduce((s, [,e]) => s + (e.amount || 0), 0);
     const icon = EXPENSE_ICONS[cat] || '📌';
     const rows = entries.map(([eid, e]) => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 14px;font-size:13px;border-bottom:1px solid #f7fafc">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;font-size:13px;border-bottom:1px solid #f7fafc">
         <span style="color:#4a5568">${e.description}</span>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
           <span style="font-weight:700;color:#c53030">₪${(e.amount||0).toLocaleString()}</span>
-          <button onclick="deleteTournamentEntry('${id}','expenses','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:12px" title="מחק">✕</button>
+          <button onclick="deleteTournamentEntry('${id}','expenses','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px" title="מחק">✕</button>
         </div>
       </div>`).join('');
     return `
-      <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;background:#fff5f5;padding:7px 12px;border-bottom:1px solid #fed7d7">
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:10px;background:white">
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#fff5f5;padding:8px 14px;border-bottom:1px solid #fed7d7">
           <span style="font-size:13px;font-weight:700;color:#2d3748">${icon} ${cat}</span>
           <span style="font-size:13px;font-weight:800;color:#c53030">₪${catTotal.toLocaleString()}</span>
         </div>
@@ -318,8 +318,10 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
       </div>`;
   }).join('');
 
+  const emptyRow = (text) => `<div style="color:#a0aec0;font-size:13px;padding:14px;text-align:center">${text}</div>`;
+
   return `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:22px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px">
       <div style="background:rgba(74,222,128,.1);border-radius:12px;padding:14px;text-align:center">
         <div style="font-size:11px;color:#2f855a;font-weight:700;margin-bottom:4px">הכנסות</div>
         <div style="font-size:22px;font-weight:800;color:#2f855a">₪${income.toLocaleString()}</div>
@@ -334,30 +336,49 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
       </div>
     </div>
 
-    <div style="margin-bottom:24px">
-      <div style="font-size:14px;font-weight:700;color:#2f855a;margin-bottom:10px">🎟 קטגוריות תשלום — ${totalParticipants} משתתפים · ₪${entryFeeIncome.toLocaleString()}</div>
-      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:10px">
-        ${feeCategoryRows || '<div style="color:#a0aec0;font-size:13px;padding:14px;text-align:center">אין קטגוריות תשלום עדיין — הוסף למטה</div>'}
+    <div style="background:#f8fafc;border:1px solid #edf2f7;border-radius:14px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:14px;font-weight:800;color:#2f855a">🎟 קטגוריות תשלום</span>
+        <span style="font-size:12px;font-weight:700;color:#2f855a;background:rgba(74,222,128,.15);padding:4px 10px;border-radius:20px">${totalParticipants} משתתפים · ₪${entryFeeIncome.toLocaleString()}</span>
       </div>
-      <div style="display:flex;gap:8px">
-        <input type="text" id="new-fee-cat-label" placeholder='שם קטגוריה (לדוגמה: "בוגרים")' class="modal-input" style="flex:2">
-        <input type="number" id="new-fee-cat-fee" placeholder="מחיר ₪" min="0" class="modal-input" style="flex:1">
-        <button onclick="addFeeCategory('${id}')" style="background:#2f855a;color:white;border:none;border-radius:7px;padding:0 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף קטגוריה</button>
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:12px;background:white">
+        ${feeCategoryRows || emptyRow('אין קטגוריות תשלום עדיין')}
       </div>
-
-      <div style="font-size:13px;font-weight:700;color:#4a5568;margin:18px 0 8px">📌 הכנסות נוספות (תרומות וכד׳)</div>
-      ${manualIncomeRows || '<div style="color:#a0aec0;font-size:13px;padding:6px 0">אין הכנסות נוספות</div>'}
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <input type="text" id="new-income-desc" placeholder="תיאור (לדוגמה: תרומה)" class="modal-input" style="flex:2">
-        <input type="number" id="new-income-amount" placeholder="₪" min="0" class="modal-input" style="flex:1">
-        <button onclick="addTournamentEntry('${id}','income')" style="background:#4a5568;color:white;border:none;border-radius:7px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:2;min-width:140px">
+          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">שם קטגוריה</div>
+          <input type="text" id="new-fee-cat-label" placeholder='לדוגמה: בוגרים' class="modal-input">
+        </div>
+        <div style="flex:1;min-width:80px">
+          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">מחיר ₪</div>
+          <input type="number" id="new-fee-cat-fee" placeholder="0" min="0" class="modal-input">
+        </div>
+        <button onclick="addFeeCategory('${id}')" style="background:#2f855a;color:white;border:none;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
       </div>
     </div>
 
-    <div>
-      <div style="font-size:14px;font-weight:700;color:#c53030;margin-bottom:10px">📤 הוצאות</div>
-      ${expenseGroupsHTML || '<div style="color:#a0aec0;font-size:13px;padding:8px 0;margin-bottom:8px">אין הוצאות רשומות עדיין</div>'}
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:flex-end">
+    <div style="background:#f8fafc;border:1px solid #edf2f7;border-radius:14px;padding:16px;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:800;color:#4a5568;margin-bottom:12px">📌 הכנסות נוספות (תרומות וכד׳)</div>
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:12px;background:white">
+        ${manualIncomeRows || emptyRow('אין הכנסות נוספות')}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:2;min-width:140px">
+          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">תיאור</div>
+          <input type="text" id="new-income-desc" placeholder="לדוגמה: תרומה" class="modal-input">
+        </div>
+        <div style="flex:1;min-width:80px">
+          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
+          <input type="number" id="new-income-amount" placeholder="0" min="0" class="modal-input">
+        </div>
+        <button onclick="addTournamentEntry('${id}','income')" style="background:#4a5568;color:white;border:none;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
+      </div>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #edf2f7;border-radius:14px;padding:16px">
+      <div style="font-size:14px;font-weight:800;color:#c53030;margin-bottom:12px">📤 הוצאות</div>
+      ${expenseGroupsHTML || `<div style="border:1px solid #e2e8f0;border-radius:10px;background:white;margin-bottom:12px">${emptyRow('אין הוצאות רשומות עדיין')}</div>`}
+      <div style="display:flex;gap:8px;margin-top:${expenseGroupsHTML?'12px':'0'};flex-wrap:wrap;align-items:flex-end">
         <div style="flex:2;min-width:130px">
           <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">קטגוריה</div>
           <select id="new-expense-cat" class="modal-input">
