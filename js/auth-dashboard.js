@@ -103,8 +103,8 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
 
   // ── Tournaments ────────────────────────────────────────
   const tournList = Object.values(_tournaments||{});
-  const activeTourns   = tournList.filter(t => t.status === 'active');
-  const upcomingTourns = tournList.filter(t => t.status === 'upcoming').sort((a,b) => (a.startDate||'').localeCompare(b.startDate||''));
+  const activeTourns   = tournList.filter(t => getTournamentStatus(t) === 'active');
+  const upcomingTourns = tournList.filter(t => getTournamentStatus(t) === 'upcoming').sort((a,b) => (a.startDate||'').localeCompare(b.startDate||''));
   const totalBalance   = tournList.reduce((sum, t) => sum + (typeof calcTournamentIncome==='function' ? calcTournamentIncome(t) - calcTournamentExpenses(t) : 0), 0);
 
   // ── Friday leagues top-3 ───────────────────────────────

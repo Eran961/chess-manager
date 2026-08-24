@@ -21,6 +21,14 @@ function renderTournamentsPanel() {
   if (el) el.innerHTML = buildTournamentsHTML();
 }
 
+function getTournamentStatus(t) {
+  const today = new Date().toISOString().split('T')[0];
+  if (!t.startDate) return 'upcoming';
+  if (today < t.startDate) return 'upcoming';
+  if (today > (t.endDate||t.startDate)) return 'finished';
+  return 'active';
+}
+
 function calcTournamentParticipants(t) {
   let total = 0;
   if (t.feeCategories) Object.values(t.feeCategories).forEach(c => total += c.count || 0);
@@ -63,7 +71,7 @@ function buildTournamentsHTML() {
     const income = calcTournamentIncome(t);
     const expenses = calcTournamentExpenses(t);
     const balance = income - expenses;
-    const sm = statusMeta[t.status||'upcoming'];
+    const sm = statusMeta[getTournamentStatus(t)];
     const date = formatTournamentDate(t);
     const balColor = balance >= 0 ? '#4ade80' : '#f87171';
     return `
@@ -139,7 +147,7 @@ async function saveNewTournament() {
     type: document.getElementById('ct-type')?.value||TOURNAMENT_TYPES[0],
     format: document.getElementById('ct-format')?.value||'single',
     notes: document.getElementById('ct-notes')?.value?.trim()||'',
-    status: 'upcoming', createdAt: new Date().toISOString() };
+    createdAt: new Date().toISOString() };
   try {
     const ref = await db.ref('clubTournaments').push(data);
     _tournaments[ref.key] = data;
@@ -199,8 +207,7 @@ function switchTournamentTab(id, tab) {
 window.switchTournamentTab = switchTournamentTab;
 
 function renderTournamentDetails(id, t) {
-  const statusOpts = ['upcoming','active','finished'].map(s =>
-    `<option value="${s}" ${(t.status||'upcoming')===s?'selected':''}>${{upcoming:'עתידי',active:'פעיל',finished:'הסתיים'}[s]}</option>`).join('');
+  const statusLabels = { upcoming:'🔵 עתידי', active:'🟢 פעיל', finished:'⚪ הסתיים' };
   return `
     <div style="display:flex;flex-direction:column;gap:16px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -214,8 +221,8 @@ function renderTournamentDetails(id, t) {
           <select id="te-type" class="modal-input">${TOURNAMENT_TYPES.map(tp=>`<option ${t.type===tp?'selected':''}>${tp}</option>`).join('')}</select></div>
         <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">מבנה</label>
           <select id="te-format" class="modal-input">${Object.entries(TOURNAMENT_FORMATS).map(([v,l])=>`<option value="${v}" ${(t.format||'single')===v?'selected':''}>${l}</option>`).join('')}</select></div>
-        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">סטטוס</label>
-          <select id="te-status" class="modal-input">${statusOpts}</select></div>
+        <div class="modal-field" style="grid-column:1/-1"><label style="font-size:12px;color:#718096;font-weight:600">סטטוס (אוטומטי לפי תאריכים)</label>
+          <div style="padding:9px 12px;font-size:13px;font-weight:700">${statusLabels[getTournamentStatus(t)]}</div></div>
       </div>
       <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">הערות</label>
         <textarea id="te-notes" rows="3" class="modal-input" style="resize:vertical;font-family:inherit">${t.notes||''}</textarea></div>
@@ -233,7 +240,6 @@ async function saveTournamentDetails(id) {
     endDate: document.getElementById('te-end-date')?.value||startDate,
     type: document.getElementById('te-type')?.value||_tournaments[id].type,
     format: document.getElementById('te-format')?.value||_tournaments[id].format||'single',
-    status: document.getElementById('te-status')?.value||_tournaments[id].status,
     notes: document.getElementById('te-notes')?.value?.trim()||'' };
   try {
     await db.ref(`clubTournaments/${id}`).update(updates);
