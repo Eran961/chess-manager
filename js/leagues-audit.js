@@ -59,40 +59,81 @@ function formatTournamentDate(t, style) {
   return `${start} – ${end}`;
 }
 
+const TOURNAMENT_STATUS_META = {
+  upcoming: { label: 'עתידי',   color: '#3b82f6' },
+  active:   { label: 'פעיל',    color: '#4ade80' },
+  finished: { label: 'הסתיים',  color: 'var(--text-muted)' },
+};
+
+function renderTournamentCard(id, t) {
+  const participants = calcTournamentParticipants(t);
+  const income = calcTournamentIncome(t);
+  const expenses = calcTournamentExpenses(t);
+  const balance = income - expenses;
+  const sm = TOURNAMENT_STATUS_META[getTournamentStatus(t)];
+  const date = formatTournamentDate(t);
+  const balColor = balance >= 0 ? '#4ade80' : '#f87171';
+  return `
+    <div onclick="openTournamentDetail('${id}')" style="border:1px solid var(--border);border-radius:14px;padding:18px 22px;cursor:pointer;background:var(--bg-card);transition:transform .15s,box-shadow .15s"
+      onmouseenter="this.style.boxShadow='0 6px 18px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)'" onmouseleave="this.style.boxShadow='';this.style.transform=''">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px">
+        <div style="min-width:0">
+          <div style="font-size:16px;font-weight:800;color:var(--text-primary)">${t.name}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:3px">🗓 ${date}${t.format?' · '+TOURNAMENT_FORMATS[t.format]:''}${t.type?' · '+t.type:''}</div>
+        </div>
+        <span style="background:${sm.color}22;color:${sm.color};border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;white-space:nowrap">${sm.label}</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <span style="background:var(--bg-subtle);color:var(--text-muted);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600">👥 ${participants} משתתפים</span>
+        ${income>0||expenses>0 ? `
+          <span style="background:rgba(74,222,128,.14);color:#4ade80;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">💰 ₪${income.toLocaleString()}</span>
+          <span style="background:rgba(248,113,113,.14);color:#f87171;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">📤 ₪${expenses.toLocaleString()}</span>
+          <span style="background:${balColor}22;color:${balColor};border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">${balance>=0?'+':''}₪${balance.toLocaleString()}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+const HEBREW_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+function tournamentMonthLabel(monthKey, currentKey, nextKey) {
+  if (monthKey === currentKey) return 'החודש';
+  if (monthKey === nextKey) return 'חודש הבא';
+  const [y, m] = monthKey.split('-').map(Number);
+  return `${HEBREW_MONTHS[m-1]} ${y}`;
+}
+
 function buildTournamentsHTML() {
-  const list = Object.entries(_tournaments).sort((a,b) => (b[1].startDate||'').localeCompare(a[1].startDate||''));
-  const statusMeta = {
-    upcoming: { label: 'עתידי',   color: '#3b82f6' },
-    active:   { label: 'פעיל',    color: '#4ade80' },
-    finished: { label: 'הסתיים',  color: 'var(--text-muted)' },
-  };
-  const cards = list.map(([id, t]) => {
-    const participants = calcTournamentParticipants(t);
-    const income = calcTournamentIncome(t);
-    const expenses = calcTournamentExpenses(t);
-    const balance = income - expenses;
-    const sm = statusMeta[getTournamentStatus(t)];
-    const date = formatTournamentDate(t);
-    const balColor = balance >= 0 ? '#4ade80' : '#f87171';
+  const list = Object.entries(_tournaments);
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const nextMonthDate = new Date(now.getFullYear(), now.getMonth()+1, 1);
+  const nextKey = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth()+1).padStart(2,'0')}`;
+
+  // Group by the month the tournament starts in
+  const groups = {};
+  list.forEach(([id, t]) => {
+    const monthKey = t.startDate ? t.startDate.slice(0,7) : 'ללא תאריך';
+    if (!groups[monthKey]) groups[monthKey] = [];
+    groups[monthKey].push([id, t]);
+  });
+
+  // Current/future months first (chronological), then past months (most recent first)
+  const monthKeys = Object.keys(groups).filter(k => k !== 'ללא תאריך');
+  const futureKeys = monthKeys.filter(k => k >= currentKey).sort();
+  const pastKeys = monthKeys.filter(k => k < currentKey).sort().reverse();
+  const orderedKeys = [...futureKeys, ...pastKeys];
+  if (groups['ללא תאריך']) orderedKeys.push('ללא תאריך');
+
+  const sectionsHtml = orderedKeys.map(key => {
+    const items = groups[key].sort((a,b) => (a[1].startDate||'').localeCompare(b[1].startDate||''));
+    const label = key === 'ללא תאריך' ? 'ללא תאריך' : tournamentMonthLabel(key, currentKey, nextKey);
     return `
-      <div onclick="openTournamentDetail('${id}')" style="border:1px solid var(--border);border-radius:14px;padding:18px 22px;cursor:pointer;background:var(--bg-card);transition:transform .15s,box-shadow .15s"
-        onmouseenter="this.style.boxShadow='0 6px 18px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)'" onmouseleave="this.style.boxShadow='';this.style.transform=''">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px">
-          <div style="min-width:0">
-            <div style="font-size:16px;font-weight:800;color:var(--text-primary)">${t.name}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">🗓 ${date}${t.format?' · '+TOURNAMENT_FORMATS[t.format]:''}${t.type?' · '+t.type:''}</div>
-          </div>
-          <span style="background:${sm.color}22;color:${sm.color};border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;white-space:nowrap">${sm.label}</span>
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <span style="background:var(--bg-subtle);color:var(--text-muted);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600">👥 ${participants} משתתפים</span>
-          ${income>0||expenses>0 ? `
-            <span style="background:rgba(74,222,128,.14);color:#4ade80;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">💰 ₪${income.toLocaleString()}</span>
-            <span style="background:rgba(248,113,113,.14);color:#f87171;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">📤 ₪${expenses.toLocaleString()}</span>
-            <span style="background:${balColor}22;color:${balColor};border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">${balance>=0?'+':''}₪${balance.toLocaleString()}</span>` : ''}
-        </div>
+      <div style="margin-bottom:22px">
+        <div style="font-size:13px;font-weight:800;color:var(--text-muted);margin-bottom:10px;padding-right:2px">${label}</div>
+        <div style="display:flex;flex-direction:column;gap:12px">${items.map(([id,t]) => renderTournamentCard(id,t)).join('')}</div>
       </div>`;
   }).join('');
+
   return `
     <div style="max-width:760px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px">
@@ -102,7 +143,7 @@ function buildTournamentsHTML() {
       ${list.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:60px 20px">
         <div style="font-size:40px;margin-bottom:12px">🏆</div>
         <div style="font-size:15px">אין תחרויות עדיין — לחץ "תחרות חדשה"</div>
-      </div>` : `<div style="display:flex;flex-direction:column;gap:12px">${cards}</div>`}
+      </div>` : sectionsHtml}
     </div>`;
 }
 
