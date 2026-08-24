@@ -218,7 +218,7 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
           : `<div style="padding:10px 18px;display:flex;flex-direction:column;gap:8px">
               ${activeTourns.map(t=>`<div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:13px;font-weight:600;color:#276749">🟢 ${t.name}</span>
-                <span style="font-size:12px;color:#718096">${Object.keys(t.players||{}).length} שחקנים</span>
+                <span style="font-size:12px;color:#718096">${calcTournamentParticipants(t)} משתתפים</span>
               </div>`).join('')}
               ${upcomingTourns.length>0?`<div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:13px;color:#4a5568">⏳ ${upcomingTourns[0].name}</span>
@@ -264,7 +264,7 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
           : `<div style="padding:10px 18px;display:flex;flex-direction:column;gap:8px">
               ${activeTourns.map(t=>`<div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:13px;font-weight:600;color:#276749">🟢 ${t.name}</span>
-                <span style="font-size:12px;color:#718096">${Object.keys(t.players||{}).length} שחקנים</span>
+                <span style="font-size:12px;color:#718096">${calcTournamentParticipants(t)} משתתפים</span>
               </div>`).join('')}
               ${upcomingTourns.length>0?`<div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:13px;color:#4a5568">⏳ ${upcomingTourns[0].name}</span>

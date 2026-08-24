@@ -21,9 +21,15 @@ function renderTournamentsPanel() {
   if (el) el.innerHTML = buildTournamentsHTML();
 }
 
+function calcTournamentParticipants(t) {
+  let total = 0;
+  if (t.feeCategories) Object.values(t.feeCategories).forEach(c => total += c.count || 0);
+  return total;
+}
+
 function calcTournamentIncome(t) {
   let total = 0;
-  if (t.entryFee && t.players) total += Object.values(t.players).filter(p => p.paid).length * t.entryFee;
+  if (t.feeCategories) Object.values(t.feeCategories).forEach(c => total += (c.fee||0) * (c.count||0));
   if (t.income) Object.values(t.income).forEach(e => total += e.amount || 0);
   return total;
 }
@@ -36,43 +42,48 @@ function calcTournamentExpenses(t) {
 
 function buildTournamentsHTML() {
   const list = Object.entries(_tournaments).sort((a,b) => (b[1].date||'').localeCompare(a[1].date||''));
+  const statusMeta = {
+    upcoming: { label: 'עתידי',   color: '#3b82f6' },
+    active:   { label: 'פעיל',    color: '#4ade80' },
+    finished: { label: 'הסתיים',  color: 'var(--text-muted)' },
+  };
   const cards = list.map(([id, t]) => {
-    const players = t.players ? Object.keys(t.players).length : 0;
+    const participants = calcTournamentParticipants(t);
     const income = calcTournamentIncome(t);
     const expenses = calcTournamentExpenses(t);
     const balance = income - expenses;
-    const statusColor = { upcoming:'#2b6cb0', active:'#276749', finished:'#718096' }[t.status||'upcoming'];
-    const statusLabel = { upcoming:'עתידי', active:'פעיל', finished:'הסתיים' }[t.status||'upcoming'];
+    const sm = statusMeta[t.status||'upcoming'];
     const date = t.date ? new Date(t.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'}) : '—';
+    const balColor = balance >= 0 ? '#4ade80' : '#f87171';
     return `
-      <div onclick="openTournamentDetail('${id}')" style="border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;cursor:pointer;background:white;transition:box-shadow 0.15s"
-        onmouseenter="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'" onmouseleave="this.style.boxShadow=''">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-          <div>
-            <div style="font-size:16px;font-weight:700;color:#2d3748">${t.name}</div>
-            <div style="font-size:12px;color:#718096;margin-top:2px">${date}${t.location?' · '+t.location:''}${t.type?' · '+t.type:''}</div>
+      <div onclick="openTournamentDetail('${id}')" style="border:1px solid var(--border);border-radius:14px;padding:18px 22px;cursor:pointer;background:var(--bg-card);transition:transform .15s,box-shadow .15s"
+        onmouseenter="this.style.boxShadow='0 6px 18px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)'" onmouseleave="this.style.boxShadow='';this.style.transform=''">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px">
+          <div style="min-width:0">
+            <div style="font-size:16px;font-weight:800;color:var(--text-primary)">${t.name}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">🗓 ${date}${t.location?' · 📍 '+t.location:''}${t.type?' · '+t.type:''}</div>
           </div>
-          <span style="background:${statusColor}22;color:${statusColor};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap">${statusLabel}</span>
+          <span style="background:${sm.color}22;color:${sm.color};border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;white-space:nowrap">${sm.label}</span>
         </div>
-        <div style="display:flex;gap:16px;font-size:13px;flex-wrap:wrap">
-          <span style="color:#4a5568">👥 ${players} שחקנים</span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <span style="background:var(--bg-subtle);color:var(--text-muted);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600">👥 ${participants} משתתפים</span>
           ${income>0||expenses>0 ? `
-            <span style="color:#276749">💰 ₪${income.toLocaleString()}</span>
-            <span style="color:#c53030">📤 ₪${expenses.toLocaleString()}</span>
-            <span style="font-weight:700;color:${balance>=0?'#276749':'#c53030'}">${balance>=0?'+':''}₪${balance.toLocaleString()}</span>` : ''}
+            <span style="background:rgba(74,222,128,.14);color:#4ade80;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">💰 ₪${income.toLocaleString()}</span>
+            <span style="background:rgba(248,113,113,.14);color:#f87171;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">📤 ₪${expenses.toLocaleString()}</span>
+            <span style="background:${balColor}22;color:${balColor};border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">${balance>=0?'+':''}₪${balance.toLocaleString()}</span>` : ''}
         </div>
       </div>`;
   }).join('');
   return `
-    <div style="max-width:700px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-        <div style="font-size:20px;font-weight:800;color:#2d3748">🏆 תחרויות המועדון</div>
-        <button onclick="openCreateTournamentModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">➕ תחרות חדשה</button>
+    <div style="max-width:760px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px">
+        <div style="font-size:21px;font-weight:800;color:var(--text-primary)">🏆 תחרויות המועדון</div>
+        <button onclick="openCreateTournamentModal()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">➕ תחרות חדשה</button>
       </div>
-      ${list.length===0 ? `<div style="text-align:center;color:#a0aec0;padding:60px 20px">
+      ${list.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:60px 20px">
         <div style="font-size:40px;margin-bottom:12px">🏆</div>
         <div style="font-size:15px">אין תחרויות עדיין — לחץ "תחרות חדשה"</div>
-      </div>` : `<div style="display:flex;flex-direction:column;gap:10px">${cards}</div>`}
+      </div>` : `<div style="display:flex;flex-direction:column;gap:12px">${cards}</div>`}
     </div>`;
 }
 
@@ -92,12 +103,8 @@ function openCreateTournamentModal() {
             <div class="modal-field" style="flex:1"><label>סוג</label>
               <select id="ct-type" class="modal-input">${TOURNAMENT_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
           </div>
-          <div style="display:flex;gap:10px">
-            <div class="modal-field" style="flex:1"><label>מיקום</label>
-              <input type="text" id="ct-location" placeholder='מועדון ראשל"צ' class="modal-input"></div>
-            <div class="modal-field" style="flex:1"><label>דמי השתתפות (₪)</label>
-              <input type="number" id="ct-fee" placeholder="0" min="0" class="modal-input"></div>
-          </div>
+          <div class="modal-field"><label>מיקום</label>
+            <input type="text" id="ct-location" placeholder='מועדון ראשל"צ' class="modal-input"></div>
           <div class="modal-field"><label>הערות</label>
             <textarea id="ct-notes" rows="2" class="modal-input" style="resize:vertical;font-family:inherit"></textarea></div>
           <button onclick="saveNewTournament()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ צור תחרות</button>
@@ -114,7 +121,6 @@ async function saveNewTournament() {
   if (!date) { showToast('יש לבחור תאריך', 'error'); return; }
   const data = { name, date, type: document.getElementById('ct-type')?.value||'אחר',
     location: document.getElementById('ct-location')?.value?.trim()||'',
-    entryFee: parseFloat(document.getElementById('ct-fee')?.value)||0,
     notes: document.getElementById('ct-notes')?.value?.trim()||'',
     status: 'upcoming', createdAt: new Date().toISOString() };
   try {
@@ -133,25 +139,25 @@ function openTournamentDetail(id) {
   if (!_tournamentSubTab[id]) _tournamentSubTab[id] = 'details';
   const sub = _tournamentSubTab[id];
   const income = calcTournamentIncome(t), expenses = calcTournamentExpenses(t);
-  const tabs = [{key:'details',label:'📋 פרטים'},{key:'players',label:'👥 משתתפים'},{key:'finance',label:'💰 כספים'}];
+  const tabs = [{key:'details',label:'📋 פרטים'},{key:'finance',label:'💰 כספים'}];
   const tabBar = tabs.map(tb => `
     <button onclick="switchTournamentTab('${id}','${tb.key}')"
-      style="padding:10px 16px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border-bottom:3px solid ${sub===tb.key?'#2b6cb0':'transparent'};color:${sub===tb.key?'#2b6cb0':'#718096'};margin-bottom:-2px">
+      style="padding:12px 18px;border:none;background:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border-bottom:3px solid ${sub===tb.key?'#f97316':'transparent'};color:${sub===tb.key?'#f97316':'#a0aec0'};margin-bottom:-2px;transition:color .15s">
       ${tb.label}</button>`).join('');
   const date = t.date ? new Date(t.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
       <div class="profile-modal-box" style="width:640px;max-width:calc(100vw - 24px)">
-        <div style="background:linear-gradient(135deg,#2b6cb0,#2c5282);color:white;padding:18px 22px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+        <div style="background:linear-gradient(135deg,#1e3a5f,#0d2137);color:white;padding:20px 24px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div style="font-size:18px;font-weight:800">${t.name}</div>
-            <div style="font-size:12px;opacity:0.85;margin-top:2px">${date}${t.type?' · '+t.type:''}</div>
+            <div style="font-size:19px;font-weight:800">🏆 ${t.name}</div>
+            <div style="font-size:12px;opacity:0.75;margin-top:3px">${date}${t.type?' · '+t.type:''}</div>
           </div>
-          <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
+          <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
         </div>
-        <div style="border-bottom:2px solid #e2e8f0;padding:0 16px;display:flex">${tabBar}</div>
-        <div class="profile-modal-body" style="padding:20px" id="tournament-tab-content-${id}">
-          ${sub==='details'?renderTournamentDetails(id,t):sub==='players'?renderTournamentPlayers(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses)}
+        <div style="border-bottom:1px solid #e2e8f0;padding:0 20px;display:flex;background:#fafbfc">${tabBar}</div>
+        <div class="profile-modal-body" style="padding:22px;background:white" id="tournament-tab-content-${id}">
+          ${sub==='details'?renderTournamentDetails(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses)}
         </div>
       </div>
     </div>`);
@@ -166,12 +172,12 @@ function switchTournamentTab(id, tab) {
   if (modal) {
     modal.querySelectorAll('[onclick*="switchTournamentTab"]').forEach(btn => {
       const active = btn.getAttribute('onclick').includes(`'${tab}'`);
-      btn.style.borderBottomColor = active ? '#2b6cb0' : 'transparent';
-      btn.style.color = active ? '#2b6cb0' : '#718096';
+      btn.style.borderBottomColor = active ? '#f97316' : 'transparent';
+      btn.style.color = active ? '#f97316' : '#a0aec0';
     });
   }
   const el = document.getElementById(`tournament-tab-content-${id}`);
-  if (el) el.innerHTML = tab==='details'?renderTournamentDetails(id,t):tab==='players'?renderTournamentPlayers(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses);
+  if (el) el.innerHTML = tab==='details'?renderTournamentDetails(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses);
 }
 window.switchTournamentTab = switchTournamentTab;
 
@@ -179,8 +185,8 @@ function renderTournamentDetails(id, t) {
   const statusOpts = ['upcoming','active','finished'].map(s =>
     `<option value="${s}" ${(t.status||'upcoming')===s?'selected':''}>${{upcoming:'עתידי',active:'פעיל',finished:'הסתיים'}[s]}</option>`).join('');
   return `
-    <div style="display:flex;flex-direction:column;gap:14px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">שם</label>
           <input type="text" id="te-name" value="${t.name||''}" class="modal-input"></div>
         <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">תאריך</label>
@@ -189,16 +195,14 @@ function renderTournamentDetails(id, t) {
           <select id="te-type" class="modal-input">${TOURNAMENT_TYPES.map(tp=>`<option ${t.type===tp?'selected':''}>${tp}</option>`).join('')}</select></div>
         <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">סטטוס</label>
           <select id="te-status" class="modal-input">${statusOpts}</select></div>
-        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">מיקום</label>
+        <div class="modal-field" style="grid-column:1/-1"><label style="font-size:12px;color:#718096;font-weight:600">מיקום</label>
           <input type="text" id="te-location" value="${t.location||''}" class="modal-input"></div>
-        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">דמי השתתפות (₪)</label>
-          <input type="number" id="te-fee" value="${t.entryFee||0}" min="0" class="modal-input"></div>
       </div>
       <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">הערות</label>
         <textarea id="te-notes" rows="3" class="modal-input" style="resize:vertical;font-family:inherit">${t.notes||''}</textarea></div>
-      <div style="display:flex;gap:10px">
-        <button onclick="saveTournamentDetails('${id}')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">💾 שמור</button>
-        <button onclick="deleteTournament('${id}')" style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#c53030">🗑 מחק</button>
+      <div style="display:flex;gap:10px;padding-top:4px;border-top:1px solid #edf2f7">
+        <button onclick="saveTournamentDetails('${id}')" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:14px">💾 שמור</button>
+        <button onclick="deleteTournament('${id}')" style="background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;color:#c53030;margin-top:14px">🗑 מחק תחרות</button>
       </div>
     </div>`;
 }
@@ -209,7 +213,6 @@ async function saveTournamentDetails(id) {
     type: document.getElementById('te-type')?.value||_tournaments[id].type,
     status: document.getElementById('te-status')?.value||_tournaments[id].status,
     location: document.getElementById('te-location')?.value?.trim()||'',
-    entryFee: parseFloat(document.getElementById('te-fee')?.value)||0,
     notes: document.getElementById('te-notes')?.value?.trim()||'' };
   try {
     await db.ref(`clubTournaments/${id}`).update(updates);
@@ -232,139 +235,29 @@ async function deleteTournament(id) {
 }
 window.deleteTournament = deleteTournament;
 
-function renderTournamentPlayers(id, t) {
-  const players = t.players ? Object.entries(t.players) : [];
-  const fee = t.entryFee || 0;
-  const paidCount = players.filter(([,p]) => p.paid).length;
-  const thS = 'padding:9px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
-  const rows = players.map(([pid, p]) => `
-    <tr style="border-bottom:1px solid #f0f4f8">
-      <td style="padding:8px 12px;font-size:14px;font-weight:600">${p.name}</td>
-      <td style="padding:8px 12px;text-align:center;font-size:13px;color:#718096">${p.fedId||'—'}</td>
-      <td style="padding:8px;text-align:center" onclick="event.stopPropagation()">
-        <button onclick="toggleTournamentPlayerPaid('${id}','${pid}')"
-          style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;background:${p.paid?'#c6f6d5':'#fed7d7'};color:${p.paid?'#276749':'#c53030'}">
-          ${p.paid?'✓ שילם':'✗ טרם שילם'}</button></td>
-      <td style="padding:8px;text-align:center" onclick="event.stopPropagation()">
-        <button onclick="removeTournamentPlayer('${id}','${pid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button>
-      </td>
-    </tr>`).join('');
-  return `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div style="font-size:13px;color:#4a5568">${players.length} רשומים${fee>0?` · ${paidCount} שילמו · ₪${(paidCount*fee).toLocaleString()}`:''}</div>
-      <button onclick="openAddTournamentPlayer('${id}')" style="background:#2b6cb0;color:white;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף שחקן</button>
-    </div>
-    ${players.length > 0 ? `
-    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr><th style="${thS}">שם</th><th style="${thS};text-align:center">מס׳ שחקן</th><th style="${thS};text-align:center">תשלום</th><th style="${thS}"></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>` : '<div style="text-align:center;color:#a0aec0;padding:32px;font-size:13px">אין שחקנים רשומים</div>'}`;
-}
-
-function openAddTournamentPlayer(id) {
-  const existing = new Set(Object.values(_tournaments[id]?.players||{}).map(p=>p.name));
-  const clubPlayers = [];
-  groups.forEach(g => g.subGroups.forEach(sg => sg.players.filter(p=>!p.hidden&&!existing.has(p.name)).forEach(p => clubPlayers.push(p))));
-  const clubOpts = clubPlayers.slice(0,150).map(p => `<option value="${p.name}|${p.fedId||''}">${p.name}${p.fedId?' ('+p.fedId+')':''}</option>`).join('');
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
-      <div class="modal-box" style="max-width:380px">
-        <div class="modal-header"><span class="modal-title">➕ הוסף לתחרות</span>
-          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-        <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:12px">
-          ${clubOpts?`<div>
-            <label style="font-size:12px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">מרשימת המועדון</label>
-            <select id="tp-club-pick" class="modal-input" onchange="fillTournamentPlayerFromClub()">
-              <option value="">— בחר שחקן —</option>${clubOpts}
-            </select></div>
-          <div style="text-align:center;font-size:12px;color:#a0aec0">— או הוסף ידנית —</div>`:''}
-          <div style="display:flex;gap:8px">
-            <div class="modal-field" style="flex:2"><label style="font-size:12px">שם <span style="color:#e53e3e">*</span></label>
-              <input type="text" id="tp-name" placeholder="שם מלא" class="modal-input"></div>
-            <div class="modal-field" style="flex:1"><label style="font-size:12px">מס׳ שחקן</label>
-              <input type="number" id="tp-fedid" placeholder="—" class="modal-input"></div>
-          </div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-            <input type="checkbox" id="tp-paid"> שילם דמי השתתפות</label>
-          <button onclick="saveTournamentPlayer('${id}')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ הוסף</button>
-        </div>
-      </div>
-    </div>`);
-}
-window.openAddTournamentPlayer = openAddTournamentPlayer;
-
-function fillTournamentPlayerFromClub() {
-  const val = document.getElementById('tp-club-pick')?.value;
-  if (!val) return;
-  const [name, fedId] = val.split('|');
-  const n = document.getElementById('tp-name'); if (n) n.value = name;
-  const f = document.getElementById('tp-fedid'); if (f) f.value = fedId||'';
-}
-window.fillTournamentPlayerFromClub = fillTournamentPlayerFromClub;
-
-async function saveTournamentPlayer(id) {
-  const name = document.getElementById('tp-name')?.value?.trim();
-  if (!name) { showToast('יש להזין שם', 'error'); return; }
-  const fedId = parseInt(document.getElementById('tp-fedid')?.value)||null;
-  const paid = document.getElementById('tp-paid')?.checked||false;
-  try {
-    const ref = await db.ref(`clubTournaments/${id}/players`).push({name,fedId,paid});
-    if (!_tournaments[id].players) _tournaments[id].players = {};
-    _tournaments[id].players[ref.key] = {name,fedId,paid};
-    document.querySelectorAll('.friday-modal').forEach((m,i,a) => { if(i===a.length-1) m.remove(); });
-    showToast(`${name} נוסף ✅`);
-    _tournamentSubTab[id] = 'players';
-    document.querySelector('.friday-modal')?.remove();
-    openTournamentDetail(id);
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.saveTournamentPlayer = saveTournamentPlayer;
-
-async function toggleTournamentPlayerPaid(id, pid) {
-  const cur = _tournaments[id]?.players?.[pid]?.paid||false;
-  try {
-    await db.ref(`clubTournaments/${id}/players/${pid}/paid`).set(!cur);
-    _tournaments[id].players[pid].paid = !cur;
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentPlayers(id, _tournaments[id]);
-    renderTournamentsPanel();
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.toggleTournamentPlayerPaid = toggleTournamentPlayerPaid;
-
-async function removeTournamentPlayer(id, pid) {
-  try {
-    await db.ref(`clubTournaments/${id}/players/${pid}`).remove();
-    delete _tournaments[id].players[pid];
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentPlayers(id, _tournaments[id]);
-    renderTournamentsPanel();
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.removeTournamentPlayer = removeTournamentPlayer;
-
 function renderTournamentFinance(id, t, income, expenses, balance) {
-  const fee = t.entryFee || 0;
-  const players = t.players ? Object.entries(t.players) : [];
-  const paidPlayers = players.filter(([,p]) => p.paid);
-  const unpaidPlayers = players.filter(([,p]) => !p.paid);
-  const entryFeeIncome = paidPlayers.length * fee;
+  const feeCategories = t.feeCategories ? Object.entries(t.feeCategories) : [];
+  const entryFeeIncome = feeCategories.reduce((s,[,c]) => s + (c.fee||0)*(c.count||0), 0);
+  const totalParticipants = feeCategories.reduce((s,[,c]) => s + (c.count||0), 0);
   const manualIncome = t.income ? Object.entries(t.income) : [];
   const expensesList = t.expenses ? Object.entries(t.expenses) : [];
-  const balColor = balance >= 0 ? '#276749' : '#c53030';
-  const thS = 'padding:7px 12px;text-align:right;font-size:11px;font-weight:700;color:#718096;border-bottom:1px solid #e2e8f0;background:#f7fafc';
+  const balColor = balance >= 0 ? '#4ade80' : '#f87171';
 
-  // Per-player payment rows
-  const playerRows = players.map(([pid, p]) => `
-    <tr style="border-bottom:1px solid #f0f4f8">
-      <td style="padding:7px 12px;font-size:13px;font-weight:600;color:#2d3748">${p.name}</td>
-      <td style="padding:7px 8px;text-align:center" onclick="event.stopPropagation()">
-        <button onclick="toggleTournamentPlayerPaid('${id}','${pid}')"
-          style="padding:2px 10px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;background:${p.paid?'#c6f6d5':'#fed7d7'};color:${p.paid?'#276749':'#c53030'}">
-          ${p.paid ? '✓ שילם' : '✗ לא שילם'}</button></td>
-      <td style="padding:7px 12px;text-align:left;font-size:13px;font-weight:700;color:${p.paid?'#276749':'#a0aec0'}">
-        ${fee > 0 ? (p.paid ? `₪${fee.toLocaleString()}` : `(₪${fee.toLocaleString()})`) : '—'}</td>
-    </tr>`).join('');
+  // Fee-category rows (label + fee + participant count, editable inline)
+  const feeCategoryRows = feeCategories.map(([cid, c]) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f0f4f8">
+      <input type="text" value="${(c.label||'').replace(/"/g,'&quot;')}" onchange="updateFeeCategory('${id}','${cid}','label',this.value)"
+        style="flex:2;min-width:0;border:1px solid transparent;background:none;font-size:13px;font-weight:600;color:#2d3748;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
+      <div style="display:flex;align-items:center;gap:3px;color:#718096;font-size:12px">
+        <input type="number" value="${c.fee||0}" min="0" onchange="updateFeeCategory('${id}','${cid}','fee',this.value)"
+          style="width:60px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
+        <span>₪ ×</span>
+        <input type="number" value="${c.count||0}" min="0" onchange="updateFeeCategory('${id}','${cid}','count',this.value)"
+          style="width:52px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
+      </div>
+      <span style="width:74px;text-align:left;font-size:13px;font-weight:700;color:#276749">₪${((c.fee||0)*(c.count||0)).toLocaleString()}</span>
+      <button onclick="deleteFeeCategory('${id}','${cid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px">✕</button>
+    </div>`).join('');
 
   // Manual income entries
   const manualIncomeRows = manualIncome.map(([eid, e]) => `
@@ -405,50 +298,38 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
   }).join('');
 
   return `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px">
-      <div style="background:#f0fff4;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:11px;color:#276749;font-weight:600;margin-bottom:4px">הכנסות</div>
-        <div style="font-size:22px;font-weight:800;color:#276749">₪${income.toLocaleString()}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:22px">
+      <div style="background:rgba(74,222,128,.1);border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:#2f855a;font-weight:700;margin-bottom:4px">הכנסות</div>
+        <div style="font-size:22px;font-weight:800;color:#2f855a">₪${income.toLocaleString()}</div>
       </div>
-      <div style="background:#fff5f5;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:11px;color:#c53030;font-weight:600;margin-bottom:4px">הוצאות</div>
+      <div style="background:rgba(248,113,113,.1);border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:#c53030;font-weight:700;margin-bottom:4px">הוצאות</div>
         <div style="font-size:22px;font-weight:800;color:#c53030">₪${expenses.toLocaleString()}</div>
       </div>
-      <div style="background:${balance>=0?'#f0fff4':'#fff5f5'};border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:11px;color:${balColor};font-weight:600;margin-bottom:4px">יתרה</div>
-        <div style="font-size:22px;font-weight:800;color:${balColor}">${balance>=0?'+':''}₪${balance.toLocaleString()}</div>
+      <div style="background:${balance>=0?'rgba(74,222,128,.1)':'rgba(248,113,113,.1)'};border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:${balance>=0?'#2f855a':'#c53030'};font-weight:700;margin-bottom:4px">יתרה</div>
+        <div style="font-size:22px;font-weight:800;color:${balance>=0?'#2f855a':'#c53030'}">${balance>=0?'+':''}₪${balance.toLocaleString()}</div>
       </div>
     </div>
 
-    <div style="margin-bottom:20px">
-      <div style="font-size:14px;font-weight:700;color:#276749;margin-bottom:10px">💰 הכנסות</div>
-      ${fee > 0 && players.length > 0 ? `
-      <div style="border:1px solid #c6f6d5;border-radius:8px;overflow:hidden;margin-bottom:10px">
-        <div style="background:#f0fff4;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #c6f6d5">
-          <span style="font-size:13px;font-weight:700;color:#276749">🎟 דמי השתתפות — ₪${fee.toLocaleString()} לשחקן</span>
-          <span style="font-size:12px;font-weight:700;color:${paidPlayers.length===players.length?'#276749':'#c53030'}">
-            ${paidPlayers.length}/${players.length} שילמו · ₪${entryFeeIncome.toLocaleString()}</span>
-        </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse">
-            <thead><tr>
-              <th style="${thS}">שם</th>
-              <th style="${thS};text-align:center">סטטוס</th>
-              <th style="${thS};text-align:left">סכום</th>
-            </tr></thead>
-            <tbody>${playerRows}</tbody>
-          </table>
-        </div>
-        ${unpaidPlayers.length > 0 ? `
-        <div style="background:#fffaf0;padding:6px 12px;font-size:11px;color:#c05621;border-top:1px solid #fbd38d">
-          ⚠️ ${unpaidPlayers.length} שחקנים טרם שילמו · צפוי ₪${(unpaidPlayers.length*fee).toLocaleString()} נוסף
-        </div>` : ''}
-      </div>` : ''}
-      ${manualIncomeRows}
+    <div style="margin-bottom:24px">
+      <div style="font-size:14px;font-weight:700;color:#2f855a;margin-bottom:10px">🎟 קטגוריות תשלום — ${totalParticipants} משתתפים · ₪${entryFeeIncome.toLocaleString()}</div>
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:10px">
+        ${feeCategoryRows || '<div style="color:#a0aec0;font-size:13px;padding:14px;text-align:center">אין קטגוריות תשלום עדיין — הוסף למטה</div>'}
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="new-fee-cat-label" placeholder='שם קטגוריה (לדוגמה: "בוגרים")' class="modal-input" style="flex:2">
+        <input type="number" id="new-fee-cat-fee" placeholder="מחיר ₪" min="0" class="modal-input" style="flex:1">
+        <button onclick="addFeeCategory('${id}')" style="background:#2f855a;color:white;border:none;border-radius:7px;padding:0 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף קטגוריה</button>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#4a5568;margin:18px 0 8px">📌 הכנסות נוספות (תרומות וכד׳)</div>
+      ${manualIncomeRows || '<div style="color:#a0aec0;font-size:13px;padding:6px 0">אין הכנסות נוספות</div>'}
       <div style="display:flex;gap:8px;margin-top:10px">
-        <input type="text" id="new-income-desc" placeholder="הכנסה נוספת (תיאור)" class="modal-input" style="flex:2">
+        <input type="text" id="new-income-desc" placeholder="תיאור (לדוגמה: תרומה)" class="modal-input" style="flex:2">
         <input type="number" id="new-income-amount" placeholder="₪" min="0" class="modal-input" style="flex:1">
-        <button onclick="addTournamentEntry('${id}','income')" style="background:#276749;color:white;border:none;border-radius:7px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
+        <button onclick="addTournamentEntry('${id}','income')" style="background:#4a5568;color:white;border:none;border-radius:7px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
       </div>
     </div>
 
@@ -477,6 +358,51 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
       </div>
     </div>`;
 }
+
+async function updateFeeCategory(id, catId, field, value) {
+  const t = _tournaments[id];
+  if (field === 'label' && !value.trim()) {
+    showToast('יש להזין שם קטגוריה', 'error');
+    const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    return;
+  }
+  const val = field === 'label' ? value.trim() : (parseFloat(value)||0);
+  try {
+    await db.ref(`clubTournaments/${id}/feeCategories/${catId}/${field}`).set(val);
+    t.feeCategories[catId][field] = val;
+    const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.updateFeeCategory = updateFeeCategory;
+
+async function addFeeCategory(id) {
+  const label = document.getElementById('new-fee-cat-label')?.value?.trim();
+  const fee = parseFloat(document.getElementById('new-fee-cat-fee')?.value)||0;
+  if (!label) { showToast('יש להזין שם קטגוריה', 'error'); return; }
+  try {
+    const ref = await db.ref(`clubTournaments/${id}/feeCategories`).push({label, fee, count: 0});
+    if (!_tournaments[id].feeCategories) _tournaments[id].feeCategories = {};
+    _tournaments[id].feeCategories[ref.key] = {label, fee, count: 0};
+    const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.addFeeCategory = addFeeCategory;
+
+async function deleteFeeCategory(id, catId) {
+  try {
+    await db.ref(`clubTournaments/${id}/feeCategories/${catId}`).remove();
+    delete _tournaments[id].feeCategories[catId];
+    const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteFeeCategory = deleteFeeCategory;
 
 async function addTournamentEntry(id, type) {
   const isIncome = type==='income';
