@@ -344,17 +344,13 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
       <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:12px;background:white">
         ${feeCategoryRows || emptyRow('אין קטגוריות תשלום עדיין')}
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-        <div style="flex:2;min-width:140px">
-          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">שם קטגוריה</div>
-          <input type="text" id="new-fee-cat-label" placeholder='לדוגמה: בוגרים' class="modal-input">
-        </div>
-        <div style="flex:1;min-width:80px">
-          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">מחיר ₪</div>
-          <input type="number" id="new-fee-cat-fee" placeholder="0" min="0" class="modal-input">
-        </div>
-        <button onclick="addFeeCategory('${id}')" style="background:#2f855a;color:white;border:none;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px">
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">שם קטגוריה</div>
+          <input type="text" id="new-fee-cat-label" placeholder='לדוגמה: בוגרים' class="modal-input" style="width:100%"></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">מחיר ₪</div>
+          <input type="number" id="new-fee-cat-fee" placeholder="0" min="0" class="modal-input" style="width:100%"></div>
       </div>
+      <button onclick="addFeeCategory('${id}')" style="width:100%;background:#2f855a;color:white;border:none;border-radius:7px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ הוסף קטגוריה</button>
     </div>
 
     <div style="background:#f8fafc;border:1px solid #edf2f7;border-radius:14px;padding:16px;margin-bottom:14px">
@@ -362,42 +358,29 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
       <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:12px;background:white">
         ${manualIncomeRows || emptyRow('אין הכנסות נוספות')}
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-        <div style="flex:2;min-width:140px">
-          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">תיאור</div>
-          <input type="text" id="new-income-desc" placeholder="לדוגמה: תרומה" class="modal-input">
-        </div>
-        <div style="flex:1;min-width:80px">
-          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
-          <input type="number" id="new-income-amount" placeholder="0" min="0" class="modal-input">
-        </div>
-        <button onclick="addTournamentEntry('${id}','income')" style="background:#4a5568;color:white;border:none;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ הוסף</button>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px">
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">תיאור</div>
+          <input type="text" id="new-income-desc" placeholder="לדוגמה: תרומה" class="modal-input" style="width:100%"></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
+          <input type="number" id="new-income-amount" placeholder="0" min="0" class="modal-input" style="width:100%"></div>
       </div>
+      <button onclick="addTournamentEntry('${id}','income')" style="width:100%;background:#4a5568;color:white;border:none;border-radius:7px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ הוסף</button>
     </div>
 
     <div style="background:#f8fafc;border:1px solid #edf2f7;border-radius:14px;padding:16px">
       <div style="font-size:14px;font-weight:800;color:#c53030;margin-bottom:12px">📤 הוצאות</div>
       ${expenseGroupsHTML || `<div style="border:1px solid #e2e8f0;border-radius:10px;background:white;margin-bottom:12px">${emptyRow('אין הוצאות רשומות עדיין')}</div>`}
-      <div style="display:flex;gap:8px;margin-top:${expenseGroupsHTML?'12px':'0'};flex-wrap:wrap;align-items:flex-end">
-        <div style="flex:2;min-width:130px">
-          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">קטגוריה</div>
-          <select id="new-expense-cat" class="modal-input">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:${expenseGroupsHTML?'12px':'0'};margin-bottom:10px">
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">קטגוריה</div>
+          <select id="new-expense-cat" class="modal-input" style="width:100%">
             ${EXPENSE_CATEGORIES.map(c=>`<option value="${c}">${EXPENSE_ICONS[c]||'📌'} ${c}</option>`).join('')}
-          </select>
-        </div>
-        <div style="flex:3;min-width:140px">
-          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">תיאור</div>
-          <input type="text" id="new-expense-desc" placeholder="פירוט (לדוגמה: שופט ראשי)" class="modal-input">
-        </div>
-        <div style="flex:1;min-width:70px">
-          <div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
-          <input type="number" id="new-expense-amount" placeholder="0" min="0" class="modal-input">
-        </div>
-        <button onclick="addTournamentEntry('${id}','expenses')"
-          style="background:#c53030;color:white;border:none;border-radius:7px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;align-self:flex-end">
-          + הוסף
-        </button>
+          </select></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">תיאור</div>
+          <input type="text" id="new-expense-desc" placeholder="פירוט (לדוגמה: שופט ראשי)" class="modal-input" style="width:100%"></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
+          <input type="number" id="new-expense-amount" placeholder="0" min="0" class="modal-input" style="width:100%"></div>
       </div>
+      <button onclick="addTournamentEntry('${id}','expenses')" style="width:100%;background:#c53030;color:white;border:none;border-radius:7px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ הוסף</button>
     </div>`;
 }
 
