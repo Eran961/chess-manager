@@ -40,8 +40,19 @@ function calcTournamentExpenses(t) {
   return total;
 }
 
+const TOURNAMENT_FORMATS = { single: 'חד יומית', weekly: 'שבועית' };
+
+function formatTournamentDate(t, style) {
+  if (!t.startDate) return style==='short' ? '' : '—';
+  const opts = style==='short' ? {day:'numeric',month:'short'} : {day:'numeric',month:'long',year:'numeric'};
+  const start = new Date(t.startDate+'T12:00:00').toLocaleDateString('he-IL',opts);
+  if (!t.endDate || t.endDate === t.startDate) return start;
+  const end = new Date(t.endDate+'T12:00:00').toLocaleDateString('he-IL',opts);
+  return `${start} – ${end}`;
+}
+
 function buildTournamentsHTML() {
-  const list = Object.entries(_tournaments).sort((a,b) => (b[1].date||'').localeCompare(a[1].date||''));
+  const list = Object.entries(_tournaments).sort((a,b) => (b[1].startDate||'').localeCompare(a[1].startDate||''));
   const statusMeta = {
     upcoming: { label: 'עתידי',   color: '#3b82f6' },
     active:   { label: 'פעיל',    color: '#4ade80' },
@@ -53,7 +64,7 @@ function buildTournamentsHTML() {
     const expenses = calcTournamentExpenses(t);
     const balance = income - expenses;
     const sm = statusMeta[t.status||'upcoming'];
-    const date = t.date ? new Date(t.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'}) : '—';
+    const date = formatTournamentDate(t);
     const balColor = balance >= 0 ? '#4ade80' : '#f87171';
     return `
       <div onclick="openTournamentDetail('${id}')" style="border:1px solid var(--border);border-radius:14px;padding:18px 22px;cursor:pointer;background:var(--bg-card);transition:transform .15s,box-shadow .15s"
@@ -61,7 +72,7 @@ function buildTournamentsHTML() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px">
           <div style="min-width:0">
             <div style="font-size:16px;font-weight:800;color:var(--text-primary)">${t.name}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">🗓 ${date}${t.type?' · '+t.type:''}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">🗓 ${date}${t.format?' · '+TOURNAMENT_FORMATS[t.format]:''}${t.type?' · '+t.type:''}</div>
           </div>
           <span style="background:${sm.color}22;color:${sm.color};border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;white-space:nowrap">${sm.label}</span>
         </div>
@@ -98,10 +109,16 @@ function openCreateTournamentModal() {
           <div class="modal-field"><label>שם התחרות <span style="color:#e53e3e">*</span></label>
             <input type="text" id="ct-name" placeholder='לדוגמה: אליפות ראשל"צ 2026' class="modal-input" autofocus></div>
           <div style="display:flex;gap:10px">
-            <div class="modal-field" style="flex:1"><label>תאריך <span style="color:#e53e3e">*</span></label>
-              <input type="date" id="ct-date" value="${today}" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>תאריך התחלה <span style="color:#e53e3e">*</span></label>
+              <input type="date" id="ct-start-date" value="${today}" class="modal-input"></div>
+            <div class="modal-field" style="flex:1"><label>תאריך סיום</label>
+              <input type="date" id="ct-end-date" class="modal-input"></div>
+          </div>
+          <div style="display:flex;gap:10px">
             <div class="modal-field" style="flex:1"><label>סוג</label>
               <select id="ct-type" class="modal-input">${TOURNAMENT_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+            <div class="modal-field" style="flex:1"><label>מבנה</label>
+              <select id="ct-format" class="modal-input">${Object.entries(TOURNAMENT_FORMATS).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div>
           </div>
           <div class="modal-field"><label>הערות</label>
             <textarea id="ct-notes" rows="2" class="modal-input" style="resize:vertical;font-family:inherit"></textarea></div>
@@ -114,10 +131,13 @@ window.openCreateTournamentModal = openCreateTournamentModal;
 
 async function saveNewTournament() {
   const name = document.getElementById('ct-name')?.value?.trim();
-  const date = document.getElementById('ct-date')?.value;
+  const startDate = document.getElementById('ct-start-date')?.value;
+  const endDate = document.getElementById('ct-end-date')?.value || startDate;
   if (!name) { showToast('יש להזין שם תחרות', 'error'); return; }
-  if (!date) { showToast('יש לבחור תאריך', 'error'); return; }
-  const data = { name, date, type: document.getElementById('ct-type')?.value||TOURNAMENT_TYPES[0],
+  if (!startDate) { showToast('יש לבחור תאריך התחלה', 'error'); return; }
+  const data = { name, startDate, endDate,
+    type: document.getElementById('ct-type')?.value||TOURNAMENT_TYPES[0],
+    format: document.getElementById('ct-format')?.value||'single',
     notes: document.getElementById('ct-notes')?.value?.trim()||'',
     status: 'upcoming', createdAt: new Date().toISOString() };
   try {
@@ -141,7 +161,7 @@ function openTournamentDetail(id) {
     <button onclick="switchTournamentTab('${id}','${tb.key}')"
       style="padding:12px 18px;border:none;background:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border-bottom:3px solid ${sub===tb.key?'#f97316':'transparent'};color:${sub===tb.key?'#f97316':'#a0aec0'};margin-bottom:-2px;transition:color .15s">
       ${tb.label}</button>`).join('');
-  const date = t.date ? new Date(t.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'}) : '';
+  const date = formatTournamentDate(t);
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
       <div class="profile-modal-box" style="width:640px;max-width:calc(100vw - 24px)">
@@ -184,12 +204,16 @@ function renderTournamentDetails(id, t) {
   return `
     <div style="display:flex;flex-direction:column;gap:16px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">שם</label>
+        <div class="modal-field" style="grid-column:1/-1"><label style="font-size:12px;color:#718096;font-weight:600">שם</label>
           <input type="text" id="te-name" value="${t.name||''}" class="modal-input"></div>
-        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">תאריך</label>
-          <input type="date" id="te-date" value="${t.date||''}" class="modal-input"></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">תאריך התחלה</label>
+          <input type="date" id="te-start-date" value="${t.startDate||''}" class="modal-input"></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">תאריך סיום</label>
+          <input type="date" id="te-end-date" value="${t.endDate||''}" class="modal-input"></div>
         <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">סוג</label>
           <select id="te-type" class="modal-input">${TOURNAMENT_TYPES.map(tp=>`<option ${t.type===tp?'selected':''}>${tp}</option>`).join('')}</select></div>
+        <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">מבנה</label>
+          <select id="te-format" class="modal-input">${Object.entries(TOURNAMENT_FORMATS).map(([v,l])=>`<option value="${v}" ${(t.format||'single')===v?'selected':''}>${l}</option>`).join('')}</select></div>
         <div class="modal-field"><label style="font-size:12px;color:#718096;font-weight:600">סטטוס</label>
           <select id="te-status" class="modal-input">${statusOpts}</select></div>
       </div>
@@ -203,9 +227,12 @@ function renderTournamentDetails(id, t) {
 }
 
 async function saveTournamentDetails(id) {
+  const startDate = document.getElementById('te-start-date')?.value||_tournaments[id].startDate;
   const updates = { name: document.getElementById('te-name')?.value?.trim()||_tournaments[id].name,
-    date: document.getElementById('te-date')?.value||_tournaments[id].date,
+    startDate,
+    endDate: document.getElementById('te-end-date')?.value||startDate,
     type: document.getElementById('te-type')?.value||_tournaments[id].type,
+    format: document.getElementById('te-format')?.value||_tournaments[id].format||'single',
     status: document.getElementById('te-status')?.value||_tournaments[id].status,
     notes: document.getElementById('te-notes')?.value?.trim()||'' };
   try {

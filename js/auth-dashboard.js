@@ -104,7 +104,7 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
   // ── Tournaments ────────────────────────────────────────
   const tournList = Object.values(_tournaments||{});
   const activeTourns   = tournList.filter(t => t.status === 'active');
-  const upcomingTourns = tournList.filter(t => t.status === 'upcoming').sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  const upcomingTourns = tournList.filter(t => t.status === 'upcoming').sort((a,b) => (a.startDate||'').localeCompare(b.startDate||''));
   const totalBalance   = tournList.reduce((sum, t) => sum + (typeof calcTournamentIncome==='function' ? calcTournamentIncome(t) - calcTournamentExpenses(t) : 0), 0);
 
   // ── Friday leagues top-3 ───────────────────────────────
@@ -222,7 +222,7 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
               </div>`).join('')}
               ${upcomingTourns.length>0?`<div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:13px;color:#4a5568">⏳ ${upcomingTourns[0].name}</span>
-                <span style="font-size:12px;color:#718096">${upcomingTourns[0].date?new Date(upcomingTourns[0].date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'short'}):''}</span>
+                <span style="font-size:12px;color:#718096">${formatTournamentDate(upcomingTourns[0],'short')}</span>
               </div>`:''}
               <div style="border-top:1px solid #f0f4f8;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:12px;color:#718096">יתרה כוללת</span>
@@ -268,7 +268,7 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
               </div>`).join('')}
               ${upcomingTourns.length>0?`<div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:13px;color:#4a5568">⏳ ${upcomingTourns[0].name}</span>
-                <span style="font-size:12px;color:#718096">${upcomingTourns[0].date?new Date(upcomingTourns[0].date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'short'}):''}</span>
+                <span style="font-size:12px;color:#718096">${formatTournamentDate(upcomingTourns[0],'short')}</span>
               </div>`:''}
               <div style="border-top:1px solid #f0f4f8;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:12px;color:#718096">יתרה כוללת</span>
