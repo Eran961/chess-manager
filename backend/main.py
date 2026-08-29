@@ -603,14 +603,18 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
 
     # ── Name + gender: the section title is "פרטי שחקן" (male) or "פרטי שחקנית"
     # (female) — Hebrew grammatical gender on the word "player" itself doubles
-    # as the only explicit gender signal on this page.
+    # as the only explicit gender signal on this page. NOTE: the male form ends
+    # in final-nun (ן, U+05DF) while the female form's נ mid-word is the regular
+    # nun (U+05E0) — these are different characters, so "שחקן" is NOT a substring
+    # of "שחקנית" despite looking similar. Compare the two full forms separately,
+    # never via "in"/prefix-sharing across them.
     for heading in soup.find_all(["h1", "h2", "h3", "h4"]):
         txt = clean_text(heading)
         if not txt:
             continue
-        if "פרטי שחקן" in txt:
+        if txt in ("פרטי שחקן", "פרטי שחקנית"):
             if "gender" not in profile:
-                profile["gender"] = "נקבה" if "שחקנית" in txt else "זכר"
+                profile["gender"] = "נקבה" if txt == "פרטי שחקנית" else "זכר"
             continue
         if len(txt) >= 2:
             profile["name"] = txt
@@ -620,9 +624,12 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
         form_table_fb = soup.find("table", id=re.compile(r"PlayerFormView$", re.I))
         if form_table_fb:
             blob = clean_text(form_table_fb.find("td") or form_table_fb)
-            if "gender" not in profile and "פרטי שחקן" in blob:
-                profile["gender"] = "נקבה" if "פרטי שחקנית" in blob else "זכר"
-            m = re.search(r"פרטי שחקנ(?:ית|)\s+(.+?)\s+(?:דרגה|מספר שחקן)", blob)
+            if "gender" not in profile:
+                if "פרטי שחקנית" in blob:
+                    profile["gender"] = "נקבה"
+                elif "פרטי שחקן" in blob:
+                    profile["gender"] = "זכר"
+            m = re.search(r"פרטי (?:שחקן|שחקנית)\s+(.+?)\s+(?:דרגה|מספר שחקן)", blob)
             if m:
                 profile["name"] = m.group(1).strip()
 
