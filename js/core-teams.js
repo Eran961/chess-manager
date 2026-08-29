@@ -1103,61 +1103,42 @@ async function lookupFedPlayer() {
   btn.disabled = true;
   btn.textContent = '⏳';
   statusEl.style.color = '#666';
-  statusEl.textContent = 'מחפש...';
+  statusEl.textContent = '⏳ מחפש... (ייתכן עיכוב של עד דקה אם השרת נרדם)';
 
   try {
-    const targetUrl = `https://www.chess.org.il/Players/Player.aspx?Id=${parseInt(fedId)}`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const html = await res.text();
+    const res = await fetch(`https://chess-manager-7wkr.onrender.com/api/player-profile?fedId=${parseInt(fedId)}`,
+      { signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`שגיאת שרת (${res.status})`);
+    const data = await res.json();
 
-    // Check for runtime error page (player not found)
-    if (html.includes('Runtime Error') || html.includes('Object reference not set')) {
-      throw new Error('שחקן לא נמצא');
-    }
+    if (!data.name) throw new Error('שחקן לא נמצא — בדוק את המספר');
 
-    // Extract name from <title>
-    const titleMatch = html.match(/<title>\s*([^\/\|<]+)/);
-    if (!titleMatch) throw new Error('לא ניתן לחלץ שם');
-    const fullName = titleMatch[1].trim();
-    const parts = fullName.split(/\s+/);
-    if (parts.length < 2) throw new Error('שם לא תקין');
+    const parts = data.name.trim().split(/\s+/);
     const firstName = parts[0];
-    const lastName = parts.slice(1).join(' ');
+    const lastName = parts.slice(1).join(' ') || '';
 
-    // Extract birth year — appears near שנת לידה
-    const birthMatch = html.match(/שנת לידה[\s\S]{0,300}<span[^>]*>\s*(\d{4})\s*<\/span>/);
-    const birthYear = birthMatch ? parseInt(birthMatch[1]) : null;
-
-    // Extract Israeli rating: <li>מד כושר ישראלי<span>: 2043</span>
-    let rating = null;
-    const ratingMatch = html.match(/מד כושר ישראלי<span>:\s*(\d+)<\/span>/);
-    if (ratingMatch) rating = parseInt(ratingMatch[1]);
-
-    // Extract card expiry: <li>תוקף כרטיס שחמטאי<span> 31/12/2021</span>
+    // Backend returns card expiry as DD/MM/YYYY — convert to YYYY-MM-DD for the date input
     let cardExpiry = null;
-    const expiryMatch = html.match(/תוקף כרטיס שחמטאי<span>\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*<\/span>/);
-    if (expiryMatch) {
-      // store as YYYY-MM-DD
-      cardExpiry = `${expiryMatch[3]}-${expiryMatch[2].padStart(2,'0')}-${expiryMatch[1].padStart(2,'0')}`;
+    if (data.cardExpiry) {
+      const [d, m, y] = data.cardExpiry.split('/');
+      if (d && m && y) cardExpiry = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
     }
 
     // Fill the form
     document.getElementById('mf-first').value = firstName;
     document.getElementById('mf-last').value = lastName;
-    if (birthYear) {
-      document.getElementById('mf-year').value = birthYear;
-      updateModalAge(birthYear);
+    if (data.birthYear) {
+      document.getElementById('mf-year').value = data.birthYear;
+      updateModalAge(data.birthYear);
     }
-    if (rating) document.getElementById('mf-rating').value = rating;
+    if (data.rating) document.getElementById('mf-rating').value = data.rating;
     if (cardExpiry) document.getElementById('mf-card-expiry').value = cardExpiry;
 
     statusEl.style.color = '#276749';
-    statusEl.textContent = `✅ נמצא: ${fullName}${birthYear ? ` (${birthYear})` : ''}${rating ? ` | מד כושר: ${rating}` : ''}${cardExpiry ? ` | כרטיס עד: ${formatDate(cardExpiry)}` : ''}`;
+    statusEl.textContent = `✅ נמצא: ${data.name}${data.birthYear ? ` (${data.birthYear})` : ''}${data.rating ? ` | מד כושר: ${data.rating}` : ''}${cardExpiry ? ` | כרטיס עד: ${formatDate(cardExpiry)}` : ''}`;
   } catch (err) {
     statusEl.style.color = '#e53e3e';
-    statusEl.textContent = `❌ ${err.message || 'שגיאה בשליפה'}`;
+    statusEl.textContent = `❌ ${err.name === 'TimeoutError' ? 'תם הזמן — נסה שוב' : (err.message || 'שגיאה בשליפה')}`;
   } finally {
     btn.disabled = false;
     btn.textContent = '🔍 שלוף';

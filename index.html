@@ -587,6 +587,18 @@ if(localStorage.getItem('ccm_loggedIn')){
       </div>
     </div>
     <div class="modal-body">
+      <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:10px;padding:14px;margin-bottom:20px">
+        <label style="font-size:13px;font-weight:700;color:#2b6cb0;display:block;margin-bottom:2px">מספר שחקן באיגוד</label>
+        <div style="font-size:11px;color:#4a5568;margin-bottom:8px">לא חובה — רק אם כבר רשום/ה באיגוד. שליפה תמלא אוטומטית את הפרטים למטה.</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="mf-fed" placeholder="לדוגמה: 123456" inputmode="numeric" style="flex:1">
+          <button type="button" id="btn-fed-lookup" onclick="lookupFedPlayer()"
+            style="padding:9px 14px;background:#2b6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;font-family:inherit">
+            🔍 שלוף
+          </button>
+        </div>
+        <div id="fed-lookup-status" style="font-size:12px;margin-top:6px;min-height:16px"></div>
+      </div>
       <div class="modal-field">
         <label>שם פרטי <span class="required">*</span></label>
         <input type="text" id="mf-first" placeholder="שם פרטי">
@@ -602,39 +614,31 @@ if(localStorage.getItem('ccm_loggedIn')){
         <div class="age-hint" id="mf-age"></div>
       </div>
       <div class="modal-field">
-        <label>מין <span class="required">*</span></label>
-        <div class="pay-select" id="mf-gender-select">
-          <button type="button" class="pay-btn" id="mf-gender-m" onclick="selectModalGender('m')">👦 זכר</button>
-          <button type="button" class="pay-btn" id="mf-gender-f" onclick="selectModalGender('f')">👧 נקבה</button>
-        </div>
-        <input type="hidden" id="mf-gender" value="">
-      </div>
-      <div class="modal-field">
-        <label>טלפון הורה <span class="required">*</span></label>
-        <input type="tel" id="mf-phone" placeholder="05X-XXXXXXX" dir="ltr">
-      </div>
-      <div class="modal-field">
-        <label>מייל הורה <span class="required">*</span></label>
-        <input type="email" id="mf-email" placeholder="example@mail.com" dir="ltr">
-      </div>
-      <div class="modal-field" style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0">
-        <label>מספר שחקן</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" id="mf-fed" placeholder="לא חובה" inputmode="numeric" style="flex:1">
-          <button type="button" id="btn-fed-lookup" onclick="lookupFedPlayer()"
-            style="padding:8px 12px;background:#2b6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap;font-family:inherit">
-            🔍 שלוף
-          </button>
-        </div>
-        <div id="fed-lookup-status" style="font-size:12px;margin-top:4px;min-height:16px"></div>
-      </div>
-      <div class="modal-field">
         <label>מד כושר ישראלי</label>
         <input type="text" id="mf-rating" placeholder="ממולא אוטומטית בשליפה" inputmode="numeric">
       </div>
       <div class="modal-field">
         <label>תוקף כרטיס שחמטאי</label>
         <input type="date" id="mf-card-expiry" placeholder="ממולא אוטומטית בשליפה">
+      </div>
+      <div style="margin-top:22px;padding-top:14px;border-top:1px dashed #e2e8f0">
+        <div style="font-size:12px;color:#a0aec0;margin-bottom:14px">📌 הפרטים הבאים לא קיימים באתר האיגוד — נא למלא</div>
+        <div class="modal-field">
+          <label>מין <span class="required">*</span></label>
+          <div class="pay-select" id="mf-gender-select">
+            <button type="button" class="pay-btn" id="mf-gender-m" onclick="selectModalGender('m')">👦 זכר</button>
+            <button type="button" class="pay-btn" id="mf-gender-f" onclick="selectModalGender('f')">👧 נקבה</button>
+          </div>
+          <input type="hidden" id="mf-gender" value="">
+        </div>
+        <div class="modal-field">
+          <label>טלפון הורה <span class="required">*</span></label>
+          <input type="tel" id="mf-phone" placeholder="05X-XXXXXXX" dir="ltr">
+        </div>
+        <div class="modal-field">
+          <label>מייל הורה <span class="required">*</span></label>
+          <input type="email" id="mf-email" placeholder="example@mail.com" dir="ltr">
+        </div>
       </div>
     </div>
     <div class="modal-actions">
