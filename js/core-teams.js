@@ -735,7 +735,7 @@ function toggleAddTeamPlayerForm(teamIdx, subTeamIdx) {
   const sg = t.subGroups[subTeamIdx];
   const title = (t.subGroups.length > 1 && sg.time) ? `${t.name} — ${sg.time}` : t.name;
   document.getElementById('modalTitle').textContent = title;
-  ['mf-first','mf-last','mf-year','mf-fed','mf-rating','mf-card-expiry','mf-phone','mf-email'].forEach(id => {
+  ['mf-first','mf-last','mf-year','mf-fed','mf-rating','mf-card-expiry','mf-phone','mf-parent-name'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.value = ''; el.classList.remove('input-error'); }
   });
@@ -743,6 +743,9 @@ function toggleAddTeamPlayerForm(teamIdx, subTeamIdx) {
   if (ageEl) ageEl.textContent = '';
   const statusEl = document.getElementById('fed-lookup-status');
   if (statusEl) statusEl.textContent = '';
+  document.getElementById('mf-gender').value = '';
+  document.getElementById('mf-gender-m').className = 'pay-btn';
+  document.getElementById('mf-gender-f').className = 'pay-btn';
   document.getElementById('addPlayerModal').classList.add('open');
   setTimeout(() => document.getElementById('mf-first')?.focus(), 50);
 }
@@ -1062,7 +1065,7 @@ function toggleAddPlayerForm(groupIdx, subGroupIdx) {
   const sg = g.subGroups[subGroupIdx];
   const title = sg.time ? `${g.name} — ${sg.time}` : g.name;
   document.getElementById('modalTitle').textContent = title;
-  ['mf-first','mf-last','mf-year','mf-fed','mf-rating','mf-card-expiry','mf-phone','mf-email'].forEach(id => {
+  ['mf-first','mf-last','mf-year','mf-fed','mf-rating','mf-card-expiry','mf-phone','mf-parent-name'].forEach(id => {
     const el = document.getElementById(id);
     el.value = '';
     el.classList.remove('input-error');
@@ -1133,9 +1136,10 @@ async function lookupFedPlayer() {
     }
     if (data.rating) document.getElementById('mf-rating').value = data.rating;
     if (cardExpiry) document.getElementById('mf-card-expiry').value = cardExpiry;
+    if (data.gender === 'זכר' || data.gender === 'נקבה') selectModalGender(data.gender === 'נקבה' ? 'f' : 'm');
 
     statusEl.style.color = '#276749';
-    statusEl.textContent = `✅ נמצא: ${data.name}${data.birthYear ? ` (${data.birthYear})` : ''}${data.rating ? ` | מד כושר: ${data.rating}` : ''}${cardExpiry ? ` | כרטיס עד: ${formatDate(cardExpiry)}` : ''}`;
+    statusEl.textContent = `✅ נמצא: ${data.name}${data.birthYear ? ` (${data.birthYear})` : ''}${data.gender ? ` | ${data.gender}` : ''}${data.rating ? ` | מד כושר: ${data.rating}` : ''}${cardExpiry ? ` | כרטיס עד: ${formatDate(cardExpiry)}` : ''}`;
   } catch (err) {
     statusEl.style.color = '#e53e3e';
     statusEl.textContent = `❌ ${err.name === 'TimeoutError' ? 'תם הזמן — נסה שוב' : (err.message || 'שגיאה בשליפה')}`;
@@ -1152,9 +1156,9 @@ async function submitAddPlayer() {
   const fedEl   = document.getElementById('mf-fed');
 
   const phoneEl  = document.getElementById('mf-phone');
-  const emailEl  = document.getElementById('mf-email');
+  const parentNameEl = document.getElementById('mf-parent-name');
   const genderEl = document.getElementById('mf-gender');
-  [firstEl, lastEl, yearEl, phoneEl, emailEl].forEach(el => el.classList.remove('input-error'));
+  [firstEl, lastEl, yearEl, phoneEl, parentNameEl].forEach(el => el.classList.remove('input-error'));
   document.getElementById('mf-gender-select')?.classList.remove('input-error');
 
   const firstName = firstEl.value.trim();
@@ -1176,14 +1180,14 @@ async function submitAddPlayer() {
     valid = false;
   }
   if (!phoneEl.value.trim()) { phoneEl.classList.add('input-error'); if (valid) phoneEl.focus(); valid = false; }
-  if (!emailEl.value.trim()) { emailEl.classList.add('input-error'); if (valid) emailEl.focus(); valid = false; }
+  if (!parentNameEl.value.trim()) { parentNameEl.classList.add('input-error'); if (valid) parentNameEl.focus(); valid = false; }
   if (!valid) return;
 
   const fedId = fedVal ? (parseInt(fedVal) || null) : null;
   const joinDate = new Date().toISOString().split('T')[0];
   const gender = genderEl.value || null;
   const parentPhone = phoneEl.value.trim() || null;
-  const parentEmail = emailEl.value.trim() || null;
+  const parentName = parentNameEl.value.trim() || null;
   const ratingRaw = document.getElementById('mf-rating').value.trim();
   const rating = ratingRaw ? (parseInt(ratingRaw) || null) : null;
   const cardExpiry = document.getElementById('mf-card-expiry').value || null;
@@ -1195,13 +1199,13 @@ async function submitAddPlayer() {
     const subTeamIdx = _modalSubGroupIdx;
     const t  = teams[teamIdx];
     const sg = t.subGroups[subTeamIdx];
-    const newPlayer = { name: `${firstName} ${lastName}`, firstName, lastName, birthYear, fedId, joinDate, rating, cardExpiry, gender: gender || null, paymentStatus: 'trial', parentPhone, parentEmail, hidden: false };
+    const newPlayer = { name: `${firstName} ${lastName}`, firstName, lastName, birthYear, fedId, joinDate, rating, cardExpiry, gender: gender || null, paymentStatus: 'trial', parentPhone, parentName, hidden: false };
     sg.players.push(newPlayer);
     document.getElementById('addPlayerModal').classList.remove('open');
     if (db) {
       try {
         const ref = await db.ref(`team_players/${t.id}/${subTeamIdx}`).push(
-          { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null, parentPhone: parentPhone || null, parentEmail: parentEmail || null, paymentStatus: 'trial' }
+          { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null, gender: gender || null, parentPhone: parentPhone || null, parentName: parentName || null, paymentStatus: 'trial' }
         );
         newPlayer._key = ref.key;
       } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); }
@@ -1212,7 +1216,7 @@ async function submitAddPlayer() {
     return;
   }
 
-  const player = { name: `${firstName} ${lastName}`, birthYear, fedId, joinDate, added: true, parentPhone, parentEmail, rating, cardExpiry };
+  const player = { name: `${firstName} ${lastName}`, birthYear, fedId, joinDate, added: true, gender, parentPhone, parentName, rating, cardExpiry };
   const groupIdx = _modalGroupIdx;
   const subGroupIdx = _modalSubGroupIdx;
 
@@ -1223,10 +1227,10 @@ async function submitAddPlayer() {
     const playerIdx = groups[groupIdx].subGroups[subGroupIdx].players.length - 1;
     await Promise.all([
       db.ref(`extra_players/${g.id}/${subGroupIdx}`).push(
-        { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null }
+        { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null, gender: gender || null }
       ),
-      (parentPhone || parentEmail)
-        ? db.ref(`player_contacts/${g.id}/${subGroupIdx}/${playerIdx}`).set({ parentPhone: parentPhone || null, parentEmail: parentEmail || null })
+      (parentPhone || parentName)
+        ? db.ref(`player_contacts/${g.id}/${subGroupIdx}/${playerIdx}`).set({ parentPhone: parentPhone || null, parentName: parentName || null })
         : Promise.resolve(),
       db.ref(`history/${g.id}/${subGroupIdx}`).push({ type: 'joined', playerName: `${lastName} ${firstName}`, timestamp: Date.now() }),
     ]);

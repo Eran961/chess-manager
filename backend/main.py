@@ -601,10 +601,18 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     profile: dict = {"fedId": fed_id}
 
-    # ── Name: first heading that isn't the section title "פרטי שחקן" ──────────────
+    # ── Name + gender: the section title is "פרטי שחקן" (male) or "פרטי שחקנית"
+    # (female) — Hebrew grammatical gender on the word "player" itself doubles
+    # as the only explicit gender signal on this page.
     for heading in soup.find_all(["h1", "h2", "h3", "h4"]):
         txt = clean_text(heading)
-        if txt and "פרטי שחקן" not in txt and len(txt) >= 2:
+        if not txt:
+            continue
+        if "פרטי שחקן" in txt:
+            if "gender" not in profile:
+                profile["gender"] = "נקבה" if "שחקנית" in txt else "זכר"
+            continue
+        if len(txt) >= 2:
             profile["name"] = txt
             break
     # Fallback: extract from the PlayerFormView text blob
@@ -612,7 +620,9 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
         form_table_fb = soup.find("table", id=re.compile(r"PlayerFormView$", re.I))
         if form_table_fb:
             blob = clean_text(form_table_fb.find("td") or form_table_fb)
-            m = re.search(r"פרטי שחקן\s+(.+?)\s+(?:דרגה|מספר שחקן)", blob)
+            if "gender" not in profile and "פרטי שחקן" in blob:
+                profile["gender"] = "נקבה" if "פרטי שחקנית" in blob else "זכר"
+            m = re.search(r"פרטי שחקנ(?:ית|)\s+(.+?)\s+(?:דרגה|מספר שחקן)", blob)
             if m:
                 profile["name"] = m.group(1).strip()
 
