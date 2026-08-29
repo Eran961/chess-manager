@@ -1834,6 +1834,10 @@
       scrollbar-width: none !important;
       flex: 1 !important;
       min-width: 0 !important;
+      /* Fade both edges so a tab truncated by the scroll boundary reads as
+         "scroll for more" instead of looking like it's cut off/broken. */
+      -webkit-mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%) !important;
+      mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%) !important;
     }
     .nav-tabs-scroll::-webkit-scrollbar { display: none; }
     .nav-tab-login, .btn-theme-toggle { flex-shrink: 0 !important; }

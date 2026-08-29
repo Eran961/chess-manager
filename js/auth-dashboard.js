@@ -364,16 +364,17 @@ async function handleContactSubmit(e) {
 function toggleTheme() {
   const isLight = document.body.classList.toggle('light-mode');
   const btn = document.getElementById('theme-toggle');
-  btn.textContent = isLight ? '🌙 מצב כהה' : '☀️ מצב בהיר';
+  btn.textContent = isLight ? '🌙' : '☀️';
+  btn.title = isLight ? 'מעבר למצב כהה' : 'מעבר למצב בהיר';
   localStorage.setItem('theme', isLight ? 'light' : 'dark');
 }
 (function() {
   const btn = document.getElementById('theme-toggle');
   if (localStorage.getItem('theme') === 'light') {
     document.body.classList.add('light-mode');
-    if (btn) btn.textContent = '🌙 מצב כהה';
+    if (btn) { btn.textContent = '🌙'; btn.title = 'מעבר למצב כהה'; }
   } else {
-    if (btn) btn.textContent = '☀️ מצב בהיר';
+    if (btn) { btn.textContent = '☀️'; btn.title = 'מעבר למצב בהיר'; }
   }
 })();
 
