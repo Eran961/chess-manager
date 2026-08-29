@@ -1031,6 +1031,8 @@ async function loadSiteContent() {
     if (d.achievements) renderAchievementsContent(d.achievements);
     if (d.testimonials) renderTestimonialsContent(d.testimonials);
     if (d.gallery) renderGalleryContent(d.gallery);
+    if (d.tournaments) renderTournamentsContent(d.tournaments);
+    if (d.contact) renderContactContent(d.contact);
   } catch(e) { console.warn('loadSiteContent:', e); }
 }
 window.loadSiteContent = loadSiteContent;
@@ -1101,6 +1103,58 @@ function renderGalleryContent(data) {
   }).join('');
 }
 
+function renderTournamentsContent(data) {
+  const grid = document.getElementById('tourn-cards-grid');
+  if (grid && data.cards) {
+    const items = Object.values(data.cards).filter(function(c){ return c.active !== false; });
+    items.sort(function(a,b){ return (a.order||99)-(b.order||99); });
+    grid.innerHTML = items.map(function(c) {
+      return '<div class="tourn-card">' +
+        '<div class="tourn-card-icon">' + (c.icon||'♟️') + '</div>' +
+        '<div class="tourn-card-name">' + (c.name||'') + '</div>' +
+        '<div class="tourn-card-when">' + (c.when||'') + '</div>' +
+        '<div class="tourn-card-desc">' + (c.desc||'') + '</div>' +
+        '<span class="tourn-card-badge badge-' + (c.badgeType||'open') + '">' + (c.badge||'') + '</span>' +
+        '</div>';
+    }).join('');
+  }
+  const linkText = document.getElementById('tourn-fed-link-text');
+  if (linkText && data.fedLinkText) linkText.textContent = data.fedLinkText;
+  const linkBtn = document.getElementById('tourn-fed-link-btn');
+  if (linkBtn && data.fedLinkLabel) linkBtn.textContent = '🔗 ' + data.fedLinkLabel;
+}
+
+function renderContactContent(data) {
+  if (data.waPhone) {
+    const link = document.getElementById('cc-wa-link');
+    if (link) link.href = 'https://wa.me/' + data.waPhone + (data.waMessage ? '?text=' + encodeURIComponent(data.waMessage) : '');
+  }
+  if (data.waDisplayPhone) {
+    const el = document.getElementById('cc-wa-display-phone');
+    if (el) el.textContent = data.waDisplayPhone;
+  }
+  if (data.address) {
+    const addrEl = document.getElementById('cc-address');
+    if (addrEl) addrEl.textContent = data.address;
+    const wazeLink = document.getElementById('cc-waze-link');
+    if (wazeLink) wazeLink.href = 'https://waze.com/ul?q=' + encodeURIComponent(data.address) + '&navigate=yes';
+    const mapFrame = document.getElementById('cc-map-iframe');
+    if (mapFrame) mapFrame.src = 'https://maps.google.com/maps?q=' + encodeURIComponent(data.address) + '&output=embed&hl=he&z=16';
+  }
+  if (data.hours) {
+    const hoursEl = document.getElementById('cc-hours');
+    if (hoursEl) hoursEl.textContent = data.hours;
+  }
+  if (data.facebookUrl) {
+    const fb = document.getElementById('cc-fb-link');
+    if (fb) fb.href = data.facebookUrl;
+  }
+  if (data.instagramUrl) {
+    const ig = document.getElementById('cc-ig-link');
+    if (ig) ig.href = data.instagramUrl;
+  }
+}
+
 // ---- Admin ----
 window.loadSiteContentAdmin = async function() {
   const el = document.getElementById('site-content-admin-container');
@@ -1109,11 +1163,11 @@ window.loadSiteContentAdmin = async function() {
   let d = {};
   try { const s = await db.ref('siteContent').get(); if (s.exists()) d = s.val(); } catch(e) {}
 
-  el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">📝 ניהול עמוד הבית</h3>' +
+  el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">📝 ניהול תוכן האתר</h3>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">' +
-    ['about','achievements','testimonials','gallery'].map(function(sec) {
-      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה'};
-      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸'};
+    ['about','achievements','testimonials','gallery','tournaments','contact'].map(function(sec) {
+      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה',tournaments:'תחרויות',contact:'צרו קשר'};
+      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸',tournaments:'🏆',contact:'☎️'};
       return '<button onclick="showSiteSec(\'' + sec + '\')" id="sec-btn-' + sec + '" style="padding:9px 18px;border-radius:8px;border:2px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">' +
         icons[sec] + ' ' + labels[sec] + '</button>';
     }).join('') +
@@ -1121,7 +1175,9 @@ window.loadSiteContentAdmin = async function() {
     '<div id="sec-about" class="site-sec-panel" style="display:none">' + renderAboutAdmin(d.about) + '</div>' +
     '<div id="sec-achievements" class="site-sec-panel" style="display:none">' + renderAchievementsAdmin(d.achievements) + '</div>' +
     '<div id="sec-testimonials" class="site-sec-panel" style="display:none">' + renderTestimonialsAdmin(d.testimonials) + '</div>' +
-    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>';
+    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>' +
+    '<div id="sec-tournaments" class="site-sec-panel" style="display:none">' + renderTournamentsAdmin(d.tournaments) + '</div>' +
+    '<div id="sec-contact" class="site-sec-panel" style="display:none">' + renderContactAdmin(d.contact) + '</div>';
 
   showSiteSec('about');
 };
@@ -1431,6 +1487,162 @@ window.deleteGalleryItem = async function(id) {
 window.toggleGallerySpan = async function(id, val) {
   try { await db.ref('siteContent/gallery/'+id+'/span2').set(val); loadSiteContentAdmin(); loadSiteContent(); }
   catch(e) { showToast('❌ '+e.message); }
+};
+
+// ---- Tournaments (עמוד "תחרויות במועדון") ----
+const TOURN_BADGE_LABELS = { open:'פתוח (ירוק)', free:'ללא דירוג (כתום)', rated:'מדורג (כחול)' };
+
+function renderTournamentsAdmin(data) {
+  const defaultCards = [
+    { icon:'♟️', name:'תחרות סבב שבועית', when:'כל שלישי | 18:30–22:30', desc:'תחרות פנימית קבועה בפורמט שוויצרי. פתוחה לכל שחקני המועדון.', badge:'פתוח לכל', badgeType:'open', active:true, order:0 },
+    { icon:'🌟', name:'תחרות לבלתי מדורגים', when:'כל שישי | 13:30–15:00', desc:'תחרות מדורגת לשחקנים ללא דירוג FIDE. הזדמנות מצוינת לקבל דירוג רשמי ראשון.', badge:'ללא דירוג', badgeType:'free', active:true, order:1 },
+    { icon:'🏅', name:'תחרות למדורגים', when:'כל שישי | 15:00–17:00', desc:'תחרות FIDE מדורגת לשחקנים בעלי דירוג. מצוין לשיפור מד הכושר הרשמי.', badge:'FIDE מדורג', badgeType:'rated', active:true, order:2 },
+    { icon:'🏆', name:'ליגת ישראל', when:'כל חמישי | 18:30–22:30', desc:'משחקי ליגה רשמית מטעם איגוד השחמט הישראלי. המועדון משתתף במספר ליגות.', badge:'ליגה רשמית', badgeType:'rated', active:true, order:3 },
+    { icon:'⚔️', name:'משחקי ליגה', when:'שבת | 10:00–15:00', desc:'משחקי ליגה בשבת. אווירה נהדרת של שחמט תחרותי ברמה גבוהה.', badge:'ליגה רשמית', badgeType:'rated', active:true, order:4 },
+    { icon:'🎯', name:'תחרויות מיוחדות', when:'לפי לוח שנה', desc:'אליפויות מועדון, תחרויות נוער, אירועים חגיגיים ותחרויות אורחים לאורך השנה.', badge:'משתנה', badgeType:'open', active:true, order:5 },
+  ];
+  const cardsData = data && data.cards;
+  const items = cardsData ? Object.entries(cardsData).map(function(e){ return Object.assign({_id:e[0]},e[1]); }) : defaultCards.map(function(c,i){ return Object.assign({_id:'d'+i},c); });
+  items.sort(function(a,b){ return (a.order||99)-(b.order||99); });
+  const fedLinkText  = (data && data.fedLinkText)  || 'לתוצאות חיות, לוחות ומידע על תחרויות רשמיות — היכנסו לאתר איגוד השחמט הישראלי';
+  const fedLinkLabel = (data && data.fedLinkLabel) || 'תחרויות המועדון באיגוד';
+
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+    '<h4 style="margin:0">🏆 כרטיסי תחרויות</h4>' +
+    '<button onclick="openTournCardModal(null)" style="background:#f97316;color:white;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:700;font-size:13px">+ הוסף תחרות</button>' +
+    '</div>' +
+    '<div id="tourn-admin-list" style="margin-bottom:24px">' +
+    items.map(function(c) {
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.05);margin-bottom:6px">' +
+        '<span style="font-size:20px">' + (c.icon||'♟️') + '</span>' +
+        '<div style="flex:1">' +
+          '<div style="font-weight:700">' + (c.name||'') + ' <span style="opacity:.6;font-weight:400">· ' + (c.when||'') + '</span></div>' +
+          '<div style="font-size:12px;opacity:.65">' + (c.desc||'') + '</div>' +
+          '<div style="font-size:11px;margin-top:3px;opacity:.8">🏷 ' + (c.badge||'') + ' (' + (TOURN_BADGE_LABELS[c.badgeType]||c.badgeType) + ')</div>' +
+        '</div>' +
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">' +
+          '<input type="checkbox" ' + (c.active!==false?'checked':'') + ' onchange="toggleTournCard(\'' + (c._id||'') + '\',this.checked)" style="width:15px;height:15px"> פעיל</label>' +
+        '<button onclick="openTournCardModal(\'' + (c._id||'') + '\')" style="background:rgba(255,255,255,.1);border:none;border-radius:6px;padding:6px 10px;cursor:pointer;color:inherit;font-size:12px">✏️</button>' +
+        '<button onclick="deleteTournCard(\'' + (c._id||'') + '\')" style="background:rgba(252,129,129,.15);border:none;border-radius:6px;padding:6px 10px;cursor:pointer;color:#fc8181;font-size:12px">🗑️</button>' +
+        '</div>';
+    }).join('') +
+    '</div>' +
+    '<h4 style="margin:0 0 12px">🔗 קופסת קישור לאיגוד</h4>' +
+    '<div style="display:flex;flex-direction:column;gap:12px;max-width:500px">' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">טקסט</label>' +
+    '<textarea id="tourn-fedlink-text" rows="2" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">' + fedLinkText + '</textarea></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">כיתוב הכפתור</label>' +
+    '<input id="tourn-fedlink-label" value="' + fedLinkLabel.replace(/"/g,'&quot;') + '" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>' +
+    '<button onclick="saveTournFedLink()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-weight:700;font-size:14px;align-self:flex-start">💾 שמור</button>' +
+    '</div>';
+}
+
+window.toggleTournCard = async function(id, val) {
+  if (!id) return;
+  try { await db.ref('siteContent/tournaments/cards/' + id + '/active').set(val); loadSiteContent(); }
+  catch(e) { showToast('❌ ' + e.message); }
+};
+window.deleteTournCard = async function(id) {
+  if (!id || !confirm('למחוק את התחרות?')) return;
+  try { await db.ref('siteContent/tournaments/cards/' + id).remove(); loadSiteContentAdmin(); loadSiteContent(); showToast('🗑️ נמחק'); }
+  catch(e) { showToast('❌ ' + e.message); }
+};
+window.openTournCardModal = async function(id) {
+  let c = {};
+  if (id && id[0]!=='d') { const s = await db.ref('siteContent/tournaments/cards/'+id).get(); if(s.exists()) c=s.val(); }
+  const modal = document.createElement('div');
+  modal.className='modal-overlay open'; modal.style.cssText='z-index:9999;padding:20px';
+  modal.onclick=function(e){ if(e.target===modal) modal.remove(); };
+  modal.innerHTML='<div style="background:var(--bg-card);border-radius:16px;max-width:480px;width:100%;padding:28px;direction:rtl;max-height:90vh;overflow-y:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h3 style="margin:0">' + (id&&id[0]!=='d'?'עריכת תחרות':'תחרות חדשה') + '</h3>' +
+    '<button onclick="this.closest(\'.modal-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:inherit">✕</button></div>' +
+    '<div style="display:flex;flex-direction:column;gap:12px">' +
+    ['icon:אייקון (אמוג\'י):♟️','name:שם התחרות:','when:מתי (יום ושעה):','badge:כיתוב התגית:'].map(function(f){
+      const p=f.split(':'); return '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">'+p[1]+'</label>' +
+      '<input id="tourn-'+p[0]+'" value="'+(c[p[0]]||p[2]||'').replace(/"/g,'&quot;')+'" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>';
+    }).join('') +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">תיאור</label>' +
+    '<textarea id="tourn-desc" rows="3" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">'+(c.desc||'')+'</textarea></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">צבע התגית</label>' +
+    '<select id="tourn-badgeType" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:var(--bg-card);color:inherit;font-family:inherit;font-size:14px">' +
+    Object.keys(TOURN_BADGE_LABELS).map(function(bt){ return '<option value="'+bt+'" '+(c.badgeType===bt?'selected':'')+'>'+TOURN_BADGE_LABELS[bt]+'</option>'; }).join('') +
+    '</select></div>' +
+    '<div><label style="font-size:12px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px;cursor:pointer">' +
+    '<input type="checkbox" id="tourn-active" '+(c.active!==false?'checked':'')+' style="width:15px;height:15px"> פעיל (מוצג)</label></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">סדר</label>' +
+    '<input id="tourn-order" type="number" value="'+(c.order||0)+'" style="width:70px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px"></div>' +
+    '</div><div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">' +
+    '<button onclick="this.closest(\'.modal-overlay\').remove()" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:9px 18px;cursor:pointer;color:inherit">ביטול</button>' +
+    '<button onclick="saveTournCard(\''+(id&&id[0]!=='d'?id:'')+'\')" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;cursor:pointer;font-weight:700">💾 שמור</button>' +
+    '</div></div>';
+  document.body.appendChild(modal);
+};
+window.saveTournCard = async function(id) {
+  const data = {
+    icon: document.getElementById('tourn-icon').value.trim()||'♟️',
+    name: document.getElementById('tourn-name').value.trim(),
+    when: document.getElementById('tourn-when').value.trim(),
+    badge: document.getElementById('tourn-badge').value.trim(),
+    desc: document.getElementById('tourn-desc').value.trim(),
+    badgeType: document.getElementById('tourn-badgeType').value,
+    active: document.getElementById('tourn-active').checked,
+    order: parseInt(document.getElementById('tourn-order').value)||0,
+  };
+  try {
+    if (id) await db.ref('siteContent/tournaments/cards/'+id).update(data);
+    else await db.ref('siteContent/tournaments/cards').push(data);
+    document.querySelector('.modal-overlay.open')?.remove();
+    loadSiteContentAdmin(); loadSiteContent(); showToast('✅ נשמר!');
+  } catch(e) { showToast('❌ '+e.message); }
+};
+window.saveTournFedLink = async function() {
+  const fedLinkText  = document.getElementById('tourn-fedlink-text').value.trim();
+  const fedLinkLabel = document.getElementById('tourn-fedlink-label').value.trim();
+  try {
+    await db.ref('siteContent/tournaments').update({ fedLinkText, fedLinkLabel });
+    loadSiteContent();
+    showToast('✅ נשמר!');
+  } catch(e) { showToast('❌ '+e.message); }
+};
+
+// ---- Contact (עמוד "צרו קשר") ----
+function renderContactAdmin(data) {
+  const d = data || {};
+  const fields = [
+    { id:'waPhone',        label:'מספר וואטסאפ (בפורמט בינלאומי, ללא + או רווחים)', def:'972559573758', placeholder:'972501234567' },
+    { id:'waDisplayPhone', label:'טלפון כפי שיוצג בטקסט', def:'055-957-3758' },
+    { id:'address',        label:'כתובת (מעדכן גם את המפה ואת Waze אוטומטית)', def:'בן גוריון 44, ראשון לציון' },
+    { id:'facebookUrl',    label:'קישור לפייסבוק', def:'https://www.facebook.com/Rishonchess' },
+    { id:'instagramUrl',   label:'קישור לאינסטגרם', def:'https://www.instagram.com/rishonchess' },
+  ];
+  return '<h4 style="margin:0 0 16px">☎️ פרטי יצירת קשר</h4>' +
+    '<div style="display:flex;flex-direction:column;gap:14px;max-width:520px">' +
+    fields.map(function(f){
+      return '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">'+f.label+'</label>' +
+        '<input id="cc-admin-'+f.id+'" value="'+((d[f.id]!=null?d[f.id]:f.def)||'').toString().replace(/"/g,'&quot;')+'" placeholder="'+(f.placeholder||'')+'" dir="'+(f.id==='waPhone'?'ltr':'auto')+'" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>';
+    }).join('') +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">הודעת וואטסאפ מוכנה מראש</label>' +
+    '<textarea id="cc-admin-waMessage" rows="2" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">'+((d.waMessage!=null?d.waMessage:'שלום, אני מעוניין לשמוע עוד על המועדון'))+'</textarea></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">שעות פעילות (שורה לכל טווח)</label>' +
+    '<textarea id="cc-admin-hours" rows="2" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">'+((d.hours!=null?d.hours:'ראשון–שישי: 16:00–22:30\nשבת: 10:00–15:00'))+'</textarea></div>' +
+    '<button onclick="saveContactContent()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-weight:700;font-size:14px;align-self:flex-start">💾 שמור</button>' +
+    '</div>';
+}
+window.saveContactContent = async function() {
+  const data = {
+    waPhone:        document.getElementById('cc-admin-waPhone').value.trim(),
+    waDisplayPhone: document.getElementById('cc-admin-waDisplayPhone').value.trim(),
+    waMessage:      document.getElementById('cc-admin-waMessage').value.trim(),
+    address:        document.getElementById('cc-admin-address').value.trim(),
+    hours:          document.getElementById('cc-admin-hours').value.trim(),
+    facebookUrl:    document.getElementById('cc-admin-facebookUrl').value.trim(),
+    instagramUrl:   document.getElementById('cc-admin-instagramUrl').value.trim(),
+  };
+  try {
+    await db.ref('siteContent/contact').set(data);
+    renderContactContent(data);
+    showToast('✅ פרטי הקשר נשמרו!');
+  } catch(e) { showToast('❌ '+e.message); }
 };
 // ===== END SITE CONTENT CMS =====
 // ===== END CLUB PEOPLE =====
