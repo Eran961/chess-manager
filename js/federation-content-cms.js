@@ -1163,11 +1163,11 @@ window.loadSiteContentAdmin = async function() {
   let d = {};
   try { const s = await db.ref('siteContent').get(); if (s.exists()) d = s.val(); } catch(e) {}
 
-  el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">📝 ניהול תוכן האתר</h3>' +
+  el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">📝 ניהול עמוד הבית</h3>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">' +
-    ['about','achievements','testimonials','gallery','tournaments','contact'].map(function(sec) {
-      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה',tournaments:'תחרויות',contact:'צרו קשר'};
-      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸',tournaments:'🏆',contact:'☎️'};
+    ['about','achievements','testimonials','gallery'].map(function(sec) {
+      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה'};
+      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸'};
       return '<button onclick="showSiteSec(\'' + sec + '\')" id="sec-btn-' + sec + '" style="padding:9px 18px;border-radius:8px;border:2px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">' +
         icons[sec] + ' ' + labels[sec] + '</button>';
     }).join('') +
@@ -1175,11 +1175,29 @@ window.loadSiteContentAdmin = async function() {
     '<div id="sec-about" class="site-sec-panel" style="display:none">' + renderAboutAdmin(d.about) + '</div>' +
     '<div id="sec-achievements" class="site-sec-panel" style="display:none">' + renderAchievementsAdmin(d.achievements) + '</div>' +
     '<div id="sec-testimonials" class="site-sec-panel" style="display:none">' + renderTestimonialsAdmin(d.testimonials) + '</div>' +
-    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>' +
-    '<div id="sec-tournaments" class="site-sec-panel" style="display:none">' + renderTournamentsAdmin(d.tournaments) + '</div>' +
-    '<div id="sec-contact" class="site-sec-panel" style="display:none">' + renderContactAdmin(d.contact) + '</div>';
+    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>';
 
   showSiteSec('about');
+};
+
+// ---- Tournaments admin (own top-level portal card, not nested under "עמוד הבית") ----
+window.loadSiteTournamentsAdmin = async function() {
+  const el = document.getElementById('site-tournaments-admin-container');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:30px;opacity:.5">⏳ טוען...</div>';
+  let data = {};
+  try { const s = await db.ref('siteContent/tournaments').get(); if (s.exists()) data = s.val(); } catch(e) {}
+  el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">🏆 ניהול תחרויות במועדון</h3>' + renderTournamentsAdmin(data);
+};
+
+// ---- Contact admin (own top-level portal card, not nested under "עמוד הבית") ----
+window.loadSiteContactAdmin = async function() {
+  const el = document.getElementById('site-contact-admin-container');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:30px;opacity:.5">⏳ טוען...</div>';
+  let data = {};
+  try { const s = await db.ref('siteContent/contact').get(); if (s.exists()) data = s.val(); } catch(e) {}
+  el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">☎️ ניהול פרטי יצירת קשר</h3>' + renderContactAdmin(data);
 };
 
 window.showSiteSec = function(sec) {
@@ -1544,7 +1562,7 @@ window.toggleTournCard = async function(id, val) {
 };
 window.deleteTournCard = async function(id) {
   if (!id || !confirm('למחוק את התחרות?')) return;
-  try { await db.ref('siteContent/tournaments/cards/' + id).remove(); loadSiteContentAdmin(); loadSiteContent(); showToast('🗑️ נמחק'); }
+  try { await db.ref('siteContent/tournaments/cards/' + id).remove(); loadSiteTournamentsAdmin(); loadSiteContent(); showToast('🗑️ נמחק'); }
   catch(e) { showToast('❌ ' + e.message); }
 };
 window.openTournCardModal = async function(id) {
@@ -1592,7 +1610,7 @@ window.saveTournCard = async function(id) {
     if (id) await db.ref('siteContent/tournaments/cards/'+id).update(data);
     else await db.ref('siteContent/tournaments/cards').push(data);
     document.querySelector('.modal-overlay.open')?.remove();
-    loadSiteContentAdmin(); loadSiteContent(); showToast('✅ נשמר!');
+    loadSiteTournamentsAdmin(); loadSiteContent(); showToast('✅ נשמר!');
   } catch(e) { showToast('❌ '+e.message); }
 };
 window.saveTournFedLink = async function() {

@@ -1760,6 +1760,24 @@ if (currentUser?.role === 'admin') {
   siteContentPanel.className = 'tab-panel'; siteContentPanel.id = 'panel-site-content';
   siteContentPanel.innerHTML = '<div id="site-content-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>';
   content.appendChild(siteContentPanel);
+  const siteTournBtn = document.createElement('button');
+  siteTournBtn.className = 'tab-btn'; siteTournBtn.dataset.tab = 'site-tournaments';
+  siteTournBtn.textContent = '🏆 תחרויות במועדון';
+  siteTournBtn.onclick = () => { switchTab('site-tournaments'); loadSiteTournamentsAdmin(); };
+  tabsBar.appendChild(siteTournBtn);
+  const siteTournPanel = document.createElement('div');
+  siteTournPanel.className = 'tab-panel'; siteTournPanel.id = 'panel-site-tournaments';
+  siteTournPanel.innerHTML = '<div id="site-tournaments-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>';
+  content.appendChild(siteTournPanel);
+  const siteContactBtn = document.createElement('button');
+  siteContactBtn.className = 'tab-btn'; siteContactBtn.dataset.tab = 'site-contact';
+  siteContactBtn.textContent = '☎️ צרו קשר';
+  siteContactBtn.onclick = () => { switchTab('site-contact'); loadSiteContactAdmin(); };
+  tabsBar.appendChild(siteContactBtn);
+  const siteContactPanel = document.createElement('div');
+  siteContactPanel.className = 'tab-panel'; siteContactPanel.id = 'panel-site-contact';
+  siteContactPanel.innerHTML = '<div id="site-contact-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>';
+  content.appendChild(siteContactPanel);
   const newsAdminBtn = document.createElement('button');
   newsAdminBtn.className = 'tab-btn'; newsAdminBtn.dataset.tab = 'news-posts';
   newsAdminBtn.textContent = '📰 כתבות';
@@ -1936,6 +1954,8 @@ function buildTopNav() {
   // System hub
   const systemCards = [];
   if (isAdmin || hasTabPerm('site-content')) systemCards.push({ icon: '📝', label: 'עמוד הבית', tab: 'site-content' });
+  if (isAdmin || hasTabPerm('site-tournaments')) systemCards.push({ icon: '🏆', label: 'תחרויות במועדון', tab: 'site-tournaments' });
+  if (isAdmin || hasTabPerm('site-contact')) systemCards.push({ icon: '☎️', label: 'צרו קשר', tab: 'site-contact' });
   if (isAdmin || hasTabPerm('schedule-editor')) systemCards.push({ icon: '📅', label: 'לוח חוגים', tab: 'schedule-editor' });
   if (isAdmin || hasTabPerm('news-posts')) systemCards.push({ icon: '📰', label: 'כתבות', tab: 'news-posts' });
   if (isAdmin || hasTabPerm('club-people')) systemCards.push({ icon: '👥', label: 'אנשי המועדון', tab: 'club-people' });
@@ -2086,7 +2106,7 @@ function injectPermissionTabs() {
   const hasShach  = grantedExtras.includes('youth-players');
   const hasKlim   = grantedExtras.includes('hours');
   const hasCamps  = grantedExtras.includes('camps');
-  const hasMaarechet = ['audit','schedule-editor','site-content','news-posts','club-people','tourn-cal','monthly-cal'].some(k => grantedExtras.includes(k));
+  const hasMaarechet = ['audit','schedule-editor','site-content','site-tournaments','site-contact','news-posts','club-people','tourn-cal','monthly-cal'].some(k => grantedExtras.includes(k));
 
   if (hasLeague) {
     addLabel('ליגות');
@@ -2153,6 +2173,14 @@ function injectPermissionTabs() {
     if (grantedExtras.includes('site-content')) {
       addTab('site-content','📝 עמוד הבית', () => { switchTab('site-content'); loadSiteContentAdmin(); },
         '<div id="site-content-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
+    }
+    if (grantedExtras.includes('site-tournaments')) {
+      addTab('site-tournaments','🏆 תחרויות במועדון', () => { switchTab('site-tournaments'); loadSiteTournamentsAdmin(); },
+        '<div id="site-tournaments-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
+    }
+    if (grantedExtras.includes('site-contact')) {
+      addTab('site-contact','☎️ צרו קשר', () => { switchTab('site-contact'); loadSiteContactAdmin(); },
+        '<div id="site-contact-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
     }
     if (grantedExtras.includes('news-posts')) {
       addTab('news-posts','📰 כתבות', () => { switchTab('news-posts'); loadNewsAdmin(); },
