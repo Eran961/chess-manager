@@ -1314,7 +1314,8 @@ window.openAchModal = async function(id) {
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h3 style="margin:0">' + (id&&id[0]!=='d'?'עריכת הישג':'הישג חדש') + '</h3>' +
     '<button onclick="this.closest(\'.modal-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:inherit">✕</button></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px">' +
-    ['icon:אייקון (אמוג\'י):🏆','num:מספר / כותרת:0','label:תווית:','desc:תיאור:'].map(function(f){
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">אייקון</label>' + iconPickerHTML('ach-icon', a.icon, '🏆') + '</div>' +
+    ['num:מספר / כותרת:0','label:תווית:','desc:תיאור:'].map(function(f){
       const p=f.split(':'); return '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">'+p[1]+'</label>' +
       '<input id="ach-'+p[0]+'" value="'+(a[p[0]]||p[2]||'').replace(/"/g,'&quot;')+'" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>';
     }).join('') +
@@ -1507,6 +1508,17 @@ window.toggleGallerySpan = async function(id, val) {
   catch(e) { showToast('❌ '+e.message); }
 };
 
+// ---- Shared icon picker (used in achievements + tournaments card modals) ----
+const ICON_PICKER_EMOJIS = ['🏆','🥇','🥈','🥉','🎖️','🏅','⭐','🌟','♟️','♞','♛','♚','♜','♝','⚔️','🎯','🔥','📈','👑','🎓','🎉','💪','🧩','📅'];
+function iconPickerHTML(inputId, currentVal, defaultVal) {
+  return '<input id="' + inputId + '" value="' + (currentVal || defaultVal || '').replace(/"/g,'&quot;') + '" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:16px;box-sizing:border-box;margin-bottom:8px">' +
+    '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+    ICON_PICKER_EMOJIS.map(function(e) {
+      return '<button type="button" onclick="document.getElementById(\'' + inputId + '\').value=\'' + e + '\'" title="' + e + '" style="width:34px;height:34px;font-size:18px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">' + e + '</button>';
+    }).join('') +
+    '</div>';
+}
+
 // ---- Tournaments (עמוד "תחרויות במועדון") ----
 const TOURN_BADGE_LABELS = { open:'פתוח (ירוק)', free:'ללא דירוג (כתום)', rated:'מדורג (כחול)' };
 
@@ -1575,7 +1587,8 @@ window.openTournCardModal = async function(id) {
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h3 style="margin:0">' + (id&&id[0]!=='d'?'עריכת תחרות':'תחרות חדשה') + '</h3>' +
     '<button onclick="this.closest(\'.modal-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:inherit">✕</button></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px">' +
-    ['icon:אייקון (אמוג\'י):♟️','name:שם התחרות:','when:מתי (יום ושעה):','badge:כיתוב התגית:'].map(function(f){
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">אייקון</label>' + iconPickerHTML('tourn-icon', c.icon, '♟️') + '</div>' +
+    ['name:שם התחרות:','when:מתי (יום ושעה):','badge:כיתוב התגית:'].map(function(f){
       const p=f.split(':'); return '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">'+p[1]+'</label>' +
       '<input id="tourn-'+p[0]+'" value="'+(c[p[0]]||p[2]||'').replace(/"/g,'&quot;')+'" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>';
     }).join('') +
