@@ -1150,22 +1150,22 @@ async function lookupFedPlayer(prefix = 'mf') {
   }
 }
 
-async function submitAddPlayer() {
-  const firstEl = document.getElementById('mf-first');
-  const lastEl  = document.getElementById('mf-last');
-  const yearEl  = document.getElementById('mf-year');
-  const fedEl   = document.getElementById('mf-fed');
-
-  const phoneEl  = document.getElementById('mf-phone');
-  const parentNameEl = document.getElementById('mf-parent-name');
-  const genderEl = document.getElementById('mf-gender');
+// Shared validation for every "add player" form (groups/teams/camps all use this
+// exact same set of required fields). Marks invalid fields, focuses the first one,
+// and returns null on failure so every caller behaves identically.
+function validatePlayerForm(prefix) {
+  const firstEl = document.getElementById(`${prefix}-first`);
+  const lastEl  = document.getElementById(`${prefix}-last`);
+  const yearEl  = document.getElementById(`${prefix}-year`);
+  const phoneEl  = document.getElementById(`${prefix}-phone`);
+  const parentNameEl = document.getElementById(`${prefix}-parent-name`);
+  const genderEl = document.getElementById(`${prefix}-gender`);
   [firstEl, lastEl, yearEl, phoneEl, parentNameEl].forEach(el => el.classList.remove('input-error'));
-  document.getElementById('mf-gender-select')?.classList.remove('input-error');
+  document.getElementById(`${prefix}-gender-select`)?.classList.remove('input-error');
 
   const firstName = firstEl.value.trim();
   const lastName  = lastEl.value.trim();
   const yearVal   = yearEl.value.trim();
-  const fedVal    = fedEl.value.trim();
 
   let valid = true;
   if (!firstName) { firstEl.classList.add('input-error'); firstEl.focus(); valid = false; }
@@ -1177,18 +1177,29 @@ async function submitAddPlayer() {
     valid = false;
   }
   if (!genderEl.value) {
-    document.getElementById('mf-gender-select')?.classList.add('input-error');
+    document.getElementById(`${prefix}-gender-select`)?.classList.add('input-error');
     valid = false;
   }
   if (!phoneEl.value.trim()) { phoneEl.classList.add('input-error'); if (valid) phoneEl.focus(); valid = false; }
   if (!parentNameEl.value.trim()) { parentNameEl.classList.add('input-error'); if (valid) parentNameEl.focus(); valid = false; }
-  if (!valid) return;
+  if (!valid) return null;
 
+  return {
+    firstName, lastName, birthYear,
+    gender: genderEl.value || null,
+    parentPhone: phoneEl.value.trim() || null,
+    parentName: parentNameEl.value.trim() || null,
+  };
+}
+
+async function submitAddPlayer() {
+  const v = validatePlayerForm('mf');
+  if (!v) return;
+  const { firstName, lastName, birthYear, gender, parentPhone, parentName } = v;
+
+  const fedVal = document.getElementById('mf-fed').value.trim();
   const fedId = fedVal ? (parseInt(fedVal) || null) : null;
   const joinDate = new Date().toISOString().split('T')[0];
-  const gender = genderEl.value || null;
-  const parentPhone = phoneEl.value.trim() || null;
-  const parentName = parentNameEl.value.trim() || null;
   const ratingRaw = document.getElementById('mf-rating').value.trim();
   const rating = ratingRaw ? (parseInt(ratingRaw) || null) : null;
   const cardExpiry = document.getElementById('mf-card-expiry').value || null;
