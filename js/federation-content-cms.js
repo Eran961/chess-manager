@@ -1038,6 +1038,14 @@ async function loadSiteContent() {
 window.loadSiteContent = loadSiteContent;
 
 function renderAboutContent(data) {
+  if (data.stats) {
+    const bar = document.getElementById('home-stats-bar');
+    if (bar) {
+      bar.innerHTML = data.stats.map(function(s) {
+        return '<div class="stat-item"><div class="stat-num">' + (s.num||'') + '</div><div class="stat-label">' + (s.label||'') + '</div></div>';
+      }).join('');
+    }
+  }
   const el = document.getElementById('home-about-text');
   if (!el) return;
   const h3 = el.querySelector('h3');
@@ -1217,7 +1225,22 @@ function renderAboutAdmin(data) {
     'הצוות שלנו מורכב ממדריכים מנוסים ומוסמכים ברמה הבינלאומית: רב אמן בינלאומי (GM), אמן בינלאומי (IM), אמן פידה (FM) ומאמנים מוסמכים — כל אחד מביא עמו שיטות הוראה מתקדמות ותשוקה אמיתית לשחמט.',
     'בוגרי המועדון זכו באליפויות ארץ לנוער, השתתפו בתחרויות בינלאומיות והגיעו לדרגות פידה יוקרתיות. אנחנו גאים בכל שחקן שגדל אצלנו — בין אם ממשיך לתחרויות ברמה גבוהה ובין אם פשוט נהנה לשחק שחמט בחברה טובה.'
   ];
-  return '<h4 style="margin:0 0 14px">על המועדון — עריכת פסקאות</h4>' +
+  const stats = data && data.stats ? data.stats : [
+    { num:'1938', label:'שנת ייסוד' },
+    { num:'45',   label:'קבוצות פעילות' },
+    { num:'60+',  label:'בתי ספר וגנים בתוכניות בוקר' },
+    { num:'100+', label:'תלמידים בחוגי המועדון' }
+  ];
+  return '<h4 style="margin:0 0 14px">המספרים בראש העמוד</h4>' +
+    '<div id="about-stats-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">' +
+    stats.map(function(s, i) {
+      return '<div style="display:flex;gap:8px">' +
+        '<input id="about-stat-num-' + i + '" value="' + (s.num||'').replace(/"/g,'&quot;') + '" placeholder="מספר, למשל 45" style="width:110px;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box">' +
+        '<input id="about-stat-label-' + i + '" value="' + (s.label||'').replace(/"/g,'&quot;') + '" placeholder="תווית, למשל קבוצות פעילות" style="flex:1;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box">' +
+        '</div>';
+    }).join('') +
+    '</div>' +
+    '<h4 style="margin:0 0 14px">על המועדון — עריכת פסקאות</h4>' +
     '<div id="about-paras-list">' +
     p.map(function(para, i) {
       return '<div style="margin-bottom:10px">' +
@@ -1255,9 +1278,16 @@ window.removeAboutPara = function(i) {
 window.saveAboutContent = async function() {
   const paras = [];
   document.querySelectorAll('[id^="about-para-"]').forEach(function(ta) { if (ta.value.trim()) paras.push(ta.value.trim()); });
+  const stats = [];
+  for (let i = 0; i < 4; i++) {
+    const numEl = document.getElementById('about-stat-num-' + i);
+    const labelEl = document.getElementById('about-stat-label-' + i);
+    if (!numEl || !labelEl) continue;
+    stats.push({ num: numEl.value.trim(), label: labelEl.value.trim() });
+  }
   try {
-    await db.ref('siteContent/about').set({ paragraphs: paras });
-    renderAboutContent({ paragraphs: paras });
+    await db.ref('siteContent/about').set({ paragraphs: paras, stats: stats });
+    renderAboutContent({ paragraphs: paras, stats: stats });
     showToast('✅ "על המועדון" נשמר!');
   } catch(e) { showToast('❌ ' + e.message); }
 };
