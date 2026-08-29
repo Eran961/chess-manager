@@ -1985,7 +1985,7 @@ function buildTopNav() {
     themeBtn.title = light ? 'מצב כהה' : 'מצב בהיר';
     localStorage.setItem('theme', light ? 'light' : 'dark');
     const pubBtn = document.getElementById('theme-toggle');
-    if (pubBtn) pubBtn.textContent = light ? '🌙 מצב כהה' : '☀️ מצב בהיר';
+    if (pubBtn) { pubBtn.textContent = light ? '🌙' : '☀️'; pubBtn.title = light ? 'מעבר למצב כהה' : 'מעבר למצב בהיר'; }
   };
   tabsBar.appendChild(themeBtn);
 
