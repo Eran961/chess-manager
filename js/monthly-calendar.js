@@ -5,6 +5,23 @@ let _pubCalYear = new Date().getFullYear();
 let _pubCalMonth = new Date().getMonth() + 1; // 1-based
 
 async function loadAndRenderPublicCal() {
+  const el = document.getElementById('pub-cal-container');
+  if (!el) return;
+  if (typeof db !== 'undefined' && db) {
+    try {
+      const visSnap = await db.ref('monthlyCalendar/_settings').get();
+      const vis = visSnap.val() || {};
+      if (vis.hidden) {
+        const msg = vis.message || 'לוח הפעילויות יתעדכן בקרוב — נשמח לראותכם!';
+        el.innerHTML = `
+          <div style="text-align:center;padding:60px 24px;direction:rtl">
+            <div style="font-size:48px;margin-bottom:16px">🚧</div>
+            <div style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:10px;white-space:pre-wrap;line-height:1.6">${msg}</div>
+          </div>`;
+        return;
+      }
+    } catch(e) { console.warn('calendar visibility check error', e); }
+  }
   const key = `${_pubCalYear}-${String(_pubCalMonth).padStart(2,'0')}`;
   let data = {};
   if (typeof db !== 'undefined' && db) {
@@ -13,8 +30,7 @@ async function loadAndRenderPublicCal() {
       data = snap.val() || {};
     } catch(e) { console.warn('calendar load error', e); }
   }
-  const el = document.getElementById('pub-cal-container');
-  if (el) el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data);
+  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data);
 }
 window.loadAndRenderPublicCal = loadAndRenderPublicCal;
 
@@ -154,8 +170,62 @@ async function loadAdminCalendarPanel() {
   let data = {};
   try { const s = await db.ref(`monthlyCalendar/${key}`).get(); data = s.val() || {}; } catch(e) {}
   panel.innerHTML = renderAdminCalPanel(data);
+  let visData = {};
+  try { const vs = await db.ref('monthlyCalendar/_settings').get(); visData = vs.val() || {}; } catch(e) {}
+  _renderMonthlyCalVisInline(visData);
 }
 window.loadAdminCalendarPanel = loadAdminCalendarPanel;
+
+function _renderMonthlyCalVisInline(data) {
+  const el = document.getElementById('monthly-cal-vis-inline');
+  if (!el) return;
+  const hidden  = !!data.hidden;
+  const message = data.message || 'לוח הפעילויות יתעדכן בקרוב — נשמח לראותכם!';
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px;padding:16px;border-radius:10px;background:var(--bg-subtle);border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--text-primary)">🚧 הסתר לוח פעילויות באתר</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">במקומו יוצג הכיתוב שתבחר למטה</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0">
+          <input type="checkbox" id="monthly-cal-hidden-toggle" ${hidden ? 'checked' : ''} onchange="_onMonthlyCalHiddenToggle()"
+            style="opacity:0;width:0;height:0;position:absolute">
+          <span id="monthly-cal-toggle-track" style="position:absolute;inset:0;border-radius:13px;transition:.2s;cursor:pointer;
+            background:${hidden ? '#f97316' : 'rgba(160,174,192,0.4)'}"></span>
+          <span id="monthly-cal-toggle-thumb" style="position:absolute;top:3px;width:20px;height:20px;border-radius:50%;background:white;
+            transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3);
+            left:${hidden ? '23px' : '3px'}"></span>
+        </label>
+      </div>
+      <div id="monthly-cal-msg-wrap" style="display:${hidden ? 'flex' : 'none'};flex-direction:column;gap:8px">
+        <label style="font-size:13px;font-weight:600;color:var(--text-primary)">כיתוב שיופיע במקום לוח הפעילויות</label>
+        <textarea id="monthly-cal-msg-input" rows="2"
+          style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);
+                 color:var(--text-primary);font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box;direction:rtl"
+          placeholder="לדוגמה: לוח הפעילויות בבנייה — נחזור בקרוב!">${message}</textarea>
+      </div>
+      <button onclick="_saveMonthlyCalVisSettings()"
+        style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;align-self:flex-start">
+        💾 שמור
+      </button>
+    </div>`;
+}
+window._renderMonthlyCalVisInline = _renderMonthlyCalVisInline;
+
+window._onMonthlyCalHiddenToggle = function() {
+  const hidden = document.getElementById('monthly-cal-hidden-toggle').checked;
+  document.getElementById('monthly-cal-toggle-track').style.background = hidden ? '#f97316' : 'rgba(160,174,192,0.4)';
+  document.getElementById('monthly-cal-toggle-thumb').style.left       = hidden ? '23px' : '3px';
+  document.getElementById('monthly-cal-msg-wrap').style.display        = hidden ? 'flex' : 'none';
+};
+
+window._saveMonthlyCalVisSettings = async function() {
+  const hidden  = document.getElementById('monthly-cal-hidden-toggle').checked;
+  const message = (document.getElementById('monthly-cal-msg-input')?.value || '').trim();
+  await db.ref('monthlyCalendar/_settings').update({ hidden, message });
+  showToast(hidden ? '🚧 לוח הפעילויות מוסתר באתר' : '✅ לוח הפעילויות גלוי באתר');
+};
 
 function renderAdminCalPanel(data) {
   const HE_MONTHS = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
@@ -200,6 +270,7 @@ function renderAdminCalPanel(data) {
 
   return `
     <div style="max-width:900px">
+      <div id="monthly-cal-vis-inline"></div>
       <!-- Month navigation -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button onclick="adminCalNav(-1)" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 14px;font-size:16px;cursor:pointer">◀</button>
