@@ -1375,7 +1375,14 @@ function toggleSidebar(forceOpen) {
 window.toggleSidebar = toggleSidebar;
 
 function buildApp() {
-if (!_useDbGroups && (!groups || groups.length === 0)) {
+// Only fall back to the hardcoded ALL_GROUPS/ALL_TEAMS rosters when there's no
+// Firebase connection at all (local/demo mode). Gating this on the in-memory
+// _useDbGroups/_useDbTeams flags instead was unreliable: if loadDbGroups()/
+// loadDbTeams() hit a transient read error, they'd stay at their default
+// false/[] state even with Firebase connected, and this fallback would
+// silently substitute the hardcoded defaults — looking exactly like deleted
+// groups/teams "came back" even though nothing was written to Firebase.
+if (!db && (!groups || groups.length === 0)) {
   groups = ALL_GROUPS.filter(g => !_deletedGroupIds.has(g.id));
 }
 // Filter groups for non-admin users (both Firebase and ALL_GROUPS)
@@ -1389,7 +1396,7 @@ if (currentUser?.role !== 'admin') {
   });
   console.info('[ChessManager] Groups for', currentUser.name, '→', groups.map(g => g.name), '| allowedIds:', allowedIds);
 }
-if (!_useDbTeams && teams.length === 0) {
+if (!db && teams.length === 0) {
   teams = ALL_TEAMS.map((t, i) => ({
     id: 'default-team-' + i,
     name: t.name,

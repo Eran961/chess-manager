@@ -417,7 +417,7 @@ function _repKindsAvailable() {
 }
 
 function renderReportsPanel() {
-  if (!_useDbGroups && (!groups || groups.length === 0) && currentUser?.role === 'admin') groups = ALL_GROUPS.filter(g => !_deletedGroupIds.has(g.id));
+  if (!db && (!groups || groups.length === 0) && currentUser?.role === 'admin') groups = ALL_GROUPS.filter(g => !_deletedGroupIds.has(g.id));
   const kinds = _repKindsAvailable();
   if (kinds.length === 0) return `
     <div class="att-card" style="text-align:center;padding:40px;color:#a0aec0">
