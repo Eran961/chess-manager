@@ -1639,17 +1639,44 @@ function openAddCampPlayerModal(campId, li) {
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:10px;padding:14px">
+            <label style="font-size:13px;font-weight:700;color:#2b6cb0;display:block;margin-bottom:2px">מספר שחקן באיגוד</label>
+            <div style="font-size:11px;color:#4a5568;margin-bottom:8px">לא חובה — רק אם כבר רשום/ה באיגוד. שליפה תמלא אוטומטית את הפרטים למטה.</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="text" id="cp-fed" placeholder="לדוגמה: 123456" inputmode="numeric" class="modal-input" style="flex:1">
+              <button type="button" id="cp-fed-btn" onclick="lookupFedPlayer('cp')"
+                style="padding:9px 14px;background:#2b6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;font-family:inherit">
+                🔍 שלוף
+              </button>
+            </div>
+            <div id="cp-fed-status" style="font-size:12px;margin-top:6px;min-height:16px"></div>
+          </div>
           <div style="display:flex;gap:10px">
             <div class="modal-field" style="flex:1"><label>שם פרטי <span style="color:#e53e3e">*</span></label><input type="text" id="cp-first" class="modal-input"></div>
             <div class="modal-field" style="flex:1"><label>שם משפחה</label><input type="text" id="cp-last" class="modal-input"></div>
           </div>
-          <div style="display:flex;gap:10px">
-            <div class="modal-field" style="flex:1"><label>שנת לידה</label><input type="number" id="cp-year" class="modal-input" placeholder="2015"></div>
-            <div class="modal-field" style="flex:1"><label>מספר שחקן (איגוד)</label><input type="text" id="cp-fed" class="modal-input"></div>
+          <div class="modal-field">
+            <label>שנת לידה</label>
+            <input type="number" id="cp-year" class="modal-input" placeholder="2015" oninput="updateModalAge(this.value,'cp')">
+            <div class="age-hint" id="cp-age"></div>
+          </div>
+          <div class="modal-field">
+            <label>מין</label>
+            <div class="pay-select" id="cp-gender-select">
+              <button type="button" class="pay-btn" id="cp-gender-m" onclick="selectModalGender('m','cp')">👦 זכר</button>
+              <button type="button" class="pay-btn" id="cp-gender-f" onclick="selectModalGender('f','cp')">👧 נקבה</button>
+            </div>
+            <input type="hidden" id="cp-gender" value="">
           </div>
           <div style="display:flex;gap:10px">
-            <div class="modal-field" style="flex:1"><label>טלפון הורה</label><input type="text" id="cp-phone" class="modal-input" dir="ltr"></div>
-            <div class="modal-field" style="flex:1"><label>אימייל הורה</label><input type="text" id="cp-email" class="modal-input" dir="ltr"></div>
+            <div class="modal-field" style="flex:1"><label>מד כושר ישראלי</label><input type="text" id="cp-rating" class="modal-input" placeholder="ממולא אוטומטית בשליפה" inputmode="numeric"></div>
+            <div class="modal-field" style="flex:1"><label>תוקף כרטיס שחמטאי</label><input type="date" id="cp-card-expiry" class="modal-input" placeholder="ממולא אוטומטית בשליפה"></div>
+          </div>
+          <div style="margin-top:6px;padding-top:14px;border-top:1px dashed #e2e8f0">
+            <div style="font-size:13px;font-weight:700;color:#4a5568;margin-bottom:2px">👪 פרטי הורים של הילד/ה</div>
+            <div style="font-size:11px;color:#a0aec0;margin-bottom:14px">לא קיימים באתר האיגוד — נא למלא</div>
+            <div class="modal-field"><label>שם הורה</label><input type="text" id="cp-parent-name" class="modal-input" placeholder="שם ההורה"></div>
+            <div class="modal-field"><label>טלפון הורה</label><input type="text" id="cp-phone" class="modal-input" dir="ltr" placeholder="05X-XXXXXXX"></div>
           </div>
           <button onclick="saveCampPlayer('${campId}',${li})" style="background:#276749;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 הוסף</button>
         </div>
@@ -1661,12 +1688,17 @@ window.openAddCampPlayerModal = openAddCampPlayerModal;
 async function saveCampPlayer(campId, li) {
   const firstName = document.getElementById('cp-first')?.value?.trim();
   if (!firstName) { showToast('יש להזין שם פרטי', 'error'); return; }
-  const lastName    = document.getElementById('cp-last')?.value?.trim()  || '';
-  const birthYear   = parseInt(document.getElementById('cp-year')?.value) || null;
-  const fedId       = document.getElementById('cp-fed')?.value?.trim()   || null;
-  const parentPhone = document.getElementById('cp-phone')?.value?.trim() || null;
-  const parentEmail = document.getElementById('cp-email')?.value?.trim() || null;
-  const playerDef = { firstName, lastName, birthYear, fedId, parentPhone, parentEmail, paymentStatus: 'trial' };
+  const lastName     = document.getElementById('cp-last')?.value?.trim()  || '';
+  const birthYear    = parseInt(document.getElementById('cp-year')?.value) || null;
+  const fedIdRaw     = document.getElementById('cp-fed')?.value?.trim()   || '';
+  const fedId        = fedIdRaw ? (parseInt(fedIdRaw) || null) : null;
+  const gender       = document.getElementById('cp-gender')?.value       || null;
+  const ratingRaw    = document.getElementById('cp-rating')?.value?.trim() || '';
+  const rating       = ratingRaw ? (parseInt(ratingRaw) || null) : null;
+  const cardExpiry   = document.getElementById('cp-card-expiry')?.value  || null;
+  const parentPhone  = document.getElementById('cp-phone')?.value?.trim() || null;
+  const parentName   = document.getElementById('cp-parent-name')?.value?.trim() || null;
+  const playerDef = { firstName, lastName, birthYear, fedId, gender, rating, cardExpiry, parentPhone, parentName, paymentStatus: 'trial' };
   try {
     const ref = await db.ref(`camp_players/${campId}/${li}`).push(playerDef);
     const camp = camps.find(c => c.id === campId);

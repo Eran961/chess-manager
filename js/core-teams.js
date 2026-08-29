@@ -741,7 +741,7 @@ function toggleAddTeamPlayerForm(teamIdx, subTeamIdx) {
   });
   const ageEl = document.getElementById('mf-age');
   if (ageEl) ageEl.textContent = '';
-  const statusEl = document.getElementById('fed-lookup-status');
+  const statusEl = document.getElementById('mf-fed-status');
   if (statusEl) statusEl.textContent = '';
   document.getElementById('mf-gender').value = '';
   document.getElementById('mf-gender-m').className = 'pay-btn';
@@ -1071,7 +1071,7 @@ function toggleAddPlayerForm(groupIdx, subGroupIdx) {
     el.classList.remove('input-error');
   });
   document.getElementById('mf-age').textContent = '';
-  document.getElementById('fed-lookup-status').textContent = '';
+  document.getElementById('mf-fed-status').textContent = '';
   document.getElementById('mf-gender').value = '';
   document.getElementById('mf-gender-m').className = 'pay-btn';
   document.getElementById('mf-gender-f').className = 'pay-btn';
@@ -1085,16 +1085,17 @@ function closeAddModal(e) {
   _addPlayerIsTeam = false;
 }
 
-function updateModalAge(val) {
+function updateModalAge(val, prefix = 'mf') {
   const year = parseInt(val);
-  const hint = document.getElementById('mf-age');
+  const hint = document.getElementById(`${prefix}-age`);
+  if (!hint) return;
   hint.textContent = (year >= 1900 && year <= CURRENT_YEAR) ? `גיל ${CURRENT_YEAR - year}` : '';
 }
 
-async function lookupFedPlayer() {
-  const fedEl = document.getElementById('mf-fed');
-  const statusEl = document.getElementById('fed-lookup-status');
-  const btn = document.getElementById('btn-fed-lookup');
+async function lookupFedPlayer(prefix = 'mf') {
+  const fedEl = document.getElementById(`${prefix}-fed`);
+  const statusEl = document.getElementById(`${prefix}-fed-status`);
+  const btn = document.getElementById(`${prefix}-fed-btn`);
   const fedId = fedEl.value.trim();
 
   if (!fedId || isNaN(parseInt(fedId))) {
@@ -1127,16 +1128,16 @@ async function lookupFedPlayer() {
       if (d && m && y) cardExpiry = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
     }
 
-    // Fill the form
-    document.getElementById('mf-first').value = firstName;
-    document.getElementById('mf-last').value = lastName;
+    // Fill the form (fields that may not exist on every variant of this form are optional)
+    document.getElementById(`${prefix}-first`).value = firstName;
+    document.getElementById(`${prefix}-last`).value = lastName;
     if (data.birthYear) {
-      document.getElementById('mf-year').value = data.birthYear;
-      updateModalAge(data.birthYear);
+      document.getElementById(`${prefix}-year`).value = data.birthYear;
+      updateModalAge(data.birthYear, prefix);
     }
-    if (data.rating) document.getElementById('mf-rating').value = data.rating;
-    if (cardExpiry) document.getElementById('mf-card-expiry').value = cardExpiry;
-    if (data.gender === 'זכר' || data.gender === 'נקבה') selectModalGender(data.gender === 'נקבה' ? 'f' : 'm');
+    if (data.rating) { const el = document.getElementById(`${prefix}-rating`); if (el) el.value = data.rating; }
+    if (cardExpiry)  { const el = document.getElementById(`${prefix}-card-expiry`); if (el) el.value = cardExpiry; }
+    if (data.gender === 'זכר' || data.gender === 'נקבה') selectModalGender(data.gender === 'נקבה' ? 'f' : 'm', prefix);
 
     statusEl.style.color = '#276749';
     statusEl.textContent = `✅ נמצא: ${data.name}${data.birthYear ? ` (${data.birthYear})` : ''}${data.gender ? ` | ${data.gender}` : ''}${data.rating ? ` | מד כושר: ${data.rating}` : ''}${cardExpiry ? ` | כרטיס עד: ${formatDate(cardExpiry)}` : ''}`;

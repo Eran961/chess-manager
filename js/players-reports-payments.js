@@ -152,11 +152,11 @@ function selectGender(g) {
   document.getElementById('pe-gender').value = g;
 }
 
-function selectModalGender(g) {
-  document.getElementById('mf-gender-m').className = 'pay-btn' + (g==='m'?' active-paid':'');
-  document.getElementById('mf-gender-f').className = 'pay-btn' + (g==='f'?' active-pending':'');
-  document.getElementById('mf-gender').value = g;
-  document.getElementById('mf-gender-select')?.classList.remove('input-error');
+function selectModalGender(g, prefix = 'mf') {
+  document.getElementById(`${prefix}-gender-m`).className = 'pay-btn' + (g==='m'?' active-paid':'');
+  document.getElementById(`${prefix}-gender-f`).className = 'pay-btn' + (g==='f'?' active-pending':'');
+  document.getElementById(`${prefix}-gender`).value = g;
+  document.getElementById(`${prefix}-gender-select`)?.classList.remove('input-error');
 }
 window.selectModalGender = selectModalGender;
 
