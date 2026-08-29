@@ -1221,7 +1221,7 @@ window.showSiteSec = function(sec) {
 
 function renderAboutAdmin(data) {
   const p = data && data.paragraphs ? data.paragraphs : [
-    'מועדון השחמט ראשון לציון, הפועל ברחוב בן גוריון 44, הוא אחד ממועדוני השחמט הוותיקים והגדולים בישראל — פעיל מאז <strong>1882</strong>. המועדון מציע חוגים לכל הגילאים והרמות, מגן חובה ועד שחקנים בעלי דרגות בינלאומיות.',
+    'מועדון השחמט ראשון לציון, הפועל ברחוב בן גוריון 44, הוא אחד ממועדוני השחמט הוותיקים והגדולים בישראל — פעיל מאז <strong>1938</strong>. המועדון מציע חוגים לכל הגילאים והרמות, מגן חובה ועד שחקנים בעלי דרגות בינלאומיות.',
     'הצוות שלנו מורכב ממדריכים מנוסים ומוסמכים ברמה הבינלאומית: רב אמן בינלאומי (GM), אמן בינלאומי (IM), אמן פידה (FM) ומאמנים מוסמכים — כל אחד מביא עמו שיטות הוראה מתקדמות ותשוקה אמיתית לשחמט.',
     'בוגרי המועדון זכו באליפויות ארץ לנוער, השתתפו בתחרויות בינלאומיות והגיעו לדרגות פידה יוקרתיות. אנחנו גאים בכל שחקן שגדל אצלנו — בין אם ממשיך לתחרויות ברמה גבוהה ובין אם פשוט נהנה לשחק שחמט בחברה טובה.'
   ];
@@ -1232,14 +1232,10 @@ function renderAboutAdmin(data) {
     { num:'100+', label:'תלמידים בחוגי המועדון' }
   ];
   return '<h4 style="margin:0 0 14px">המספרים בראש העמוד</h4>' +
-    '<div id="about-stats-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">' +
-    stats.map(function(s, i) {
-      return '<div style="display:flex;gap:8px">' +
-        '<input id="about-stat-num-' + i + '" value="' + (s.num||'').replace(/"/g,'&quot;') + '" placeholder="מספר, למשל 45" style="width:110px;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box">' +
-        '<input id="about-stat-label-' + i + '" value="' + (s.label||'').replace(/"/g,'&quot;') + '" placeholder="תווית, למשל קבוצות פעילות" style="flex:1;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box">' +
-        '</div>';
-    }).join('') +
+    '<div id="about-stats-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">' +
+    stats.map(function(s) { return aboutStatRowHTML(s.num, s.label); }).join('') +
     '</div>' +
+    '<button onclick="addAboutStat()" style="margin-bottom:20px;background:rgba(255,255,255,.08);border:1px dashed rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;cursor:pointer;color:inherit;font-size:13px;width:100%">+ הוסף מספר</button>' +
     '<h4 style="margin:0 0 14px">על המועדון — עריכת פסקאות</h4>' +
     '<div id="about-paras-list">' +
     p.map(function(para, i) {
@@ -1255,6 +1251,19 @@ function renderAboutAdmin(data) {
     '<button onclick="addAboutPara()" style="margin-top:8px;background:rgba(255,255,255,.08);border:1px dashed rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;cursor:pointer;color:inherit;font-size:13px;width:100%">+ הוסף פסקה</button>' +
     '<button onclick="saveAboutContent()" style="margin-top:16px;background:#f97316;color:white;border:none;border-radius:8px;padding:11px 26px;cursor:pointer;font-weight:700;font-size:14px">💾 שמור</button>';
 }
+
+function aboutStatRowHTML(num, label) {
+  return '<div class="about-stat-row" style="display:flex;gap:8px;align-items:center">' +
+    '<input class="about-stat-num" value="' + (num||'').replace(/"/g,'&quot;') + '" placeholder="מספר, למשל 45" style="width:110px;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box">' +
+    '<input class="about-stat-label" value="' + (label||'').replace(/"/g,'&quot;') + '" placeholder="תווית, למשל קבוצות פעילות" style="flex:1;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box">' +
+    '<button onclick="this.closest(\'.about-stat-row\').remove()" style="background:none;border:none;cursor:pointer;color:#fc8181;font-size:16px;padding:4px 8px" title="הסר">✕</button>' +
+    '</div>';
+}
+window.addAboutStat = function() {
+  const list = document.getElementById('about-stats-list');
+  if (!list) return;
+  list.insertAdjacentHTML('beforeend', aboutStatRowHTML('', ''));
+};
 
 window.addAboutPara = function() {
   const list = document.getElementById('about-paras-list');
@@ -1279,12 +1288,13 @@ window.saveAboutContent = async function() {
   const paras = [];
   document.querySelectorAll('[id^="about-para-"]').forEach(function(ta) { if (ta.value.trim()) paras.push(ta.value.trim()); });
   const stats = [];
-  for (let i = 0; i < 4; i++) {
-    const numEl = document.getElementById('about-stat-num-' + i);
-    const labelEl = document.getElementById('about-stat-label-' + i);
-    if (!numEl || !labelEl) continue;
-    stats.push({ num: numEl.value.trim(), label: labelEl.value.trim() });
-  }
+  document.querySelectorAll('#about-stats-list .about-stat-row').forEach(function(row) {
+    const numEl = row.querySelector('.about-stat-num');
+    const labelEl = row.querySelector('.about-stat-label');
+    const num = numEl ? numEl.value.trim() : '';
+    const label = labelEl ? labelEl.value.trim() : '';
+    if (num || label) stats.push({ num: num, label: label });
+  });
   try {
     await db.ref('siteContent/about').set({ paragraphs: paras, stats: stats });
     renderAboutContent({ paragraphs: paras, stats: stats });
@@ -1298,7 +1308,7 @@ function renderAchievementsAdmin(data) {
     { icon:'🥉', num:'מדליית ארד', label:'ליגת העל הגברים', desc:'קבוצת הגברים עם גרנד מאסטרים בליגה הלאומית הגבוהה ביותר', active:true, order:1 },
     { icon:'🏫', num:'58', label:'גנים ובתי ספר', desc:'תוכנית "מסע לעולם השחמט" — חינוך שחמט ב-40 גנים ו-18 בתי ספר בראשון לציון', active:true, order:2 },
     { icon:'⭐', num:'GM, IM, FM', label:'בוגרים בעלי דרגות', desc:'בוגרי המועדון הגיעו לדרגות הבינלאומיות היוקרתיות ביותר בשחמט', active:true, order:3 },
-    { icon:'📅', num:'1882', label:'שנת ייסוד', desc:'אחד ממועדוני השחמט הוותיקים בישראל — מסורת ארוכה של מצוינות שחמטאית', active:true, order:4 },
+    { icon:'📅', num:'1938', label:'שנת ייסוד', desc:'אחד ממועדוני השחמט הוותיקים בישראל — מסורת ארוכה של מצוינות שחמטאית', active:true, order:4 },
     { icon:'🌍', num:'3', label:'קבוצות בליגת העל', desc:'מועדוני בית אחד עם שלוש קבוצות בדיביזיה הגבוהה ביותר בו זמנית', active:true, order:5 }
   ];
   const items = data ? Object.entries(data).map(function(e){ return Object.assign({_id:e[0]},e[1]); }) : defaults.map(function(d,i){ return Object.assign({_id:'d'+i},d); });
