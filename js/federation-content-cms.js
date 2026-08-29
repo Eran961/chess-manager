@@ -1031,6 +1031,7 @@ async function loadSiteContent() {
     if (d.achievements) renderAchievementsContent(d.achievements);
     if (d.testimonials) renderTestimonialsContent(d.testimonials);
     if (d.gallery) renderGalleryContent(d.gallery);
+    if (d.heroVideoUrl) applyHeroVideo(d.heroVideoUrl);
   } catch(e) { console.warn('loadSiteContent:', e); }
 }
 window.loadSiteContent = loadSiteContent;
@@ -1101,6 +1102,84 @@ function renderGalleryContent(data) {
   }).join('');
 }
 
+function applyHeroVideo(url) {
+  const video = document.getElementById('hero-video');
+  const source = document.getElementById('hero-video-source');
+  if (!video || !source) return;
+  source.src = url;
+  video.load();
+}
+
+const MAX_HERO_VIDEO_MB = 60;
+
+function renderVideoAdmin(currentUrl) {
+  if (!storage) {
+    return '<h4 style="margin:0 0 14px">🎬 סרטון ראשי — עמוד הבית</h4>' +
+      '<div style="background:rgba(245,101,101,.1);border:1px solid rgba(245,101,101,.3);border-radius:10px;padding:16px;font-size:13px;line-height:1.7">' +
+      '⚠️ Firebase Storage לא מופעל עדיין בפרויקט. יש להפעיל אותו בקונסולת Firebase (Build → Storage → Get started) לפני שאפשר להעלות סרטון מכאן — פנה לעזרה אם צריך.' +
+      '</div>';
+  }
+  return '<h4 style="margin:0 0 14px">🎬 סרטון ראשי — עמוד הבית</h4>' +
+    '<div style="font-size:13px;opacity:.75;margin-bottom:14px">' +
+    (currentUrl ? '✅ כרגע מוצג סרטון מותאם אישית שהועלה.' : 'כרגע מוצג הסרטון המקורי של האתר.') +
+    '</div>' +
+    (currentUrl ? '<video src="' + currentUrl + '" controls muted style="width:100%;max-width:420px;border-radius:10px;margin-bottom:16px;display:block"></video>' : '') +
+    '<input type="file" id="hero-video-file" accept="video/mp4,video/webm,video/quicktime" style="margin-bottom:10px;display:block">' +
+    '<div style="font-size:11px;opacity:.6;margin-bottom:14px">קובץ mp4 מומלץ, עד ' + MAX_HERO_VIDEO_MB + 'MB</div>' +
+    '<div id="hero-video-progress" style="display:none;background:rgba(255,255,255,.1);border-radius:8px;height:8px;overflow:hidden;margin-bottom:10px"><div id="hero-video-progress-bar" style="background:#f97316;height:100%;width:0%"></div></div>' +
+    '<div id="hero-video-status" style="font-size:13px;margin-bottom:10px;min-height:18px"></div>' +
+    '<button onclick="uploadHeroVideo()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:11px 26px;cursor:pointer;font-weight:700;font-size:14px">⬆️ העלה סרטון חדש</button>' +
+    (currentUrl ? '<button onclick="restoreDefaultHeroVideo()" style="margin-inline-start:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:11px 20px;cursor:pointer;color:inherit;font-size:14px">↩️ שחזר לסרטון המקורי</button>' : '');
+}
+
+window.uploadHeroVideo = async function() {
+  const fileEl = document.getElementById('hero-video-file');
+  const statusEl = document.getElementById('hero-video-status');
+  const progWrap = document.getElementById('hero-video-progress');
+  const progBar = document.getElementById('hero-video-progress-bar');
+  const file = fileEl?.files?.[0];
+  if (!file) { showToast('יש לבחור קובץ סרטון תחילה'); return; }
+  if (file.size > MAX_HERO_VIDEO_MB * 1024 * 1024) {
+    statusEl.style.color = '#fc8181';
+    statusEl.textContent = `❌ הקובץ גדול מדי (מקסימום ${MAX_HERO_VIDEO_MB}MB)`;
+    return;
+  }
+  progWrap.style.display = 'block';
+  statusEl.style.color = 'inherit';
+  statusEl.textContent = '⏳ מעלה...';
+  try {
+    const ref = storage.ref('site/hero-video.mp4');
+    const task = ref.put(file);
+    await new Promise((resolve, reject) => {
+      task.on('state_changed', snap => {
+        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        progBar.style.width = pct + '%';
+        statusEl.textContent = `⏳ מעלה... ${pct}%`;
+      }, reject, resolve);
+    });
+    const url = await ref.getDownloadURL();
+    await db.ref('siteContent/heroVideoUrl').set(url);
+    applyHeroVideo(url);
+    statusEl.style.color = '#68d391';
+    statusEl.textContent = '✅ הסרטון הועלה ועודכן באתר';
+    showToast('✅ הסרטון עודכן');
+    loadSiteContentAdmin();
+  } catch(e) {
+    statusEl.style.color = '#fc8181';
+    statusEl.textContent = '❌ שגיאה: ' + e.message;
+  }
+};
+
+window.restoreDefaultHeroVideo = async function() {
+  if (!confirm('לשחזר את הסרטון המקורי של האתר?')) return;
+  try {
+    await db.ref('siteContent/heroVideoUrl').remove();
+    applyHeroVideo('סרטון.mp4');
+    showToast('✅ שוחזר הסרטון המקורי');
+    loadSiteContentAdmin();
+  } catch(e) { showToast('❌ שגיאה: ' + e.message, 'error'); }
+};
+
 // ---- Admin ----
 window.loadSiteContentAdmin = async function() {
   const el = document.getElementById('site-content-admin-container');
@@ -1111,9 +1190,9 @@ window.loadSiteContentAdmin = async function() {
 
   el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">📝 ניהול עמוד הבית</h3>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">' +
-    ['about','achievements','testimonials','gallery'].map(function(sec) {
-      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה'};
-      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸'};
+    ['about','achievements','testimonials','gallery','video'].map(function(sec) {
+      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה',video:'סרטון ראשי'};
+      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸',video:'🎬'};
       return '<button onclick="showSiteSec(\'' + sec + '\')" id="sec-btn-' + sec + '" style="padding:9px 18px;border-radius:8px;border:2px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">' +
         icons[sec] + ' ' + labels[sec] + '</button>';
     }).join('') +
@@ -1121,7 +1200,8 @@ window.loadSiteContentAdmin = async function() {
     '<div id="sec-about" class="site-sec-panel" style="display:none">' + renderAboutAdmin(d.about) + '</div>' +
     '<div id="sec-achievements" class="site-sec-panel" style="display:none">' + renderAchievementsAdmin(d.achievements) + '</div>' +
     '<div id="sec-testimonials" class="site-sec-panel" style="display:none">' + renderTestimonialsAdmin(d.testimonials) + '</div>' +
-    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>';
+    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>' +
+    '<div id="sec-video" class="site-sec-panel" style="display:none">' + renderVideoAdmin(d.heroVideoUrl) + '</div>';
 
   showSiteSec('about');
 };
