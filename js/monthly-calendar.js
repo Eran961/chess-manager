@@ -34,6 +34,49 @@ async function loadAndRenderPublicCal() {
 }
 window.loadAndRenderPublicCal = loadAndRenderPublicCal;
 
+// ===== HOME PAGE "UPCOMING ACTIVITIES" ROW =====
+// Pulls the next 3 dated events from the same monthlyCalendar ("לוח פעילויות") data
+// the public calendar page reads, so anything entered there shows up here too.
+const UPCOMING_HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+async function loadUpcomingActivities() {
+  const section = document.getElementById('upcoming-section');
+  const grid = document.getElementById('upcoming-grid');
+  if (!section || !grid || typeof db === 'undefined' || !db) return;
+  try {
+    const visSnap = await db.ref('monthlyCalendar/_settings').get();
+    const vis = visSnap.val() || {};
+    if (vis.hidden) { section.style.display = 'none'; return; }
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const upcoming = [];
+    // Scan the current month plus up to 2 months ahead, stopping once we have enough candidates
+    for (let offset = 0; offset < 3 && upcoming.length < 3; offset++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const snap = await db.ref('monthlyCalendar/' + key + '/events').get();
+      const events = snap.val() ? Object.values(snap.val()) : [];
+      events.forEach(function(ev) { if (ev.date && ev.date >= todayStr) upcoming.push(ev); });
+    }
+    upcoming.sort(function(a, b) { return a.date.localeCompare(b.date); });
+    const next3 = upcoming.slice(0, 3);
+
+    if (!next3.length) { section.style.display = 'none'; return; }
+
+    grid.innerHTML = next3.map(function(ev) {
+      const parts = ev.date.split('-').map(Number);
+      const dateLabel = parts[2] + ' ב' + UPCOMING_HE_MONTHS[parts[1] - 1];
+      return '<div class="upcoming-card" style="border-right-color:' + (ev.color || '#f97316') + '">' +
+        '<div class="upcoming-date">📅 ' + dateLabel + '</div>' +
+        '<div class="upcoming-title">' + (ev.title || '') + '</div>' +
+        '</div>';
+    }).join('');
+    section.style.display = '';
+  } catch(e) { console.warn('loadUpcomingActivities:', e); section.style.display = 'none'; }
+}
+window.loadUpcomingActivities = loadUpcomingActivities;
+
 function renderPublicCalendar(year, month, data) {
   const HE_MONTHS = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const HE_DAYS   = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];

@@ -1076,23 +1076,57 @@ function renderAchievementsContent(data) {
   }).join('');
 }
 
+let _testiPages = [], _testiIdx = 0, _testiTimer = null;
+const TESTI_PER_PAGE = 3;
+
 function renderTestimonialsContent(data) {
-  const el = document.getElementById('home-testimonials-grid');
-  if (!el) return;
+  const inner = document.getElementById('home-testimonials-grid');
+  const dotsEl = document.getElementById('testi-dots');
+  const wrap = inner ? inner.closest('.testi-wrap') : null;
+  if (!inner) return;
   const items = Object.values(data).filter(function(t){ return t.active !== false; });
   items.sort(function(a,b){ return (a.order||99)-(b.order||99); });
-  el.innerHTML = items.map(function(t) {
-    const initial = (t.name||'?').charAt(0);
-    return '<div class="testimonial-card">' +
-      '<div class="testimonial-quote">“</div>' +
-      '<div class="testimonial-text">' + (t.text||'') + '</div>' +
-      '<div class="testimonial-author">' +
-        '<div class="testimonial-avatar">' + initial + '</div>' +
-        '<div><div class="testimonial-name">' + (t.name||'') + '</div>' +
-        '<div class="testimonial-role">' + (t.role||'') + '</div></div>' +
-      '</div></div>';
+
+  _testiPages = [];
+  for (let i = 0; i < items.length; i += TESTI_PER_PAGE) _testiPages.push(items.slice(i, i + TESTI_PER_PAGE));
+
+  inner.innerHTML = _testiPages.map(function(page) {
+    return '<div class="testi-page testimonials-grid">' + page.map(function(t) {
+      const initial = (t.name||'?').charAt(0);
+      return '<div class="testimonial-card">' +
+        '<div class="testimonial-quote">“</div>' +
+        '<div class="testimonial-text">' + (t.text||'') + '</div>' +
+        '<div class="testimonial-author">' +
+          '<div class="testimonial-avatar">' + initial + '</div>' +
+          '<div><div class="testimonial-name">' + (t.name||'') + '</div>' +
+          '<div class="testimonial-role">' + (t.role||'') + '</div></div>' +
+        '</div></div>';
+    }).join('') + '</div>';
   }).join('');
+
+  const multiPage = _testiPages.length > 1;
+  if (wrap) wrap.querySelectorAll('.testi-arrow').forEach(function(b) { b.style.display = multiPage ? '' : 'none'; });
+  if (dotsEl) {
+    dotsEl.innerHTML = multiPage ? _testiPages.map(function(_, i) {
+      return '<button class="testi-dot' + (i===0?' active':'') + '" onclick="testiGoTo(' + i + ')"></button>';
+    }).join('') : '';
+  }
+  testiGoTo(0);
+  startTestiTimer();
 }
+
+function testiGoTo(i) {
+  if (!_testiPages.length) return;
+  _testiIdx = ((i % _testiPages.length) + _testiPages.length) % _testiPages.length;
+  const inner = document.getElementById('home-testimonials-grid');
+  if (inner) inner.style.transform = 'translateX(' + (_testiIdx * -100) + '%)';
+  document.querySelectorAll('.testi-dot').forEach(function(d, j) { d.classList.toggle('active', j === _testiIdx); });
+}
+window.testiGoTo = testiGoTo;
+window.testiNav  = function(dir) { testiGoTo(_testiIdx + dir); restartTestiTimer(); };
+
+function startTestiTimer()   { clearInterval(_testiTimer); if (_testiPages.length > 1) _testiTimer = setInterval(function(){ testiGoTo(_testiIdx + 1); }, 6000); }
+function restartTestiTimer() { startTestiTimer(); }
 
 function renderGalleryContent(data) {
   const el = document.getElementById('home-gallery-grid');

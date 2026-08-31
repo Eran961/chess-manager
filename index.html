@@ -84,6 +84,14 @@ if(localStorage.getItem('ccm_loggedIn')){
       <div class="stat-item"><div class="stat-num">60+</div><div class="stat-label">בתי ספר וגנים בתוכניות בוקר</div></div>
       <div class="stat-item"><div class="stat-num">100+</div><div class="stat-label">תלמידים בחוגי המועדון</div></div>
     </div>
+    <div class="upcoming-section" id="upcoming-section" style="display:none">
+      <div class="section-header">
+        <h2>📅 הפעילויות הקרובות</h2>
+        <p>מה קורה בקרוב במועדון</p>
+        <div class="section-line"></div>
+      </div>
+      <div class="upcoming-grid" id="upcoming-grid"></div>
+    </div>
     <div class="about-section">
       <div class="about-text" id="home-about-text">
         <h3>על המועדון</h3>
@@ -165,32 +173,41 @@ if(localStorage.getItem('ccm_loggedIn')){
         <p>שחקנים והורים שמחלקים את החוויה שלהם</p>
         <div class="section-line"></div>
       </div>
-      <div class="testimonials-grid" id="home-testimonials-grid">
-        <div class="testimonial-card">
-          <div class="testimonial-quote">"</div>
-          <div class="testimonial-text">הילד שלי התחיל בגיל 6 ועכשיו בגיל 10 הוא כבר בעל דירוג. המדריכים מדהימים — סבלניים, מקצועיים ואוהבים ילדים. ממליצה בחום!</div>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar">מ</div>
-            <div><div class="testimonial-name">מיכל כהן</div><div class="testimonial-role">אמא של שחקן חוג</div></div>
+      <div class="testi-wrap">
+        <div class="testi-track">
+          <div class="testi-inner" id="home-testimonials-grid">
+            <div class="testi-page testimonials-grid">
+              <div class="testimonial-card">
+                <div class="testimonial-quote">"</div>
+                <div class="testimonial-text">הילד שלי התחיל בגיל 6 ועכשיו בגיל 10 הוא כבר בעל דירוג. המדריכים מדהימים — סבלניים, מקצועיים ואוהבים ילדים. ממליצה בחום!</div>
+                <div class="testimonial-author">
+                  <div class="testimonial-avatar">מ</div>
+                  <div><div class="testimonial-name">מיכל כהן</div><div class="testimonial-role">אמא של שחקן חוג</div></div>
+                </div>
+              </div>
+              <div class="testimonial-card">
+                <div class="testimonial-quote">"</div>
+                <div class="testimonial-text">הגעתי למועדון בגיל 35 בלי שום ניסיון. תוך שנה כבר משתתף בתחרויות שישי. אווירה מצוינת ומדריכים שמסבירים בסבלנות לכל רמה.</div>
+                <div class="testimonial-author">
+                  <div class="testimonial-avatar">ד</div>
+                  <div><div class="testimonial-name">דוד לוי</div><div class="testimonial-role">שחקן מבוגרים מתחילים</div></div>
+                </div>
+              </div>
+              <div class="testimonial-card">
+                <div class="testimonial-quote">"</div>
+                <div class="testimonial-text">הבת שלי זכתה באליפות ישראל לנוער — הכל בזכות ההדרכה המדהימה פה. לא רק שחמט, הם מלמדים חשיבה, סבלנות ומשמעת.</div>
+                <div class="testimonial-author">
+                  <div class="testimonial-avatar">ר</div>
+                  <div><div class="testimonial-name">רחל אברהם</div><div class="testimonial-role">אמא של שחקנית נוער</div></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="testimonial-card">
-          <div class="testimonial-quote">"</div>
-          <div class="testimonial-text">הגעתי למועדון בגיל 35 בלי שום ניסיון. תוך שנה כבר משתתף בתחרויות שישי. אווירה מצוינת ומדריכים שמסבירים בסבלנות לכל רמה.</div>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar">ד</div>
-            <div><div class="testimonial-name">דוד לוי</div><div class="testimonial-role">שחקן מבוגרים מתחילים</div></div>
-          </div>
-        </div>
-        <div class="testimonial-card">
-          <div class="testimonial-quote">"</div>
-          <div class="testimonial-text">הבת שלי זכתה באליפות ישראל לנוער — הכל בזכות ההדרכה המדהימה פה. לא רק שחמט, הם מלמדים חשיבה, סבלנות ומשמעת.</div>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar">ר</div>
-            <div><div class="testimonial-name">רחל אברהם</div><div class="testimonial-role">אמא של שחקנית נוער</div></div>
-          </div>
-        </div>
+        <button class="testi-arrow prev" onclick="testiNav(1)" title="הבא" style="display:none">&#10095;</button>
+        <button class="testi-arrow next" onclick="testiNav(-1)" title="הקודם" style="display:none">&#10094;</button>
       </div>
+      <div class="testi-dots" id="testi-dots"></div>
     </div>
     <!-- GALLERY -->
     <div class="gallery-section">

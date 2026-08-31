@@ -1154,6 +1154,7 @@ function showSitePage(page) {
   if (page === 'home') { if (window.loadNewsCarousel) loadNewsCarousel(); }
   if (page === 'people') { if (window.loadPeopleSection) loadPeopleSection(); }
   if (page === 'home') { if (window.loadSiteContent) loadSiteContent(); }
+  if (page === 'home') { if (window.loadUpcomingActivities) loadUpcomingActivities(); }
 }
 
 function showWeeklyModal() { document.getElementById("weekly-modal").classList.add("visible"); }
@@ -1300,6 +1301,7 @@ function initAuth() {
   renderLandingSchedule();
   loadNewsCarousel();
   loadSiteContent();
+  if (window.loadUpcomingActivities) loadUpcomingActivities();
   auth.onAuthStateChanged(async (firebaseUser) => {
     if (!firebaseUser) {
       // Not logged in — show landing page
