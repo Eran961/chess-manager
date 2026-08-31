@@ -3,6 +3,9 @@
 // State for public calendar
 let _pubCalYear = new Date().getFullYear();
 let _pubCalMonth = new Date().getMonth() + 1; // 1-based
+// How many months ahead of "now" the public calendar is allowed to show (admin-controlled).
+// Recomputed on every load from monthlyCalendar/_settings.monthsAhead (default 2).
+let _pubCalMaxYear = null, _pubCalMaxMonth = null;
 
 async function loadAndRenderPublicCal() {
   const el = document.getElementById('pub-cal-container');
@@ -20,7 +23,18 @@ async function loadAndRenderPublicCal() {
           </div>`;
         return;
       }
+      const monthsAhead = (vis.monthsAhead && vis.monthsAhead > 0) ? vis.monthsAhead : 2;
+      const now = new Date();
+      const maxD = new Date(now.getFullYear(), now.getMonth() + (monthsAhead - 1), 1);
+      _pubCalMaxYear  = maxD.getFullYear();
+      _pubCalMaxMonth = maxD.getMonth() + 1;
     } catch(e) { console.warn('calendar visibility check error', e); }
+  }
+  // Clamp the currently-selected month to the allowed window (handles the admin
+  // shortening monthsAhead while a visitor has already paged forward).
+  if (_pubCalMaxYear != null && (_pubCalYear > _pubCalMaxYear || (_pubCalYear === _pubCalMaxYear && _pubCalMonth > _pubCalMaxMonth))) {
+    _pubCalYear = _pubCalMaxYear;
+    _pubCalMonth = _pubCalMaxMonth;
   }
   const key = `${_pubCalYear}-${String(_pubCalMonth).padStart(2,'0')}`;
   let data = {};
@@ -30,7 +44,7 @@ async function loadAndRenderPublicCal() {
       data = snap.val() || {};
     } catch(e) { console.warn('calendar load error', e); }
   }
-  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data);
+  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data, _pubCalMaxYear, _pubCalMaxMonth);
 }
 window.loadAndRenderPublicCal = loadAndRenderPublicCal;
 
@@ -47,12 +61,14 @@ async function loadUpcomingActivities() {
     const visSnap = await db.ref('monthlyCalendar/_settings').get();
     const vis = visSnap.val() || {};
     if (vis.hidden) { section.style.display = 'none'; return; }
+    const monthsAhead = (vis.monthsAhead && vis.monthsAhead > 0) ? vis.monthsAhead : 2;
 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const upcoming = [];
-    // Scan the current month plus up to 2 months ahead, stopping once we have enough candidates
-    for (let offset = 0; offset < 3 && upcoming.length < 3; offset++) {
+    // Scan the same admin-configured "months ahead" window as the public calendar,
+    // stopping once we have enough candidates
+    for (let offset = 0; offset < monthsAhead && upcoming.length < 3; offset++) {
       const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
       const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
       const snap = await db.ref('monthlyCalendar/' + key + '/events').get();
@@ -77,7 +93,7 @@ async function loadUpcomingActivities() {
 }
 window.loadUpcomingActivities = loadUpcomingActivities;
 
-function renderPublicCalendar(year, month, data) {
+function renderPublicCalendar(year, month, data, maxYear, maxMonth) {
   const HE_MONTHS = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const HE_DAYS   = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const monthStr  = String(month).padStart(2,'0');
@@ -168,12 +184,13 @@ function renderPublicCalendar(year, month, data) {
         </div>`).join('')}
     </div>` : '';
 
+  const atMax = (maxYear != null && maxMonth != null) && (year > maxYear || (year === maxYear && month >= maxMonth));
   return `
     <div class="pub-cal-wrap">
       <div class="pub-cal-header">
         <div class="pub-cal-nav">
           <button onclick="pubCalNav(-1)">◀</button>
-          <button onclick="pubCalNav(1)">▶</button>
+          <button onclick="pubCalNav(1)" ${atMax ? 'disabled title="לא ניתן לצפות רחוק יותר קדימה" style="opacity:.35;cursor:not-allowed"' : ''}>▶</button>
         </div>
         <div class="pub-cal-title">${HE_MONTHS[month]} ${monthStr}/${year}</div>
       </div>
@@ -195,6 +212,10 @@ function renderPublicCalendar(year, month, data) {
 window.renderPublicCalendar = renderPublicCalendar;
 
 function pubCalNav(dir) {
+  if (dir > 0 && _pubCalMaxYear != null &&
+      (_pubCalYear > _pubCalMaxYear || (_pubCalYear === _pubCalMaxYear && _pubCalMonth >= _pubCalMaxMonth))) {
+    return; // already at the admin-configured "months ahead" limit
+  }
   _pubCalMonth += dir;
   if (_pubCalMonth > 12) { _pubCalMonth = 1; _pubCalYear++; }
   if (_pubCalMonth < 1)  { _pubCalMonth = 12; _pubCalYear--; }
@@ -224,6 +245,7 @@ function _renderMonthlyCalVisInline(data) {
   if (!el) return;
   const hidden  = !!data.hidden;
   const message = data.message || 'לוח הפעילויות יתעדכן בקרוב — נשמח לראותכם!';
+  const monthsAhead = (data.monthsAhead && data.monthsAhead > 0) ? data.monthsAhead : 2;
   el.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px;padding:16px;border-radius:10px;background:var(--bg-subtle);border:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -248,6 +270,15 @@ function _renderMonthlyCalVisInline(data) {
                  color:var(--text-primary);font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box;direction:rtl"
           placeholder="לדוגמה: לוח הפעילויות בבנייה — נחזור בקרוב!">${message}</textarea>
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--border)">
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--text-primary)">📆 כמה חודשים קדימה להציג באתר</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">מגביל עד כמה קדימה גולשים יכולים לדפדף בלוח הפעילויות הציבורי</div>
+        </div>
+        <input type="number" id="monthly-cal-months-ahead" min="1" max="12" value="${monthsAhead}"
+          style="width:64px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);
+                 color:var(--text-primary);font-family:inherit;font-size:14px;text-align:center;flex-shrink:0">
+      </div>
       <button onclick="_saveMonthlyCalVisSettings()"
         style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;align-self:flex-start">
         💾 שמור
@@ -266,8 +297,11 @@ window._onMonthlyCalHiddenToggle = function() {
 window._saveMonthlyCalVisSettings = async function() {
   const hidden  = document.getElementById('monthly-cal-hidden-toggle').checked;
   const message = (document.getElementById('monthly-cal-msg-input')?.value || '').trim();
-  await db.ref('monthlyCalendar/_settings').update({ hidden, message });
-  showToast(hidden ? '🚧 לוח הפעילויות מוסתר באתר' : '✅ לוח הפעילויות גלוי באתר');
+  let monthsAhead = parseInt(document.getElementById('monthly-cal-months-ahead')?.value, 10);
+  if (!monthsAhead || monthsAhead < 1) monthsAhead = 1;
+  if (monthsAhead > 12) monthsAhead = 12;
+  await db.ref('monthlyCalendar/_settings').update({ hidden, message, monthsAhead });
+  showToast(hidden ? '🚧 לוח הפעילויות מוסתר באתר' : '✅ ההגדרות נשמרו');
 };
 
 function renderAdminCalPanel(data) {
