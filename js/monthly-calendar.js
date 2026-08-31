@@ -6,6 +6,8 @@ let _pubCalMonth = new Date().getMonth() + 1; // 1-based
 // How many months ahead of "now" the public calendar is allowed to show (admin-controlled).
 // Recomputed on every load from monthlyCalendar/_settings.monthsAhead (default 2).
 let _pubCalMaxYear = null, _pubCalMaxMonth = null;
+// Months (1-12) that are always "no club days" every year (e.g. summer break), admin-controlled.
+let _pubCalClosedMonths = [7,8];
 
 async function loadAndRenderPublicCal() {
   const el = document.getElementById('pub-cal-container');
@@ -28,6 +30,7 @@ async function loadAndRenderPublicCal() {
       const maxD = new Date(now.getFullYear(), now.getMonth() + (monthsAhead - 1), 1);
       _pubCalMaxYear  = maxD.getFullYear();
       _pubCalMaxMonth = maxD.getMonth() + 1;
+      _pubCalClosedMonths = vis.closedMonths || [7,8];
     } catch(e) { console.warn('calendar visibility check error', e); }
   }
   // Clamp the currently-selected month to the allowed window (handles the admin
@@ -44,7 +47,7 @@ async function loadAndRenderPublicCal() {
       data = snap.val() || {};
     } catch(e) { console.warn('calendar load error', e); }
   }
-  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data, _pubCalMaxYear, _pubCalMaxMonth);
+  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data, _pubCalMaxYear, _pubCalMaxMonth, _pubCalClosedMonths);
 }
 window.loadAndRenderPublicCal = loadAndRenderPublicCal;
 
@@ -93,13 +96,15 @@ async function loadUpcomingActivities() {
 }
 window.loadUpcomingActivities = loadUpcomingActivities;
 
-function renderPublicCalendar(year, month, data, maxYear, maxMonth) {
+function renderPublicCalendar(year, month, data, maxYear, maxMonth, closedMonths) {
   const HE_MONTHS = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const HE_DAYS   = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const monthStr  = String(month).padStart(2,'0');
+  const isClosedMonth = (closedMonths||[]).includes(month);
 
-  // Parse club days (0=Sun..6=Sat)
-  const clubDaysSet = new Set((data.clubDays||'').split(',').map(Number).filter(d=>!isNaN(d)&&d>=0));
+  // Parse club days (0=Sun..6=Sat) — a recurring "closed month" (e.g. summer break)
+  // overrides any per-month clubDays setting and shows no club days at all.
+  const clubDaysSet = isClosedMonth ? new Set() : new Set((data.clubDays||'').split(',').map(Number).filter(d=>!isNaN(d)&&d>=0));
   const noClubDates = data.noClubDates || {};
   const events      = data.events ? Object.values(data.events) : [];
   const sidebarNotes      = data.sidebarNotes || [];
@@ -230,12 +235,12 @@ let _adminCalMonth = new Date().getMonth() + 1;
 async function loadAdminCalendarPanel() {
   const panel = document.getElementById('panel-monthly-cal');
   if (!panel) return;
+  let visData = {};
+  try { const vs = await db.ref('monthlyCalendar/_settings').get(); visData = vs.val() || {}; } catch(e) {}
   const key  = `${_adminCalYear}-${String(_adminCalMonth).padStart(2,'0')}`;
   let data = {};
   try { const s = await db.ref(`monthlyCalendar/${key}`).get(); data = s.val() || {}; } catch(e) {}
-  panel.innerHTML = renderAdminCalPanel(data);
-  let visData = {};
-  try { const vs = await db.ref('monthlyCalendar/_settings').get(); visData = vs.val() || {}; } catch(e) {}
+  panel.innerHTML = renderAdminCalPanel(data, visData.closedMonths || [7,8]);
   _renderMonthlyCalVisInline(visData);
 }
 window.loadAdminCalendarPanel = loadAdminCalendarPanel;
@@ -246,6 +251,14 @@ function _renderMonthlyCalVisInline(data) {
   const hidden  = !!data.hidden;
   const message = data.message || 'לוח הפעילויות יתעדכן בקרוב — נשמח לראותכם!';
   const monthsAhead = (data.monthsAhead && data.monthsAhead > 0) ? data.monthsAhead : 2;
+  const closedMonths = data.closedMonths || [7,8]; // default: summer break (July/August)
+  const HE_MONTHS_SHORT = ['ינו','פבר','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ'];
+  const closedMonthChips = HE_MONTHS_SHORT.map((m,i) => {
+    const mn = i + 1;
+    return `<label style="display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer">
+      <input type="checkbox" value="${mn}" ${closedMonths.includes(mn)?'checked':''} class="monthly-cal-closed-month"> ${m}
+    </label>`;
+  }).join('');
   el.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px;padding:16px;border-radius:10px;background:var(--bg-subtle);border:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -279,6 +292,11 @@ function _renderMonthlyCalVisInline(data) {
           style="width:64px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);
                  color:var(--text-primary);font-family:inherit;font-size:14px;text-align:center;flex-shrink:0">
       </div>
+      <div style="padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-weight:700;font-size:14px;color:var(--text-primary)">🌴 חודשי חופשה קבועה (ללא חוגים בכלל)</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:10px">חוזר כל שנה אוטומטית — אין צורך להגדיר מחדש. סמן/בטל לפי הצורך.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">${closedMonthChips}</div>
+      </div>
       <button onclick="_saveMonthlyCalVisSettings()"
         style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;align-self:flex-start">
         💾 שמור
@@ -300,23 +318,32 @@ window._saveMonthlyCalVisSettings = async function() {
   let monthsAhead = parseInt(document.getElementById('monthly-cal-months-ahead')?.value, 10);
   if (!monthsAhead || monthsAhead < 1) monthsAhead = 1;
   if (monthsAhead > 12) monthsAhead = 12;
-  await db.ref('monthlyCalendar/_settings').update({ hidden, message, monthsAhead });
+  const closedMonths = [...document.querySelectorAll('.monthly-cal-closed-month:checked')].map(cb => parseInt(cb.value, 10));
+  await db.ref('monthlyCalendar/_settings').update({ hidden, message, monthsAhead, closedMonths });
   showToast(hidden ? '🚧 לוח הפעילויות מוסתר באתר' : '✅ ההגדרות נשמרו');
+  loadAdminCalendarPanel();
 };
 
-function renderAdminCalPanel(data) {
+function renderAdminCalPanel(data, closedMonths) {
   const HE_MONTHS = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-  const HE_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  // Friday/Saturday are never club days at this club, so they're not offered as options at all.
+  const HE_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי'];
   const clubDaysArr = (data.clubDays||'').split(',').map(Number).filter(d=>!isNaN(d)&&d>=0);
   const events = data.events ? Object.values(data.events).sort((a,b)=>a.date.localeCompare(b.date)) : [];
   const noClubDates = Object.keys(data.noClubDates||{}).sort().join(', ');
   const sidebarNotes = data.sidebarNotes || [];
   const intlEvents   = data.internationalEvents || [];
+  const monthClosed  = (closedMonths||[]).includes(_adminCalMonth);
 
   const checkboxes = HE_DAYS.map((d,i) =>
     `<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer">
        <input type="checkbox" value="${i}" ${clubDaysArr.includes(i)?'checked':''} class="admin-cal-clubday"> ${d}
      </label>`).join('');
+  const closedNote = monthClosed
+    ? `<div style="padding:10px 18px;font-size:12px;background:#fffbeb;color:#92400e;border-bottom:1px solid #fde68a">
+         🌴 ${HE_MONTHS[_adminCalMonth]} מוגדר כחודש חופשה קבועה (ללא חוגים) בהגדרות למעלה — הסימונים כאן לא ישפיעו על התצוגה הציבורית כל עוד זה כך.
+       </div>`
+    : '';
 
   const evRows = events.length
     ? events.map((ev,i) => `
@@ -360,6 +387,7 @@ function renderAdminCalPanel(data) {
       <!-- Club days -->
       <div class="att-card" style="margin-bottom:14px">
         <div class="att-card-header">📅 ימי חוג קבועים</div>
+        ${closedNote}
         <div style="padding:14px 18px;display:flex;gap:12px;flex-wrap:wrap">${checkboxes}</div>
       </div>
 
@@ -550,8 +578,12 @@ function previewAdminCal() {
     _pubCalYear  = _adminCalYear;
     _pubCalMonth = _adminCalMonth;
     const key = `${_adminCalYear}-${String(_adminCalMonth).padStart(2,'0')}`;
-    db.ref(`monthlyCalendar/${key}`).get().then(snap => {
-      const html = renderPublicCalendar(_adminCalYear, _adminCalMonth, snap.val()||{});
+    Promise.all([
+      db.ref(`monthlyCalendar/${key}`).get(),
+      db.ref('monthlyCalendar/_settings').get(),
+    ]).then(([snap, visSnap]) => {
+      const closedMonths = (visSnap.val() || {}).closedMonths || [7,8];
+      const html = renderPublicCalendar(_adminCalYear, _adminCalMonth, snap.val()||{}, null, null, closedMonths);
       document.body.insertAdjacentHTML('beforeend', `
         <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()" style="padding:20px">
           <div class="cal-preview-light" style="background:white;border-radius:14px;max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
