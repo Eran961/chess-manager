@@ -358,6 +358,7 @@
     /* ===== ATTENDANCE STYLES ===== */
     .att-card {
       background: white;
+      color: #1a202c;
       border-radius: 12px;
       box-shadow: 0 1px 4px rgba(0,0,0,0.08);
       overflow: hidden;
@@ -946,7 +947,7 @@
         --cal-legend-border:rgba(255,255,255,0.12);
         --cal-row-text:     rgba(255,255,255,0.8);
     }
-    body.light-mode {
+    body.light-mode, .cal-preview-light {
         --cal-cell-bg:      white;
         --cal-club-bg:      #fef3c7;
         --cal-no-club-bg:   white;

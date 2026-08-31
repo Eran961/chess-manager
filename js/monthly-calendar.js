@@ -520,7 +520,7 @@ function previewAdminCal() {
       const html = renderPublicCalendar(_adminCalYear, _adminCalMonth, snap.val()||{});
       document.body.insertAdjacentHTML('beforeend', `
         <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()" style="padding:20px">
-          <div style="background:white;border-radius:14px;max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
+          <div class="cal-preview-light" style="background:white;border-radius:14px;max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #e2e8f0">
               <span style="font-weight:700;font-size:16px">👁 תצוגה מקדימה</span>
               <button onclick="this.closest('.modal-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer">✕</button>
