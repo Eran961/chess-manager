@@ -1909,7 +1909,7 @@ function buildTopNav() {
   }
 
   // Camps hub
-  if (camps.length > 0 || isAdmin) {
+  if (isAdmin || (hasTabPerm('camps') && camps.length > 0)) {
     const campCards = camps.map(c => ({ icon: '🏕️', label: c.name, tab: 'camp-' + c.id }));
     camps.forEach(c => { window._tabCatMap['camp-' + c.id] = 'cat-camps'; });
     catDefs.push({ key: 'camps', label: '🏕️ מחנות', cards: campCards, emptyMessage: 'אין מחנות זמינים' });
