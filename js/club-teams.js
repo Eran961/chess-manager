@@ -1,14 +1,17 @@
 // ===== LEAGUES TAB (לשונית ליגות) =====
 
+const DIV_STYLES = {
+  'לאומית': { grad: 'linear-gradient(135deg,#1a1a2e,#0f3460)', accent: '#f0c040', light: '#fffbeb' },
+  'עילית':  { grad: 'linear-gradient(135deg,#134e4a,#0f766e)', accent: '#5eead4', light: '#f0fdfa' },
+  'ארצית':  { grad: 'linear-gradient(135deg,#0d1f3c,#1a4a8a)', accent: '#93c5fd', light: '#eff6ff' },
+  'מחוזית': { grad: 'linear-gradient(135deg,#7c2d12,#9a3412)', accent: '#fdba74', light: '#fff7ed' },
+  'א':      { grad: 'linear-gradient(135deg,#14532d,#166534)', accent: '#86efac', light: '#f0fff4' },
+  'ב':      { grad: 'linear-gradient(135deg,#3b0764,#4c1d95)', accent: '#c4b5fd', light: '#f5f3ff' },
+  'ג':      { grad: 'linear-gradient(135deg,#7f1d1d,#991b1b)', accent: '#fca5a5', light: '#fff5f5' },
+};
+const DEFAULT_STYLE = { grad: 'linear-gradient(135deg,#2d3748,#4a5568)', accent: '#e2e8f0', light: '#f7fafc' };
+
 function buildSingleTypeSection(type) {
-  const DIV_STYLES = {
-    'לאומית': { grad: 'linear-gradient(135deg,#1a1a2e,#0f3460)', accent: '#f0c040', light: '#fffbeb' },
-    'ארצית':  { grad: 'linear-gradient(135deg,#0d1f3c,#1a4a8a)', accent: '#93c5fd', light: '#eff6ff' },
-    'א':      { grad: 'linear-gradient(135deg,#14532d,#166534)', accent: '#86efac', light: '#f0fff4' },
-    'ב':      { grad: 'linear-gradient(135deg,#3b0764,#4c1d95)', accent: '#c4b5fd', light: '#f5f3ff' },
-    'ג':      { grad: 'linear-gradient(135deg,#7f1d1d,#991b1b)', accent: '#fca5a5', light: '#fff5f5' },
-  };
-  const DEFAULT_STYLE = { grad: 'linear-gradient(135deg,#2d3748,#4a5568)', accent: '#e2e8f0', light: '#f7fafc' };
 
   const teams = _clubTeams.filter(t => (t.type || 'בוגרים') === type);
   const byDiv = {};
@@ -69,14 +72,26 @@ function buildSingleTypeSection(type) {
       </div>`;
   }).join('');
 
+  const seasonYear = 2026;
+  const youthDivisionSync = type === 'נוער' ? `
+    <div id="youth-div-sync-bar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+      ${['עילית','ארצית','מחוזית'].map(d => `
+        <button id="btn-sync-youth-${d}" onclick="syncYouthDivisionTeams('${d}')"
+          style="background:${(DIV_STYLES[d]||DEFAULT_STYLE).grad};color:white;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+          🔄 סנכרן ליגת ${d}
+        </button>`).join('')}
+      <span id="youth-div-sync-status" style="font-size:12px;color:#718096;align-self:center"></span>
+    </div>` : '';
+
   return `
     <div style="max-width:640px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div>
-          <div style="font-size:20px;font-weight:800;color:#1a202c">${type}</div>
+          <div style="font-size:20px;font-weight:800;color:#1a202c">${type} <span style="font-size:14px;font-weight:600;color:#a0aec0">· עונת ${seasonYear}</span></div>
           <div style="font-size:13px;color:#718096;margin-top:2px">${teams.length} קבוצות פעילות</div>
         </div>
       </div>
+      ${youthDivisionSync}
       ${sectionsHTML}
       <details style="margin-top:6px">
         <summary style="font-size:12px;color:#a0aec0;cursor:pointer;user-select:none;padding:6px 0">+ הוסף קבוצה ידנית</summary>
@@ -85,7 +100,7 @@ function buildSingleTypeSection(type) {
             style="flex:2;min-width:120px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit"
             onkeydown="if(event.key==='Enter')addClubTeamManualTyped('${type}')">
           <select id="new-team-div-${type}" style="flex:1;min-width:90px;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit">
-            ${DIV_ORDER.map(d=>`<option value="${d}">ליגה ${d}</option>`).join('')}
+            ${baseDivOrder.map(d=>`<option value="${d}">ליגה ${d}</option>`).join('')}
           </select>
           <button onclick="addClubTeamManualTyped('${type}')"
             style="background:#276749;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">הוסף</button>
@@ -102,6 +117,45 @@ function renderLeagueTypePanels() {
   const dl = document.getElementById('datalist-club-teams');
   if (dl) dl.innerHTML = _clubTeams.map(t => `<option value="${t.name}">`).join('');
 }
+
+// Pull the club's team roster for ONE youth division (עילית/ארצית/מחוזית) from the
+// federation and merge it in — only teams in that division get replaced, everything
+// else in _clubTeams (other divisions/types) is left untouched. Each division has its
+// own button so a sync never mixes in teams from a different league by mistake.
+async function syncYouthDivisionTeams(division) {
+  const btn = document.getElementById(`btn-sync-youth-${division}`);
+  const statusEl = document.getElementById('youth-div-sync-status');
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ טוען...'; }
+  if (statusEl) { statusEl.textContent = ''; statusEl.style.color = '#718096'; }
+  try {
+    const res = await fetch('https://chess-manager-7wkr.onrender.com/api/club-teams?clubId=31', { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+    const all = await res.json();
+    const matching = all.filter(t => t.type === 'נוער' && t.division === division);
+    if (!matching.length) throw new Error(`לא נמצאו קבוצות נוער בליגה ${division}`);
+
+    // Merge: drop any existing נוער/division teams, keep everything else, add the fresh ones.
+    _clubTeams = _clubTeams.filter(t => !(t.type === 'נוער' && t.division === division)).concat(matching);
+    await db.ref('clubTeams').set(_clubTeams);
+
+    if (btn) { btn.style.background = '#276749'; btn.textContent = '✅ הצליח'; }
+    if (statusEl) { statusEl.textContent = `${matching.length} קבוצות נטענו לליגת ${division}`; statusEl.style.color = '#276749'; }
+    showToast(`✅ ${matching.length} קבוצות נוער (${division}) נטענו`, 'success');
+    renderLeagueTypePanels();
+  } catch(e) {
+    if (btn) { btn.style.background = '#c53030'; btn.textContent = '❌ נכשל'; }
+    if (statusEl) { statusEl.textContent = e.message; statusEl.style.color = '#c53030'; }
+    showToast('❌ שגיאה: ' + e.message, 'error');
+  } finally {
+    setTimeout(() => {
+      if (!btn) return;
+      btn.disabled = false; btn.textContent = origText;
+      btn.style.background = (DIV_STYLES[division]||DEFAULT_STYLE).grad;
+    }, 2500);
+  }
+}
+window.syncYouthDivisionTeams = syncYouthDivisionTeams;
 
 async function addClubTeamManualTyped(type) {
   const inp = document.getElementById(`new-team-input-${type}`);

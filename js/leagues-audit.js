@@ -640,10 +640,12 @@ function printPlayerList(groupIdx, subGroupIdx) {
 // _satDates: { 'YYYY-MM-DD': { dateDisplay, matches: [...] } }
 let _satDates = {};
 
-const SAT_DIVISIONS = ['לאומית', 'ארצית', 'א', 'ב', 'ג'];
+const SAT_DIVISIONS = ['לאומית', 'עילית', 'ארצית', 'מחוזית', 'א', 'ב', 'ג'];
 const SAT_DIV_COLORS = {
   'לאומית': { bg: '#fefcbf', border: '#d69e2e', text: '#744210' },
+  'עילית':  { bg: '#ccfbf1', border: '#0d9488', text: '#134e4a' },
   'ארצית':  { bg: '#e9d8fd', border: '#805ad5', text: '#322659' },
+  'מחוזית': { bg: '#fed7aa', border: '#c2410c', text: '#7c2d12' },
   'א':      { bg: '#bee3f8', border: '#3182ce', text: '#1a365d' },
   'ב':      { bg: '#c6f6d5', border: '#38a169', text: '#1c4532' },
   'ג':      { bg: '#feebc8', border: '#dd6b20', text: '#7b341e' },
@@ -1020,7 +1022,8 @@ function openFullscreenSlot(dateKey, slotTime) {
     .sort((a, b) => (a.boardNumber ?? 999) - (b.boardNumber ?? 999));
 
   const DIV_ACCENT = {
-    'לאומית': '#d69e2e', 'ארצית': '#805ad5', 'א': '#3182ce', 'ב': '#38a169', 'ג': '#dd6b20'
+    'לאומית': '#d69e2e', 'עילית': '#2dd4bf', 'ארצית': '#805ad5', 'מחוזית': '#fb923c',
+    'א': '#3182ce', 'ב': '#38a169', 'ג': '#dd6b20'
   };
   const typeIcon = { 'בוגרים':'♟', 'נשים':'♛', 'נוער':'🎓' };
 
