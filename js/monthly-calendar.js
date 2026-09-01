@@ -120,7 +120,8 @@ function renderPublicCalendar(year, month, data, maxYear, maxMonth, minYear, min
   // overrides any per-month clubDays setting and shows no club days at all.
   const clubDaysSet = isClosedMonth ? new Set() : new Set((data.clubDays||'').split(',').map(Number).filter(d=>!isNaN(d)&&d>=0));
   const noClubDates = data.noClubDates || {};
-  const events      = (data.events ? Object.values(data.events) : []).concat(holidayEvents || []);
+  // Holidays first, then club-added events/tournaments, on days that have both.
+  const events      = (holidayEvents || []).concat(data.events ? Object.values(data.events) : []);
   const sidebarNotes      = data.sidebarNotes || [];
   const internationalEvents = data.internationalEvents || [];
 

@@ -30,7 +30,8 @@ async function initTournCal(){
           holidays.forEach(h => {
             if (!_tcEvents[h.date]) _tcEvents[h.date] = [];
             const alreadyThere = _tcEvents[h.date].some(ev => ev.text && ev.text.includes(h.title));
-            if (!alreadyThere) _tcEvents[h.date].push({ id: 'hol-' + h.date + '-' + h.title, text: h.title, color: h.color });
+            // Holidays first, then club-added events/tournaments, on days that have both.
+            if (!alreadyThere) _tcEvents[h.date].unshift({ id: 'hol-' + h.date + '-' + h.title, text: h.title, color: h.color });
           });
         }
       } catch(e) { console.warn('tournament calendar holiday overlay failed', e); }
