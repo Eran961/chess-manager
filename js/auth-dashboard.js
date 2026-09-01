@@ -1155,6 +1155,7 @@ function showSitePage(page) {
   if (page === 'people') { if (window.loadPeopleSection) loadPeopleSection(); }
   if (page === 'home') { if (window.loadSiteContent) loadSiteContent(); }
   if (page === 'home') { if (window.loadUpcomingActivities) loadUpcomingActivities(); }
+  try { localStorage.setItem('ccm_lastSitePage', page); } catch(e) {}
 }
 
 function showWeeklyModal() { document.getElementById("weekly-modal").classList.add("visible"); }
@@ -1315,6 +1316,12 @@ function initAuth() {
       document.querySelector('header').style.display = 'none';
       document.getElementById('app-layout').style.display = 'none';
       currentUser = null;
+      try {
+        const savedPage = localStorage.getItem('ccm_lastSitePage');
+        if (savedPage && savedPage !== 'home' && document.getElementById('page-' + savedPage)) {
+          showSitePage(savedPage);
+        }
+      } catch(e) {}
       return;
     }
     // Logged in
@@ -1367,6 +1374,7 @@ function switchTab(id) {
   const catId = (window._tabCatMap && window._tabCatMap[id]) || id;
   const catBtn = document.querySelector('.cat-btn[data-tab="' + catId + '"]');
   if (catBtn) catBtn.classList.add('active');
+  try { localStorage.setItem('ccm_lastPortalTab', id); } catch(e) {}
 }
 
 function toggleSidebar(forceOpen) {
@@ -2052,8 +2060,16 @@ function buildTopNav() {
     content.appendChild(hubPanel);
   });
 
-  // Start on home
-  switchTab('home');
+  // Start on the last tab the user was viewing (persisted across refreshes), or home by default
+  let _restoredTab = false;
+  try {
+    const savedTab = localStorage.getItem('ccm_lastPortalTab');
+    if (savedTab && savedTab !== 'home' && document.getElementById('panel-' + savedTab)) {
+      (window._firTabInit || switchTab)(savedTab);
+      _restoredTab = true;
+    }
+  } catch(e) {}
+  if (!_restoredTab) switchTab('home');
 }
 
 // Rebuilds the מחנות hub panel's card grid in place, without touching the
