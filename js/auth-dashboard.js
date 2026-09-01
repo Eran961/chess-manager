@@ -1301,7 +1301,10 @@ function initAuth() {
   renderLandingSchedule();
   loadNewsCarousel();
   loadSiteContent();
-  if (window.loadUpcomingActivities) loadUpcomingActivities();
+  // monthly-calendar.js (which defines this) loads AFTER this script in index.html,
+  // so on the very first page load it isn't defined yet at this exact point —
+  // defer to the next tick, by which time every <script> tag has finished loading.
+  setTimeout(() => { if (window.loadUpcomingActivities) loadUpcomingActivities(); }, 0);
   auth.onAuthStateChanged(async (firebaseUser) => {
     if (!firebaseUser) {
       // Not logged in — show landing page
