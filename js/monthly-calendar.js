@@ -249,6 +249,7 @@ window.pubCalNav = pubCalNav;
 // Admin calendar state
 let _adminCalYear  = new Date().getFullYear();
 let _adminCalMonth = new Date().getMonth() + 1;
+let _adminCalEvents = []; // the current month's events (with _key), refreshed on every render — lets openAddCalEvent(key) pre-fill for editing
 
 async function loadAdminCalendarPanel() {
   const panel = document.getElementById('panel-monthly-cal');
@@ -347,8 +348,11 @@ function renderAdminCalPanel(data, closedMonths) {
   // Friday/Saturday are never club days at this club, so they're not offered as options at all.
   const HE_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי'];
   const clubDaysArr = (data.clubDays||'').split(',').map(Number).filter(d=>!isNaN(d)&&d>=0);
-  const events = data.events ? Object.values(data.events).sort((a,b)=>a.date.localeCompare(b.date)) : [];
-  const noClubDates = Object.keys(data.noClubDates||{}).sort().join(', ');
+  const events = data.events
+    ? Object.entries(data.events).map(([k,v]) => Object.assign({_key:k}, v)).sort((a,b)=>a.date.localeCompare(b.date))
+    : [];
+  _adminCalEvents = events; // so openAddCalEvent(key) can look up the event to pre-fill for editing
+  const noClubDatesArr = Object.keys(data.noClubDates||{}).sort();
   const sidebarNotes = data.sidebarNotes || [];
   const intlEvents   = data.internationalEvents || [];
   const monthClosed  = (closedMonths||[]).includes(_adminCalMonth);
@@ -364,12 +368,14 @@ function renderAdminCalPanel(data, closedMonths) {
     : '';
 
   const evRows = events.length
-    ? events.map((ev,i) => `
+    ? events.map((ev) => `
         <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f4f8">
           <span style="width:10px;height:10px;border-radius:50%;background:${ev.color||'#f97316'};flex-shrink:0"></span>
           <span style="font-size:13px;color:#718096;min-width:90px">${ev.date}</span>
           <span style="flex:1;font-size:13px;font-weight:600">${ev.title}</span>
-          <button onclick="deleteCalEvent('${(ev.date||'').replace(/'/g,"\\'")}','${(ev.title||'').replace(/'/g,"\\'")}')"
+          <button onclick="openAddCalEvent('${ev._key}')"
+            style="background:none;border:none;color:#4a5568;cursor:pointer;font-size:14px">✏️</button>
+          <button onclick="deleteCalEvent('${ev._key}')"
             style="background:none;border:none;color:#e53e3e;cursor:pointer;font-size:14px">🗑</button>
         </div>`)
       .join('')
@@ -422,8 +428,15 @@ function renderAdminCalPanel(data, closedMonths) {
       <div class="att-card" style="margin-bottom:14px">
         <div class="att-card-header">🚫 תאריכים ללא חוג (חגים וכד׳)</div>
         <div style="padding:14px 18px">
-          <div style="font-size:12px;color:#718096;margin-bottom:6px">הזן תאריכים מופרדים בפסיקים (YYYY-MM-DD)</div>
-          <input type="text" id="admin-cal-noclubdates" class="modal-input" value="${noClubDates}" placeholder="2025-11-15, 2025-11-22" dir="ltr">
+          <div style="font-size:12px;color:#718096;margin-bottom:10px">ימי חוג רגילים שבהם החוג לא מתקיים באותו תאריך ספציפי</div>
+          <input type="hidden" id="admin-cal-noclubdates" value="${noClubDatesArr.join(', ')}">
+          <div id="admin-cal-noclub-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+            ${noClubDatesArr.map(d => noClubChipHTML(d)).join('') || '<span style="font-size:13px;color:#a0aec0">אין תאריכים חריגים</span>'}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="date" id="admin-cal-noclub-picker" class="modal-input" style="width:auto">
+            <button onclick="addNoClubDate()" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit">➕ הוסף תאריך</button>
+          </div>
         </div>
       </div>
 
@@ -456,43 +469,48 @@ function adminCalNav(dir) {
 }
 window.adminCalNav = adminCalNav;
 
-function openAddCalEvent() {
+function openAddCalEvent(eventKey) {
+  const editing = !!eventKey;
+  const ev = editing ? _adminCalEvents.find(e => e._key === eventKey) : null;
+  const date  = ev ? ev.date  : `${_adminCalYear}-${String(_adminCalMonth).padStart(2,'0')}-01`;
+  const title = ev ? ev.title : '';
+  const color = ev ? (ev.color || '#f97316') : '#f97316';
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
       <div class="modal-box" style="max-width:400px">
         <div class="modal-header">
-          <span class="modal-title">➕ הוסף אירוע</span>
+          <span class="modal-title">${editing ? '✏️ עריכת אירוע' : '➕ הוסף אירוע'}</span>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
           <div class="modal-field">
             <label>תאריך <span style="color:#e53e3e">*</span></label>
-            <input type="date" id="cal-ev-date" class="modal-input" value="${_adminCalYear}-${String(_adminCalMonth).padStart(2,'0')}-01">
+            <input type="date" id="cal-ev-date" class="modal-input" value="${date}">
           </div>
           <div class="modal-field">
             <label>כותרת האירוע <span style="color:#e53e3e">*</span></label>
-            <input type="text" id="cal-ev-title" class="modal-input" placeholder="שם האירוע">
+            <input type="text" id="cal-ev-title" class="modal-input" placeholder="שם האירוע" value="${title.replace(/"/g,'&quot;')}">
           </div>
           <div class="modal-field">
             <label>צבע תווית</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
               ${['#f97316','#2b6cb0','#276749','#553c9a','#e53e3e','#0d9488','#718096'].map(c=>
                 `<div onclick="document.querySelectorAll('.cal-color-swatch').forEach(s=>s.style.outline='none');this.style.outline='3px solid #2d3748';document.getElementById('cal-ev-color').value='${c}'"
-                  class="cal-color-swatch" style="width:28px;height:28px;border-radius:6px;background:${c};cursor:pointer;border:2px solid rgba(0,0,0,0.1)"></div>`
+                  class="cal-color-swatch" data-color="${c}" style="width:28px;height:28px;border-radius:6px;background:${c};cursor:pointer;border:2px solid rgba(0,0,0,0.1)${c===color?';outline:3px solid #2d3748':''}"></div>`
               ).join('')}
             </div>
-            <input type="hidden" id="cal-ev-color" value="#f97316">
+            <input type="hidden" id="cal-ev-color" value="${color}">
           </div>
           <div id="cal-ev-error" style="color:#c53030;font-size:13px;display:none"></div>
-          <button onclick="submitAddCalEvent()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ הוסף</button>
+          <button onclick="submitAddCalEvent('${eventKey||''}')" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">${editing ? '💾 שמור' : '✅ הוסף'}</button>
         </div>
       </div>
     </div>`);
-  setTimeout(() => document.querySelector('.cal-color-swatch')?.click(), 50);
+  if (!editing) setTimeout(() => document.querySelector('.cal-color-swatch')?.click(), 50);
 }
 window.openAddCalEvent = openAddCalEvent;
 
-async function submitAddCalEvent() {
+async function submitAddCalEvent(eventKey) {
   const date  = document.getElementById('cal-ev-date')?.value;
   const title = document.getElementById('cal-ev-title')?.value?.trim();
   const color = document.getElementById('cal-ev-color')?.value || '#f97316';
@@ -500,27 +518,58 @@ async function submitAddCalEvent() {
   if (!date || !title) { errEl.textContent = 'יש למלא תאריך וכותרת'; errEl.style.display=''; return; }
   const key = `${_adminCalYear}-${String(_adminCalMonth).padStart(2,'0')}`;
   try {
-    await db.ref(`monthlyCalendar/${key}/events`).push({ date, title, color });
+    if (eventKey) await db.ref(`monthlyCalendar/${key}/events/${eventKey}`).update({ date, title, color });
+    else await db.ref(`monthlyCalendar/${key}/events`).push({ date, title, color });
     document.querySelector('.friday-modal')?.remove();
-    showToast('האירוע נוסף ✅');
+    showToast(eventKey ? 'האירוע עודכן ✅' : 'האירוע נוסף ✅');
     loadAdminCalendarPanel();
   } catch(e) { errEl.textContent = e.message; errEl.style.display=''; }
 }
 window.submitAddCalEvent = submitAddCalEvent;
 
-async function deleteCalEvent(date, title) {
-  if (!confirm(`למחוק: "${title}" (${date})?`)) return;
+async function deleteCalEvent(eventKey) {
+  const ev = _adminCalEvents.find(e => e._key === eventKey);
+  if (!confirm(`למחוק: "${ev ? ev.title : ''}"?`)) return;
   const key = `${_adminCalYear}-${String(_adminCalMonth).padStart(2,'0')}`;
   try {
-    const snap = await db.ref(`monthlyCalendar/${key}/events`).get();
-    const allEvs = snap.val() || {};
-    const pushKey = Object.entries(allEvs).find(([k,v]) => v.date===date && v.title===title)?.[0];
-    if (pushKey) await db.ref(`monthlyCalendar/${key}/events/${pushKey}`).remove();
+    await db.ref(`monthlyCalendar/${key}/events/${eventKey}`).remove();
     showToast('האירוע נמחק');
     loadAdminCalendarPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.deleteCalEvent = deleteCalEvent;
+
+// ---- No-club-date picker (chips + native date input, instead of typing a comma list) ----
+function noClubChipHTML(dateStr) {
+  const parts = dateStr.split('-');
+  const label = parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
+  return `<span data-date="${dateStr}" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.05);border-radius:16px;padding:4px 6px 4px 10px;font-size:12px;color:#2d3748">
+    ${label}<button onclick="removeNoClubDate('${dateStr}')" style="background:none;border:none;color:#e53e3e;cursor:pointer;font-size:13px;padding:2px;line-height:1">✕</button>
+  </span>`;
+}
+function syncNoClubHidden() {
+  const dates = [...document.querySelectorAll('#admin-cal-noclub-list [data-date]')].map(el => el.dataset.date).sort();
+  const hidden = document.getElementById('admin-cal-noclubdates');
+  if (hidden) hidden.value = dates.join(', ');
+}
+window.addNoClubDate = function() {
+  const picker = document.getElementById('admin-cal-noclub-picker');
+  const date = picker?.value;
+  if (!date) return;
+  const list = document.getElementById('admin-cal-noclub-list');
+  if (list.querySelector(`[data-date="${date}"]`)) { showToast('התאריך כבר ברשימה'); return; }
+  const placeholder = list.querySelector('span:not([data-date])');
+  if (placeholder) placeholder.remove();
+  list.insertAdjacentHTML('beforeend', noClubChipHTML(date));
+  picker.value = '';
+  syncNoClubHidden();
+};
+window.removeNoClubDate = function(dateStr) {
+  document.querySelector(`#admin-cal-noclub-list [data-date="${dateStr}"]`)?.remove();
+  const list = document.getElementById('admin-cal-noclub-list');
+  if (list && !list.querySelector('[data-date]')) list.innerHTML = '<span style="font-size:13px;color:#a0aec0">אין תאריכים חריגים</span>';
+  syncNoClubHidden();
+};
 
 function readAdminCalState() {
   const clubDays = [...document.querySelectorAll('.admin-cal-clubday:checked')].map(cb=>cb.value).join(',');
