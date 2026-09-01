@@ -1392,6 +1392,27 @@
     .upcoming-date { font-size:13px; font-weight:800; color:#f97316; margin-bottom:8px; letter-spacing:.3px; }
     .upcoming-title { font-size:15px; font-weight:700; color:white; line-height:1.4; }
 
+    /* Loading skeletons — shown briefly while the real content loads, instead of
+       flashing stale/placeholder content that then gets swapped for the real thing. */
+    .upcoming-card.skeleton { border-right-color:rgba(255,255,255,.15); cursor:default; }
+    .upcoming-card.skeleton:hover { transform:none; background:rgba(255,255,255,0.05); }
+    .skeleton-line { height:14px; border-radius:6px; margin:0 auto; }
+    .skeleton-date { width:55%; margin-bottom:12px; }
+    .skeleton-title { width:80%; height:16px; }
+    .skeleton-line,
+    .gallery-item.skeleton .gallery-item-img {
+      background:linear-gradient(90deg, rgba(255,255,255,.06) 25%, rgba(255,255,255,.14) 37%, rgba(255,255,255,.06) 63%);
+      background-size:400% 100%;
+      animation:skeleton-shimmer 1.4s ease infinite;
+    }
+    @keyframes skeleton-shimmer { 0% { background-position:100% 50%; } 100% { background-position:0 50%; } }
+    body.light-mode .skeleton-line,
+    body.light-mode .gallery-item.skeleton .gallery-item-img {
+      background:linear-gradient(90deg, rgba(0,0,0,.06) 25%, rgba(0,0,0,.12) 37%, rgba(0,0,0,.06) 63%);
+      background-size:400% 100%;
+    }
+    body.light-mode .upcoming-card.skeleton { border-right-color:#e2e8f0; }
+
     /* ===== TESTIMONIALS ===== */
     .testimonials-section { background:#0d2137; padding:56px 24px; direction:rtl; border-top:1px solid rgba(255,255,255,0.08); }
     .testimonials-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:20px; max-width:960px; margin:0 auto; }

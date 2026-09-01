@@ -86,19 +86,23 @@ if(localStorage.getItem('ccm_loggedIn')){
       <div class="stat-item"><div class="stat-num">50</div><div class="stat-label">גנים בתוכנית בוקר בחולון</div></div>
       <div class="stat-item"><div class="stat-num">100+</div><div class="stat-label">תלמידים בחוגי המועדון</div></div>
     </div>
-    <div class="upcoming-section" id="upcoming-section" style="display:none">
+    <div class="upcoming-section" id="upcoming-section">
       <div class="section-header">
         <h2>📅 הפעילויות הקרובות</h2>
         <p>מה קורה בקרוב במועדון</p>
         <div class="section-line"></div>
       </div>
-      <div class="upcoming-grid" id="upcoming-grid"></div>
+      <div class="upcoming-grid" id="upcoming-grid">
+        <div class="upcoming-card skeleton"><div class="skeleton-line skeleton-date"></div><div class="skeleton-line skeleton-title"></div></div>
+        <div class="upcoming-card skeleton"><div class="skeleton-line skeleton-date"></div><div class="skeleton-line skeleton-title"></div></div>
+        <div class="upcoming-card skeleton"><div class="skeleton-line skeleton-date"></div><div class="skeleton-line skeleton-title"></div></div>
+      </div>
     </div>
     <div class="about-section">
       <div class="about-text" id="home-about-text">
         <h3>על המועדון</h3>
         <p>מועדון השחמט ראשון לציון, הפועל ברחוב בן גוריון 44, הוא אחד ממועדוני השחמט הוותיקים והגדולים בישראל — פעיל מאז <strong>1938</strong>. המועדון מציע חוגים לכל הגילאים והרמות, מגן חובה ועד שחקנים בעלי דרגות בינלאומיות.</p>
-        <p>הצוות שלנו מורכב ממדריכים מנוסים ומוסמכים ברמה הבינלאומית: רב אמן בינלאומי (GM), אמן בינלאומי (IM), אמן פידה (FM) ומאמנים מוסמכים — כל אחד מביא עמו שיטות הוראה מתקדמות ותשוקה אמיתית לשחמט.</p>
+        <p>הצוות שלנו מורכב ממדריכים מנוסים ומוסמכים ברמה הארצית והבינלאומית — החל מרב אומן בכיר, אומנים בכירים ועד למדריכי נוער צעירים. כל אחד מביא עמו שיטות הוראה מתקדמות ותשוקה אמיתית לשחמט.</p>
         <p>בוגרי המועדון זכו באליפויות ארץ לנוער, השתתפו בתחרויות בינלאומיות והגיעו לדרגות פידה יוקרתיות. אנחנו גאים בכל שחקן שגדל אצלנו — בין אם ממשיך לתחרויות ברמה גבוהה ובין אם פשוט נהנה לשחק שחמט בחברה טובה.</p>
       </div>
       <div class="about-links">
@@ -277,30 +281,12 @@ if(localStorage.getItem('ccm_loggedIn')){
         <div class="section-line"></div>
       </div>
       <div class="gallery-grid" id="home-gallery-grid">
-        <div class="gallery-item" style="grid-column:span 2;aspect-ratio:2/1;">
-          <img src="images/gallery-group.jpg" alt="חוג שחמט">
-          <div class="gallery-overlay"></div>
-        </div>
-        <div class="gallery-item">
-          <img src="images/instructor-yaron-linik.jpg" alt="ירון ליניק">
-          <div class="gallery-overlay"></div>
-        </div>
-        <div class="gallery-item">
-          <img src="images/instructor-glib-kaganski.jpg" alt="גלב קגנסקי">
-          <div class="gallery-overlay"></div>
-        </div>
-        <div class="gallery-item">
-          <img src="images/instructor-maya-lapushnian.jpg" alt="מאיה לפושניאן">
-          <div class="gallery-overlay"></div>
-        </div>
-        <div class="gallery-item">
-          <img src="images/instructor-or-bronstein.jpg" alt="אור ברונשטיין">
-          <div class="gallery-overlay"></div>
-        </div>
-        <div class="gallery-item">
-          <img src="images/instructor-vitaly-golod.jpg" alt="ויטלי גולוד">
-          <div class="gallery-overlay"></div>
-        </div>
+        <div class="gallery-item skeleton" style="grid-column:span 2"><div class="gallery-item-img" style="aspect-ratio:2/1"></div></div>
+        <div class="gallery-item skeleton"><div class="gallery-item-img"></div></div>
+        <div class="gallery-item skeleton"><div class="gallery-item-img"></div></div>
+        <div class="gallery-item skeleton"><div class="gallery-item-img"></div></div>
+        <div class="gallery-item skeleton"><div class="gallery-item-img"></div></div>
+        <div class="gallery-item skeleton"><div class="gallery-item-img"></div></div>
       </div>
     </div>
     <div class="social-bar">
