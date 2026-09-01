@@ -6,6 +6,8 @@ let _pubCalMonth = new Date().getMonth() + 1; // 1-based
 // How many months ahead of "now" the public calendar is allowed to show (admin-controlled).
 // Recomputed on every load from monthlyCalendar/_settings.monthsAhead (default 2).
 let _pubCalMaxYear = null, _pubCalMaxMonth = null;
+// The calendar never shows months before "now" either — this is always today's month/year.
+let _pubCalMinYear = new Date().getFullYear(), _pubCalMinMonth = new Date().getMonth() + 1;
 // Months (1-12) that are always "no club days" every year (e.g. summer break), admin-controlled.
 let _pubCalClosedMonths = [7,8];
 
@@ -34,10 +36,15 @@ async function loadAndRenderPublicCal() {
     } catch(e) { console.warn('calendar visibility check error', e); }
   }
   // Clamp the currently-selected month to the allowed window (handles the admin
-  // shortening monthsAhead while a visitor has already paged forward).
+  // shortening monthsAhead while a visitor has already paged forward, or any
+  // attempt to page back before the current month).
   if (_pubCalMaxYear != null && (_pubCalYear > _pubCalMaxYear || (_pubCalYear === _pubCalMaxYear && _pubCalMonth > _pubCalMaxMonth))) {
     _pubCalYear = _pubCalMaxYear;
     _pubCalMonth = _pubCalMaxMonth;
+  }
+  if (_pubCalYear < _pubCalMinYear || (_pubCalYear === _pubCalMinYear && _pubCalMonth < _pubCalMinMonth)) {
+    _pubCalYear = _pubCalMinYear;
+    _pubCalMonth = _pubCalMinMonth;
   }
   const key = `${_pubCalYear}-${String(_pubCalMonth).padStart(2,'0')}`;
   let data = {};
@@ -54,7 +61,7 @@ async function loadAndRenderPublicCal() {
       holidayEvents = holidays.filter(h => h.date.startsWith(key));
     }
   } catch(e) { console.warn('holiday load error', e); }
-  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data, _pubCalMaxYear, _pubCalMaxMonth, _pubCalClosedMonths, holidayEvents);
+  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data, _pubCalMaxYear, _pubCalMaxMonth, _pubCalMinYear, _pubCalMinMonth, _pubCalClosedMonths, holidayEvents);
 }
 window.loadAndRenderPublicCal = loadAndRenderPublicCal;
 
@@ -103,7 +110,7 @@ async function loadUpcomingActivities() {
 }
 window.loadUpcomingActivities = loadUpcomingActivities;
 
-function renderPublicCalendar(year, month, data, maxYear, maxMonth, closedMonths, holidayEvents) {
+function renderPublicCalendar(year, month, data, maxYear, maxMonth, minYear, minMonth, closedMonths, holidayEvents) {
   const HE_MONTHS = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const HE_DAYS   = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const monthStr  = String(month).padStart(2,'0');
@@ -197,11 +204,12 @@ function renderPublicCalendar(year, month, data, maxYear, maxMonth, closedMonths
     </div>` : '';
 
   const atMax = (maxYear != null && maxMonth != null) && (year > maxYear || (year === maxYear && month >= maxMonth));
+  const atMin = (minYear != null && minMonth != null) && (year < minYear || (year === minYear && month <= minMonth));
   return `
     <div class="pub-cal-wrap">
       <div class="pub-cal-header">
         <div class="pub-cal-nav">
-          <button onclick="pubCalNav(-1)">◀</button>
+          <button onclick="pubCalNav(-1)" ${atMin ? 'disabled title="לא ניתן לצפות בחודשים קודמים" style="opacity:.35;cursor:not-allowed"' : ''}>◀</button>
           <button onclick="pubCalNav(1)" ${atMax ? 'disabled title="לא ניתן לצפות רחוק יותר קדימה" style="opacity:.35;cursor:not-allowed"' : ''}>▶</button>
         </div>
         <div class="pub-cal-title">${HE_MONTHS[month]} ${monthStr}/${year}</div>
@@ -227,6 +235,9 @@ function pubCalNav(dir) {
   if (dir > 0 && _pubCalMaxYear != null &&
       (_pubCalYear > _pubCalMaxYear || (_pubCalYear === _pubCalMaxYear && _pubCalMonth >= _pubCalMaxMonth))) {
     return; // already at the admin-configured "months ahead" limit
+  }
+  if (dir < 0 && (_pubCalYear < _pubCalMinYear || (_pubCalYear === _pubCalMinYear && _pubCalMonth <= _pubCalMinMonth))) {
+    return; // already at the current month — no browsing into the past
   }
   _pubCalMonth += dir;
   if (_pubCalMonth > 12) { _pubCalMonth = 1; _pubCalYear++; }
@@ -592,7 +603,7 @@ function previewAdminCal() {
     ]).then(([snap, visSnap, holidays]) => {
       const closedMonths = (visSnap.val() || {}).closedMonths || [7,8];
       const holidayEvents = (holidays||[]).filter(h => h.date.startsWith(key));
-      const html = renderPublicCalendar(_adminCalYear, _adminCalMonth, snap.val()||{}, null, null, closedMonths, holidayEvents);
+      const html = renderPublicCalendar(_adminCalYear, _adminCalMonth, snap.val()||{}, null, null, null, null, closedMonths, holidayEvents);
       document.body.insertAdjacentHTML('beforeend', `
         <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()" style="padding:20px">
           <div class="cal-preview-light" style="background:white;border-radius:14px;max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
