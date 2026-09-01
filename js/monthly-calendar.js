@@ -25,7 +25,7 @@ async function loadAndRenderPublicCal() {
           </div>`;
         return;
       }
-      const monthsAhead = (vis.monthsAhead && vis.monthsAhead > 0) ? vis.monthsAhead : 2;
+      const monthsAhead = (vis.monthsAhead && vis.monthsAhead > 0) ? vis.monthsAhead : 1;
       const now = new Date();
       const maxD = new Date(now.getFullYear(), now.getMonth() + (monthsAhead - 1), 1);
       _pubCalMaxYear  = maxD.getFullYear();
@@ -71,7 +71,7 @@ async function loadUpcomingActivities() {
     const visSnap = await db.ref('monthlyCalendar/_settings').get();
     const vis = visSnap.val() || {};
     if (vis.hidden) { section.style.display = 'none'; return; }
-    const monthsAhead = (vis.monthsAhead && vis.monthsAhead > 0) ? vis.monthsAhead : 2;
+    const monthsAhead = (vis.monthsAhead && vis.monthsAhead > 0) ? vis.monthsAhead : 1;
 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
@@ -257,7 +257,7 @@ function _renderMonthlyCalVisInline(data) {
   if (!el) return;
   const hidden  = !!data.hidden;
   const message = data.message || 'לוח הפעילויות יתעדכן בקרוב — נשמח לראותכם!';
-  const monthsAhead = (data.monthsAhead && data.monthsAhead > 0) ? data.monthsAhead : 2;
+  const monthsAhead = (data.monthsAhead && data.monthsAhead > 0) ? data.monthsAhead : 1;
   const closedMonths = data.closedMonths || [7,8]; // default: summer break (July/August)
   const HE_MONTHS_SHORT = ['ינו','פבר','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ'];
   const closedMonthChips = HE_MONTHS_SHORT.map((m,i) => {
