@@ -7,20 +7,35 @@
 
 const ISRAELI_HOLIDAY_COLOR = '#2f7d6c'; // matches the existing "חג" category color used in the tournament calendar
 
-// Keep only the days worth a calendar chip: the classic "major" chagim (including
-// "Erev" eve-days), but only their FIRST day for multi-day ones (Pesach, Sukkot,
-// Chanukah, Rosh Hashana) rather than every Chol HaMoed / candle-count day — and
-// from the "modern" Israeli national days, only the well-known four.
+// Every day of the classic "major" chagim — Erev, Chol HaMoed, every Chanukah day —
+// plus, from the "modern" Israeli national days, only the well-known four (skipping
+// the civic/school observances Hebcal also returns, like Family Day or Herzl Day).
 function _isRelevantHolidayItem(it) {
   if (it.category !== 'holiday') return false;
   if (it.subcat === 'modern') {
     return /^Yom HaShoah/.test(it.title) || /^Yom HaZikaron/.test(it.title) ||
            /^Yom HaAtzma/.test(it.title) || /^Yom Yerushalayim/.test(it.title);
   }
-  if (/\b(II|III|IV|V|VI|VII|VIII)\b/.test(it.title)) return false; // Chol HaMoed / continuation days
-  if (/Candles?$/.test(it.title) && it.title !== 'Chanukah: 1 Candle') return false; // Chanukah days 2-8
-  if (/8th Day/.test(it.title)) return false; // Chanukah's 8th day
-  return true;
+  return it.subcat === 'major';
+}
+
+function _addDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
+}
+
+// Hebcal doesn't return Isru Chag on its own — it's simply the day right after each
+// of the three pilgrimage festivals ends, so we derive it from the days we already have.
+function _deriveIsruChag(items) {
+  const pesachLast    = items.find(function(it) { return it.title === 'Pesach VII'; });
+  const shavuot       = items.find(function(it) { return it.title === 'Shavuot'; });
+  const shminiAtzeret = items.find(function(it) { return it.title === 'Shmini Atzeret'; });
+  const out = [];
+  if (pesachLast)    out.push({ date: _addDay(pesachLast.date),    title: 'אסרו חג פסח' });
+  if (shavuot)       out.push({ date: _addDay(shavuot.date),       title: 'אסרו חג שבועות' });
+  if (shminiAtzeret) out.push({ date: _addDay(shminiAtzeret.date), title: 'אסרו חג סוכות' });
+  return out;
 }
 
 let _holidayFetchCache = {}; // year -> Promise<Array<{date, title}>>
@@ -31,11 +46,13 @@ function _fetchIsraeliHolidaysForYear(year) {
   _holidayFetchCache[year] = fetch(url)
     .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('hebcal http ' + r.status)); })
     .then(function(j) {
-      return (j.items || [])
-        .filter(_isRelevantHolidayItem)
+      const relevant = (j.items || []).filter(_isRelevantHolidayItem);
+      const isruChag = _deriveIsruChag(relevant);
+      return relevant
         // Hebcal appends the Hebrew year to Rosh Hashana's title ("ראש השנה 5787") —
         // strip it so the chip text stays clean and matches how these are named manually.
-        .map(function(it) { return { date: it.date, title: (it.hebrew || it.title).replace(/\s+\d{4}$/, '') }; });
+        .map(function(it) { return { date: it.date, title: (it.hebrew || it.title).replace(/\s+\d{4}$/, '') }; })
+        .concat(isruChag);
     })
     .catch(function(e) { console.warn('Israeli holidays fetch failed:', e); return []; });
   return _holidayFetchCache[year];
