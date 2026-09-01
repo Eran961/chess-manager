@@ -116,6 +116,42 @@ def club_players(clubId: int = Query(...)):
 
 # ── Club teams ─────────────────────────────────────────────────────────────────
 
+
+# The League Teams table has two similarly-named division columns:
+#   cells[1] "רמת ליגה לעונה הבאה" — a PROJECTED level for the *next* season
+#             (promotion/relegation candidates), NOT necessarily where the
+#             team plays right now.
+#   cells[2] "ליגה נוכחית" — the actual current league (free-text, includes
+#             the season year, e.g. "נוער עילית בית ב  2027" or
+#             "הליגה הארצית לנוער מרכז ושפלה  2027" or just "לאומית  2026").
+# We must read the division (and season) from cells[2], not cells[1] — using
+# cells[1] pulls in teams that are only *headed toward* a division next
+# season, not teams actually playing there now.
+_KNOWN_DIVISIONS = ['לאומית', 'עילית', 'ארצית', 'מחוזית']
+
+
+def parse_current_division_and_season(current_league_text: str, fallback_division: str | None = None) -> tuple[str | None, str | None]:
+    text = current_league_text or ""
+    year_m = re.search(r"(20\d{2})", text)
+    season = year_m.group(1) if year_m else None
+    cleaned = re.sub(r"20\d{2}", "", text).strip()
+    for d in _KNOWN_DIVISIONS:
+        if d in cleaned:
+            return d, season
+    # Adult lower divisions read like "ליגה א' שבת ב'" or "ליגה ג' ראשון לציון א" —
+    # a sub-group/location descriptor tacked onto the bare division letter. Pull out
+    # just the letter so it matches the plain 'א'/'ב'/'ג' used everywhere else.
+    m = re.match(r"ליגה\s+([אבג])", cleaned)
+    if m:
+        return m.group(1), season
+    if cleaned in ('א', 'ב', 'ג'):
+        return cleaned, season
+    # No usable "current league" text at all (team not yet scheduled into a table
+    # this season) — fall back to the "next season level" column rather than
+    # silently losing the division.
+    return (fallback_division or None), season
+
+
 @app.get("/api/club-teams")
 def club_teams(clubId: int = Query(...)):
     url = f"https://www.chess.org.il/Clubs/Club.aspx?Id={clubId}&View=LeagueTeams"
@@ -138,13 +174,14 @@ def club_teams(clubId: int = Query(...)):
         if "פעילה" not in status or "לא פעילה" in status:
             continue
         team_type = cells[0].strip()
-        division = re.sub(r"[''']", "", cells[1].strip())
+        next_season_level = re.sub(r"[''']", "", cells[1].strip())
+        division, season = parse_current_division_and_season(cells[2], fallback_division=next_season_level)
         name = cells[5].strip()
         hf = row.find("input", id=re.compile(r"TeamIdHF", re.I))
         team_id = int(hf["value"]) if hf and hf.get("value", "").isdigit() else None
         if not name or len(name) < 2:
             continue
-        teams.append({"name": name, "type": team_type, "division": division, "teamId": team_id})
+        teams.append({"name": name, "type": team_type, "division": division, "season": season, "teamId": team_id})
 
     return JSONResponse(content=teams)
 

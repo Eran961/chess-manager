@@ -72,7 +72,7 @@ function buildSingleTypeSection(type) {
       </div>`;
   }).join('');
 
-  const seasonYear = 2026;
+  const seasonYear = teams.find(t => t.season)?.season || 2026; // detected from the last sync; 2026 only as a pre-sync placeholder
   const youthDivisionSync = type === 'נוער' ? `
     <div id="youth-div-sync-bar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
       ${['עילית','ארצית','מחוזית'].map(d => `
@@ -139,9 +139,10 @@ async function syncYouthDivisionTeams(division) {
     _clubTeams = _clubTeams.filter(t => !(t.type === 'נוער' && t.division === division)).concat(matching);
     await db.ref('clubTeams').set(_clubTeams);
 
+    const seasonNote = matching[0]?.season ? ` (עונת ${matching[0].season})` : '';
     if (btn) { btn.style.background = '#276749'; btn.textContent = '✅ הצליח'; }
-    if (statusEl) { statusEl.textContent = `${matching.length} קבוצות נטענו לליגת ${division}`; statusEl.style.color = '#276749'; }
-    showToast(`✅ ${matching.length} קבוצות נוער (${division}) נטענו`, 'success');
+    if (statusEl) { statusEl.textContent = `${matching.length} קבוצות נטענו לליגת ${division}${seasonNote}`; statusEl.style.color = '#276749'; }
+    showToast(`✅ ${matching.length} קבוצות נוער (${division})${seasonNote} נטענו`, 'success');
     renderLeagueTypePanels();
   } catch(e) {
     if (btn) { btn.style.background = '#c53030'; btn.textContent = '❌ נכשל'; }
