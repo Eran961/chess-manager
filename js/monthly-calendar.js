@@ -47,7 +47,14 @@ async function loadAndRenderPublicCal() {
       data = snap.val() || {};
     } catch(e) { console.warn('calendar load error', e); }
   }
-  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data, _pubCalMaxYear, _pubCalMaxMonth, _pubCalClosedMonths);
+  let holidayEvents = [];
+  try {
+    if (typeof getIsraeliHolidays === 'function') {
+      const holidays = await getIsraeliHolidays(_pubCalYear, _pubCalYear);
+      holidayEvents = holidays.filter(h => h.date.startsWith(key));
+    }
+  } catch(e) { console.warn('holiday load error', e); }
+  el.innerHTML = renderPublicCalendar(_pubCalYear, _pubCalMonth, data, _pubCalMaxYear, _pubCalMaxMonth, _pubCalClosedMonths, holidayEvents);
 }
 window.loadAndRenderPublicCal = loadAndRenderPublicCal;
 
@@ -96,7 +103,7 @@ async function loadUpcomingActivities() {
 }
 window.loadUpcomingActivities = loadUpcomingActivities;
 
-function renderPublicCalendar(year, month, data, maxYear, maxMonth, closedMonths) {
+function renderPublicCalendar(year, month, data, maxYear, maxMonth, closedMonths, holidayEvents) {
   const HE_MONTHS = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const HE_DAYS   = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const monthStr  = String(month).padStart(2,'0');
@@ -106,7 +113,7 @@ function renderPublicCalendar(year, month, data, maxYear, maxMonth, closedMonths
   // overrides any per-month clubDays setting and shows no club days at all.
   const clubDaysSet = isClosedMonth ? new Set() : new Set((data.clubDays||'').split(',').map(Number).filter(d=>!isNaN(d)&&d>=0));
   const noClubDates = data.noClubDates || {};
-  const events      = data.events ? Object.values(data.events) : [];
+  const events      = (data.events ? Object.values(data.events) : []).concat(holidayEvents || []);
   const sidebarNotes      = data.sidebarNotes || [];
   const internationalEvents = data.internationalEvents || [];
 
@@ -581,9 +588,11 @@ function previewAdminCal() {
     Promise.all([
       db.ref(`monthlyCalendar/${key}`).get(),
       db.ref('monthlyCalendar/_settings').get(),
-    ]).then(([snap, visSnap]) => {
+      (typeof getIsraeliHolidays === 'function' ? getIsraeliHolidays(_adminCalYear, _adminCalYear) : Promise.resolve([])),
+    ]).then(([snap, visSnap, holidays]) => {
       const closedMonths = (visSnap.val() || {}).closedMonths || [7,8];
-      const html = renderPublicCalendar(_adminCalYear, _adminCalMonth, snap.val()||{}, null, null, closedMonths);
+      const holidayEvents = (holidays||[]).filter(h => h.date.startsWith(key));
+      const html = renderPublicCalendar(_adminCalYear, _adminCalMonth, snap.val()||{}, null, null, closedMonths, holidayEvents);
       document.body.insertAdjacentHTML('beforeend', `
         <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()" style="padding:20px">
           <div class="cal-preview-light" style="background:white;border-radius:14px;max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">

@@ -21,6 +21,19 @@ async function initTournCal(){
       let merged=false;
       Object.keys(TC_DEF).forEach(k=>{ if(!_tcEvents[k]){ _tcEvents[k]=JSON.parse(JSON.stringify(TC_DEF[k])); merged=true; } });
       if(merged||!snap.exists()) await db.ref('tournamentCalendar').set(_tcEvents);
+      // Overlay Israeli holidays (auto-fetched, never persisted here) so they always
+      // show up without anyone having to add them by hand.
+      try {
+        if (typeof getIsraeliHolidays === 'function') {
+          const tcYears = [...new Set(TC_MONTHS.map(mo => mo.y))];
+          const holidays = await getIsraeliHolidays(Math.min(...tcYears), Math.max(...tcYears));
+          holidays.forEach(h => {
+            if (!_tcEvents[h.date]) _tcEvents[h.date] = [];
+            const alreadyThere = _tcEvents[h.date].some(ev => ev.text && ev.text.includes(h.title));
+            if (!alreadyThere) _tcEvents[h.date].push({ id: 'hol-' + h.date + '-' + h.title, text: h.title, color: h.color });
+          });
+        }
+      } catch(e) { console.warn('tournament calendar holiday overlay failed', e); }
       _tcLoaded=true;
     }catch(e){ root.innerHTML='<div style="color:#fc8181;padding:20px">שגיאה: '+e.message+'</div>'; return; }
   }
