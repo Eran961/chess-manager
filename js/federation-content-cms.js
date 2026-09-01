@@ -1164,6 +1164,7 @@ function renderTournamentsContent(data) {
   if (linkText && data.fedLinkText) linkText.textContent = data.fedLinkText;
   const linkBtn = document.getElementById('tourn-fed-link-btn');
   if (linkBtn && data.fedLinkLabel) linkBtn.textContent = '🔗 ' + data.fedLinkLabel;
+  if (linkBtn && data.fedLinkUrl) linkBtn.href = data.fedLinkUrl;
 }
 
 function renderContactContent(data) {
@@ -1610,6 +1611,7 @@ function renderTournamentsAdmin(data) {
   items.sort(function(a,b){ return (a.order||99)-(b.order||99); });
   const fedLinkText  = (data && data.fedLinkText)  || 'לתוצאות חיות, לוחות ומידע על תחרויות רשמיות — היכנסו לאתר איגוד השחמט הישראלי';
   const fedLinkLabel = (data && data.fedLinkLabel) || 'תחרויות המועדון באיגוד';
+  const fedLinkUrl   = (data && data.fedLinkUrl)   || 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=TournamentsNow';
 
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
     '<h4 style="margin:0">🏆 כרטיסי תחרויות</h4>' +
@@ -1637,6 +1639,8 @@ function renderTournamentsAdmin(data) {
     '<textarea id="tourn-fedlink-text" rows="2" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">' + fedLinkText + '</textarea></div>' +
     '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">כיתוב הכפתור</label>' +
     '<input id="tourn-fedlink-label" value="' + fedLinkLabel.replace(/"/g,'&quot;') + '" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">כתובת הקישור (URL)</label>' +
+    '<input id="tourn-fedlink-url" value="' + fedLinkUrl.replace(/"/g,'&quot;') + '" dir="ltr" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>' +
     '<button onclick="saveTournFedLink()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-weight:700;font-size:14px;align-self:flex-start">💾 שמור</button>' +
     '</div>';
 }
@@ -1703,8 +1707,9 @@ window.saveTournCard = async function(id) {
 window.saveTournFedLink = async function() {
   const fedLinkText  = document.getElementById('tourn-fedlink-text').value.trim();
   const fedLinkLabel = document.getElementById('tourn-fedlink-label').value.trim();
+  const fedLinkUrl   = document.getElementById('tourn-fedlink-url').value.trim();
   try {
-    await db.ref('siteContent/tournaments').update({ fedLinkText, fedLinkLabel });
+    await db.ref('siteContent/tournaments').update({ fedLinkText, fedLinkLabel, fedLinkUrl });
     loadSiteContent();
     showToast('✅ נשמר!');
   } catch(e) { showToast('❌ '+e.message); }
