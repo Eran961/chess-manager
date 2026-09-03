@@ -327,12 +327,16 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
       <button onclick="deleteFeeCategory('${id}','${cid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px;flex-shrink:0">✕</button>
     </div>`).join('');
 
-  // Manual income entries
+  // Manual income entries (description + amount editable inline, like fee categories)
   const manualIncomeRows = manualIncome.map(([eid, e]) => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid #edf2f7;font-size:13px">
-      <span style="color:#4a5568">📌 ${e.description}</span>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-weight:700;color:#2f855a">₪${(e.amount||0).toLocaleString()}</span>
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #edf2f7;font-size:13px">
+      <span style="flex-shrink:0">📌</span>
+      <input type="text" value="${(e.description||'').replace(/"/g,'&quot;')}" onchange="updateTournamentEntry('${id}','income','${eid}','description',this.value)"
+        style="flex:1;min-width:0;border:1px solid transparent;background:none;font-size:13px;color:#4a5568;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="color:#718096">₪</span>
+        <input type="number" value="${e.amount||0}" min="0" onchange="updateTournamentEntry('${id}','income','${eid}','amount',this.value)"
+          style="width:70px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-weight:700;color:#2f855a;font-family:inherit">
         <button onclick="deleteTournamentEntry('${id}','income','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px" title="מחק">✕</button>
       </div>
     </div>`).join('');
@@ -348,10 +352,13 @@ function renderTournamentFinance(id, t, income, expenses, balance) {
     const catTotal = entries.reduce((s, [,e]) => s + (e.amount || 0), 0);
     const icon = EXPENSE_ICONS[cat] || '📌';
     const rows = entries.map(([eid, e]) => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;font-size:13px;border-bottom:1px solid #f7fafc">
-        <span style="color:#4a5568">${e.description}</span>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-weight:700;color:#c53030">₪${(e.amount||0).toLocaleString()}</span>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:13px;border-bottom:1px solid #f7fafc">
+        <input type="text" value="${(e.description||'').replace(/"/g,'&quot;')}" onchange="updateTournamentEntry('${id}','expenses','${eid}','description',this.value)"
+          style="flex:1;min-width:0;border:1px solid transparent;background:none;font-size:13px;color:#4a5568;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span style="color:#718096">₪</span>
+          <input type="number" value="${e.amount||0}" min="0" onchange="updateTournamentEntry('${id}','expenses','${eid}','amount',this.value)"
+            style="width:70px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-weight:700;color:#c53030;font-family:inherit">
           <button onclick="deleteTournamentEntry('${id}','expenses','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px" title="מחק">✕</button>
         </div>
       </div>`).join('');
@@ -494,6 +501,25 @@ async function addTournamentEntry(id, type) {
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.addTournamentEntry = addTournamentEntry;
+
+async function updateTournamentEntry(id, type, eid, field, value) {
+  const t = _tournaments[id];
+  if (field === 'description' && !value.trim()) {
+    showToast('יש להזין תיאור', 'error');
+    const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    return;
+  }
+  const val = field === 'amount' ? (parseFloat(value)||0) : value.trim();
+  try {
+    await db.ref(`clubTournaments/${id}/${type}/${eid}/${field}`).set(val);
+    t[type][eid][field] = val;
+    const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
+    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    renderTournamentsPanel();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.updateTournamentEntry = updateTournamentEntry;
 
 async function deleteTournamentEntry(id, type, eid) {
   try {
