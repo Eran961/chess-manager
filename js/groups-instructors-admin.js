@@ -312,7 +312,13 @@ async function openInstructorDetailModal(uid) {
       </label>`;
   }).join('');
 
-  const regions = [...new Set(teams.map(t => t.region || ''))].filter(Boolean);
+  // Fixed display order — see renderTeamsAdminPanel's identical fix for why
+  // deriving this from teams.map() instead makes the section order depend on
+  // array order (which Firebase returns key-sorted, not grouped by region).
+  const REGION_ORDER = ['מערב', 'מזרח'];
+  const presentRegions = new Set(teams.map(t => t.region || '').filter(Boolean));
+  const regions = REGION_ORDER.filter(r => presentRegions.has(r))
+    .concat([...presentRegions].filter(r => !REGION_ORDER.includes(r)));
   const noRegionTeams = teams.filter(t => !t.region);
   const teamCheckboxes = [
     ...regions.map(region => {
