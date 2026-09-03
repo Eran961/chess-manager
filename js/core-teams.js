@@ -1184,7 +1184,10 @@ function validatePlayerForm(prefix) {
   }
   if (!phoneEl.value.trim()) { phoneEl.classList.add('input-error'); if (valid) phoneEl.focus(); valid = false; }
   if (!parentNameEl.value.trim()) { parentNameEl.classList.add('input-error'); if (valid) parentNameEl.focus(); valid = false; }
-  if (!valid) return null;
+  if (!valid) {
+    showToast('❌ נא למלא את כל השדות המסומנים בכוכבית (שים לב גם לבחירת מין)', 'error');
+    return null;
+  }
 
   return {
     firstName, lastName, birthYear,
