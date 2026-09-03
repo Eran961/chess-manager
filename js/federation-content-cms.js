@@ -550,14 +550,15 @@ async function syncOneFedPlayer(fedId) {
 }
 window.syncOneFedPlayer = syncOneFedPlayer;
 
-function showToast(msg) {
+function showToast(msg, type) {
   let t = document.getElementById('toast-msg');
   if (!t) {
     t = document.createElement('div');
     t.id = 'toast-msg';
-    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2d3748;color:white;padding:10px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:999;box-shadow:0 4px 14px rgba(0,0,0,0.25);transition:opacity .3s';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:white;padding:10px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:10001;box-shadow:0 4px 14px rgba(0,0,0,0.25);transition:opacity .3s';
     document.body.appendChild(t);
   }
+  t.style.background = type === 'error' ? '#c53030' : '#2d3748';
   t.textContent = msg;
   t.style.opacity = '1';
   clearTimeout(t._timer);
