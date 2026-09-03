@@ -936,8 +936,8 @@ function renderAddPlayerForm() {
         <input id="add-player-fedid" type="number" placeholder="מספר שחקן (לדוג׳ 203562)"
           style="flex:1;padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit;text-align:center;outline:none"
           onfocus="this.style.borderColor='#553c9a'" onblur="this.style.borderColor='#e2e8f0'"
-          onkeydown="if(event.key==='Enter') window.submitAddPlayer()"/>
-        <button onclick="window.submitAddPlayer()"
+          onkeydown="if(event.key==='Enter') window.submitYouthProspectLookup()"/>
+        <button onclick="window.submitYouthProspectLookup()"
           style="padding:12px 20px;background:#553c9a;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap">
           שלוף ◄
         </button>
@@ -946,7 +946,7 @@ function renderAddPlayerForm() {
     </div>`;
 }
 
-async function submitAddPlayer() {
+async function submitYouthProspectLookup() {
   const input = document.getElementById('add-player-fedid');
   if (!input) return;
   const fedId = parseInt(input.value.trim());
@@ -977,7 +977,7 @@ async function submitAddPlayer() {
     statusEl.innerHTML = `<span style="color:#c53030;font-weight:600">❌ שגיאת רשת: ${e.message}</span>`;
   }
 }
-window.submitAddPlayer = submitAddPlayer;
+window.submitYouthProspectLookup = submitYouthProspectLookup;
 
 function renderConfirmPlayer() {
   const d = _confirmPlayerData;
