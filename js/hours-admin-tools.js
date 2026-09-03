@@ -731,7 +731,15 @@ function renderTeamsAdminPanel() {
   if (teams.length === 0) {
     teamsHtml = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">אין נבחרות — צור את הראשונה</div>';
   } else {
-    const regions = [...new Set(teams.map(t => t.region || ''))];
+    // Fixed display order (מערב, then מזרח, then unassigned) — deriving this from
+    // teams.map() instead flips section order on every delete, since Firebase
+    // returns dbTeams' children key-sorted (essentially alphabetical by team
+    // name), not grouped by region, so whichever region the current first-in-
+    // array team happens to belong to would "win" the top spot each render.
+    const REGION_ORDER = ['מערב', 'מזרח', ''];
+    const presentRegions = new Set(teams.map(t => t.region || ''));
+    const regions = REGION_ORDER.filter(r => presentRegions.has(r))
+      .concat([...presentRegions].filter(r => !REGION_ORDER.includes(r))); // any custom region falls back after the fixed ones
     teamsHtml = regions.map(region => {
       const regionTeams = teams.filter(t => (t.region || '') === region);
       const header = region ? `<div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;padding:8px 4px 4px">― ${region} ―</div>` : '';
