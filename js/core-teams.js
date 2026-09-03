@@ -1330,10 +1330,21 @@ function getGroupMeetingDates(group) {
   return getGroupDates(group.dayOfWeek);
 }
 
-function defaultDateForGroup(dayOfWeekOrGroup) {
+// A group with multiple sub-groups (e.g. "יום ראשון" + "יום רביעי") meets on a
+// different day per sub-group. getGroupMeetingDates() above returns every
+// meeting day of the whole group combined — right for the group-level default,
+// but wrong once a specific sub-group is selected in attendance: it should
+// only offer dates matching THAT sub-group's own day.
+function getSubGroupMeetingDates(group, subGroupIdx) {
+  const sg = group.subGroups && group.subGroups[subGroupIdx];
+  if (sg && sg.day != null && sg.day >= 0) return getGroupDates(sg.day);
+  return getGroupMeetingDates(group); // no explicit per-sub-group day set — fall back to the old combined behavior
+}
+
+function defaultDateForGroup(dayOfWeekOrGroup, subGroupIdx) {
   const today = new Date().toISOString().split('T')[0];
   const dates = typeof dayOfWeekOrGroup === 'object'
-    ? getGroupMeetingDates(dayOfWeekOrGroup)
+    ? (subGroupIdx != null ? getSubGroupMeetingDates(dayOfWeekOrGroup, subGroupIdx) : getGroupMeetingDates(dayOfWeekOrGroup))
     : getGroupDates(dayOfWeekOrGroup);
   if (!dates.length) return today;
   let selected = dates[0];
@@ -1734,7 +1745,7 @@ window.saveTeamAttendance = saveTeamAttendance;
 function onAttGroupChange(val) {
   attState.groupIdx = parseInt(val);
   attState.subGroupIdx = 0;
-  attState.date = defaultDateForGroup(groups[attState.groupIdx]);
+  attState.date = defaultDateForGroup(groups[attState.groupIdx], 0);
   _attDatesWithData = new Set();
   rebuildSubGroupSelect();
   rebuildDateSelect();
@@ -1744,7 +1755,9 @@ function onAttGroupChange(val) {
 
 function onAttSubGroupChange(val) {
   attState.subGroupIdx = parseInt(val);
+  attState.date = defaultDateForGroup(groups[attState.groupIdx], attState.subGroupIdx);
   _attDatesWithData = new Set();
+  rebuildDateSelect();
   loadAttendance();
   loadAttendanceDates();
 }
@@ -1758,7 +1771,7 @@ function rebuildDateSelect() {
   const g = groups[attState.groupIdx];
   const sel = document.getElementById('attDateSel');
   if (!sel) return;
-  sel.innerHTML = getGroupMeetingDates(g).map(d =>
+  sel.innerHTML = getSubGroupMeetingDates(g, attState.subGroupIdx).map(d =>
     `<option value="${d}"${d === attState.date ? ' selected' : ''}>${formatDate(d)}</option>`
   ).join('');
 }
@@ -1833,7 +1846,7 @@ function renderGroupAttendanceContent() {
           <select id="attSubGroupSel" onchange="onAttSubGroupChange(this.value)" ${subGroupDisabled}>${subGroupOptions}</select></div>
         <div class="att-control-row"><label>תאריך</label>
           <select id="attDateSel" onchange="onAttDateChange(this.value)">
-            ${getGroupMeetingDates(groups[attState.groupIdx]).map(d =>
+            ${getSubGroupMeetingDates(g, attState.subGroupIdx).map(d =>
               `<option value="${d}"${d === attState.date ? ' selected' : ''}>${formatDate(d)}</option>`
             ).join('')}
           </select></div>
