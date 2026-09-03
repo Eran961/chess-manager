@@ -1328,7 +1328,7 @@ function initAuth() {
     // Kick off the club-wide data fetch (groups/teams/camps) now, in parallel with
     // loadUserRole — it's the same for every user, so it doesn't need to wait for
     // the role lookup to finish before starting.
-    const clubDataPromise = db ? Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()]) : null;
+    const clubDataPromise = db ? Promise.all([loadDeletedGroups(), loadDeletedTeamNames(), loadDbGroups(), loadDbTeams(), loadDbCamps()]) : null;
     let roleData = await loadUserRole(firebaseUser.uid);
     if (!roleData && db) {
       // User exists in Auth but has no roles entry — auto-create as instructor

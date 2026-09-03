@@ -1259,8 +1259,16 @@ window.saveNewTeam = saveNewTeam;
 async function deleteDbTeam(teamId) {
   if (!confirm('למחוק את הנבחרת לצמיתות? כל השחקנים שלה יימחקו.')) return;
   try {
+    const team = teams.find(t => t.id === teamId);
     await db.ref(`dbTeams/${teamId}`).remove();
     await db.ref(`team_players/${teamId}`).remove();
+    // Record the name permanently so it can never get silently re-seeded back
+    // in from the hardcoded default roster (see seedDefaultTeams).
+    if (team?.name) {
+      const key = _teamNameKey(team.name);
+      _deletedTeamNames.add(key);
+      await db.ref(`deletedTeamNames/${key}`).set(true);
+    }
     teams = teams.filter(t => t.id !== teamId);
     document.querySelector(`[data-tab="team-${teamId}"]`)?.remove();
     document.getElementById('panel-team-' + teamId)?.remove();

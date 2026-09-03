@@ -285,6 +285,8 @@ let _useDbGroups = false; // true = groups come from Firebase, don't fallback to
 let _deletedGroupIds = new Set(); // persisted in Firebase so ALL_GROUPS deletions survive refresh
 
 let teams = [];
+let _deletedTeamNames = new Set(); // persisted in Firebase so deleting a default-roster team survives any future reseed
+function _teamNameKey(name) { return String(name).replace(/[.#$\[\]\/]/g, '_'); } // sanitize for use as an RTDB key
 
 const PERMISSION_TABS = [
   { key: 'camps',            label: '🏕️ מחנות',            instructorDefault: false },
@@ -419,6 +421,11 @@ async function seedDefaultTeams() {
   _useDbTeams = true;
   const subGroups = [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }];
   for (const t of ALL_TEAMS) {
+    // Skip default teams the admin explicitly deleted before — otherwise every
+    // future reseed (or any other code path that ends up re-running this) would
+    // silently bring them back, which is exactly the "deleted team keeps
+    // coming back" bug this guards against, independent of what triggers it.
+    if (_deletedTeamNames.has(_teamNameKey(t.name))) continue;
     const id = 'team-' + t.name.replace(/[^א-תa-zA-Z0-9]/g, '-').replace(/-+/g,'-') + '-' + Date.now() % 100000;
     const def = { name: t.name, coach: t.coach, region: t.region, subGroups };
     try {
@@ -513,8 +520,17 @@ async function loadDeletedGroups() {
   } catch(e) { console.warn('loadDeletedGroups error:', e); }
 }
 
+async function loadDeletedTeamNames() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('deletedTeamNames').get();
+    const data = snap.val();
+    if (data) _deletedTeamNames = new Set(Object.keys(data));
+  } catch(e) { console.warn('loadDeletedTeamNames error:', e); }
+}
+
 async function initializeApp(clubDataPromise) {
-  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()])); }
+  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDeletedTeamNames(), loadDbGroups(), loadDbTeams(), loadDbCamps()])); }
   buildApp();
   injectPermissionTabs();
   buildTopNav();
