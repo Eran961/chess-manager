@@ -241,52 +241,6 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
       </div>
     </div>` : ''}
 
-    ${isAdmin ? `
-    <!-- Row 2: Prospects + Tournaments + Friday (admin only) -->
-    <div class="dash-grid" style="margin-bottom:20px">
-      <div class="dash-card" style="cursor:pointer" onclick="switchTab('prospects')">
-        <div class="dash-card-title">🌟 מצטייני גנים</div>
-        ${totalProspects===0
-          ? `<div style="padding:14px 18px;color:#a0aec0;font-size:13px">לחץ להוספת ילדים</div>`
-          : `<div style="padding:12px 18px;display:flex;gap:8px;flex-wrap:wrap">
-              ${[['new','חדשים','#ebf8ff','#2b6cb0'],['contacted','יצרנו קשר','#fffbeb','#b7791f'],['invited','הוזמן','#faf5ff','#553c9a'],['joined','הצטרפו','#f0fff4','#276749'],['declined','לא מעוניין','#fff5f5','#c53030']]
-                .filter(([k])=>pCounts[k]>0)
-                .map(([k,label,bg,color])=>`<div style="background:${bg};border-radius:8px;padding:8px 12px;text-align:center;flex:1;min-width:55px">
-                  <div style="font-size:20px;font-weight:800;color:${color}">${pCounts[k]}</div>
-                  <div style="font-size:10px;color:${color};font-weight:700;margin-top:1px">${label}</div>
-                </div>`).join('')}
-            </div>`}
-      </div>
-      <div class="dash-card" style="cursor:pointer" onclick="switchTab('club-tournaments')">
-        <div class="dash-card-title">🏆 תחרויות</div>
-        ${tournList.length===0
-          ? `<div style="padding:14px 18px;color:#a0aec0;font-size:13px">לחץ לניהול תחרויות</div>`
-          : `<div style="padding:10px 18px;display:flex;flex-direction:column;gap:8px">
-              ${activeTourns.map(t=>`<div style="display:flex;justify-content:space-between;align-items:center">
-                <span style="font-size:13px;font-weight:600;color:#276749">🟢 ${t.name}</span>
-                <span style="font-size:12px;color:#718096">${calcTournamentParticipants(t)} משתתפים</span>
-              </div>`).join('')}
-              ${upcomingTourns.length>0?`<div style="display:flex;justify-content:space-between;align-items:center">
-                <span style="font-size:13px;color:#4a5568">⏳ ${upcomingTourns[0].name}</span>
-                <span style="font-size:12px;color:#718096">${formatTournamentDate(upcomingTourns[0],'short')}</span>
-              </div>`:''}
-              <div style="border-top:1px solid #f0f4f8;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
-                <span style="font-size:12px;color:#718096">יתרה כוללת</span>
-                <span style="font-size:15px;font-weight:800;color:${totalBalance>=0?'#276749':'#c53030'}">${totalBalance>=0?'+':''}₪${totalBalance.toLocaleString()}</span>
-              </div>
-            </div>`}
-      </div>
-      <div class="dash-card" style="cursor:pointer" onclick="switchTab('friday')">
-        <div class="dash-card-title">♟ ליגות שישי</div>
-        ${!activeLeagueData
-          ? `<div style="padding:14px 18px;color:#a0aec0;font-size:13px">לחץ לניהול ליגות</div>`
-          : `<div>
-              <div style="padding:8px 18px 2px;font-size:12px;font-weight:700;color:#2b6cb0">${activeLeagueData.name||'ליגה פעילה'}</div>
-              ${fridayLeaderboard||'<div style="padding:10px 18px;color:#a0aec0;font-size:13px">טרם הוזנו תוצאות</div>'}
-            </div>`}
-      </div>
-    </div>` : ''}
-
     <!-- Shortcuts -->
     <div class="dash-card">
       <div class="dash-card-title">🔗 קיצורי דרך</div>
@@ -295,11 +249,6 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
         <button class="btn-shortcut" style="background:#ebf8ff;color:#2b6cb0" onclick="switchTab('reports')"><span>📊</span>דוחות</button>
         <button class="btn-shortcut" style="background:#f0f4ff;color:#6b46c1" onclick="switchTab('payments')"><span>💳</span>תשלומים</button>
         <button class="btn-shortcut" style="background:#fffbeb;color:#b7791f" onclick="switchTab('calendar')"><span>📅</span>לוח שנה</button>
-        ${isAdmin ? `
-        <button class="btn-shortcut" style="background:#f3f0ff;color:#553c9a" onclick="switchTab('friday')"><span>♟</span>ליגות שישי</button>
-        <button class="btn-shortcut" style="background:#fff8f0;color:#c05621" onclick="switchTab('prospects')"><span>🌟</span>מצטייני גנים</button>
-        <button class="btn-shortcut" style="background:#fffdf0;color:#b7791f" onclick="switchTab('club-tournaments')"><span>🏆</span>תחרויות</button>
-        ` : ''}
       </div>
     </div>
 
