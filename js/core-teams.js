@@ -618,9 +618,9 @@ function renderSubGroup(sg, showTime, groupIdx, subGroupIdx) {
         </table>
       </div>
       <div class="stats-bar">
-        ${sg.players.filter(p => p.fedId).length} מתוך ${totalPlayers} עם מספר שחקן
+        ${sg.players.filter(p => p.fedId && !p.hidden).length} מתוך ${totalPlayers} עם מספר שחקן
         &nbsp;·&nbsp;
-        ${sg.players.filter(p => p.birthYear).length} מתוך ${totalPlayers} עם שנת לידה
+        ${sg.players.filter(p => p.birthYear && !p.hidden).length} מתוך ${totalPlayers} עם שנת לידה
       </div>
     </div>`;
 }
