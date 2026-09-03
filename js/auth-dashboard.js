@@ -1294,8 +1294,6 @@ function initAuth() {
       superAdmin: roleData?.superAdmin || false,
       permissions: roleData?.permissions || {},
     };
-    // Filter groups by role
-    console.log('role:', currentUser.role, 'groups:', JSON.stringify(currentUser.groups));
     // Show app, hide landing
     document.getElementById('landing-page').classList.remove('visible');
     document.body.classList.remove('landing-active');
@@ -1357,7 +1355,6 @@ if (currentUser?.role !== 'admin') {
     const legacy = ALL_GROUPS.find(ag => ag.name === g.name);
     return legacy ? allowedIds.includes(legacy.id) : false;
   });
-  console.info('[ChessManager] Groups for', currentUser.name, '→', groups.map(g => g.name), '| allowedIds:', allowedIds);
 }
 if (!db && teams.length === 0) {
   teams = ALL_TEAMS.map((t, i) => ({
@@ -1372,7 +1369,6 @@ if (!db && teams.length === 0) {
 if (currentUser?.role !== 'admin') {
   const allowedTeamIds = Object.keys(currentUser?.teams || {});
   teams = teams.filter(t => allowedTeamIds.includes(t.id));
-  console.info('[ChessManager] Teams for', currentUser.name, '→', teams.map(t => t.name), '| allowedTeamIds:', allowedTeamIds);
 }
 // Build tabs
 const tabsBar = document.getElementById('tabsBar');
