@@ -412,7 +412,7 @@ function _repKindsAvailable() {
   const kinds = [];
   if (groups.length > 0) kinds.push({ key: 'groups', icon: '🗓', label: 'חוגים',  color: '#2b6cb0', render: renderGroupReportsContent });
   if (teams.length  > 0) kinds.push({ key: 'teams',  icon: '🏅', label: 'נבחרות', color: '#553c9a', render: renderTeamReportsContent, onOpen: loadTeamReportsData });
-  if (camps.length  > 0) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampReportsContent, onOpen: loadCampReportsData });
+  if (camps.length  > 0 && hasTabPerm('camps')) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampReportsContent, onOpen: loadCampReportsData });
   return kinds;
 }
 
@@ -955,7 +955,7 @@ function _payKindsAvailable() {
   const kinds = [];
   if (groups.length > 0) kinds.push({ key: 'groups', icon: '🗓', label: 'חוגים',  color: '#2b6cb0', render: renderGroupPaymentsContent });
   if (teams.length  > 0) kinds.push({ key: 'teams',  icon: '🏅', label: 'נבחרות', color: '#553c9a', render: renderTeamPaymentsContent });
-  if (camps.length  > 0) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampPaymentsContent });
+  if (camps.length  > 0 && hasTabPerm('camps')) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampPaymentsContent });
   return kinds;
 }
 

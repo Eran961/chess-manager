@@ -1790,7 +1790,7 @@ function _attKindsAvailable() {
   const kinds = [];
   if (groups.length > 0) kinds.push({ key: 'groups', icon: '🗓', label: 'חוגים',  color: '#2b6cb0', render: renderGroupAttendanceContent });
   if (teams.length  > 0) kinds.push({ key: 'teams',  icon: '🏅', label: 'נבחרות', color: '#553c9a', render: renderTeamAttendanceContent });
-  if (camps.length  > 0) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampAttendanceContent });
+  if (camps.length  > 0 && hasTabPerm('camps')) kinds.push({ key: 'camps',  icon: '🏕️', label: 'מחנות',  color: '#c05621', render: renderCampAttendanceContent });
   return kinds;
 }
 
