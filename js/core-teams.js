@@ -1236,27 +1236,34 @@ async function submitAddPlayer() {
   const player = { name: `${firstName} ${lastName}`, birthYear, fedId, joinDate, added: true, gender, parentPhone, parentName, rating, cardExpiry };
   const groupIdx = _modalGroupIdx;
   const subGroupIdx = _modalSubGroupIdx;
-
-  groups[groupIdx].subGroups[subGroupIdx].players.push(player);
+  const g = groups[groupIdx];
+  const playerIdx = g.subGroups[subGroupIdx].players.length;
 
   if (db) {
-    const g = groups[groupIdx];
-    const playerIdx = groups[groupIdx].subGroups[subGroupIdx].players.length - 1;
-    await Promise.all([
-      db.ref(`extra_players/${g.id}/${subGroupIdx}`).push(
-        { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null, gender: gender || null }
-      ),
-      (parentPhone || parentName)
-        ? db.ref(`player_contacts/${g.id}/${subGroupIdx}/${playerIdx}`).set({ parentPhone: parentPhone || null, parentName: parentName || null })
-        : Promise.resolve(),
-      db.ref(`history/${g.id}/${subGroupIdx}`).push({ type: 'joined', playerName: `${lastName} ${firstName}`, timestamp: Date.now() }),
-    ]);
+    try {
+      await Promise.all([
+        db.ref(`extra_players/${g.id}/${subGroupIdx}`).push(
+          { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null, gender: gender || null }
+        ),
+        (parentPhone || parentName)
+          ? db.ref(`player_contacts/${g.id}/${subGroupIdx}/${playerIdx}`).set({ parentPhone: parentPhone || null, parentName: parentName || null })
+          : Promise.resolve(),
+        db.ref(`history/${g.id}/${subGroupIdx}`).push({ type: 'joined', playerName: `${lastName} ${firstName}`, timestamp: Date.now() }),
+      ]);
+    } catch(e) {
+      // Keep the modal open (so the typed data isn't lost) and tell the user
+      // exactly why nothing happened — previously this threw uncaught and the
+      // add silently appeared to do nothing.
+      showToast('❌ שגיאה בשמירת השחקן: ' + e.message, 'error');
+      return;
+    }
   }
 
-  logAudit('add_player', groups[groupIdx].id, groups[groupIdx].name, `הוסף: ${lastName} ${firstName}`);
+  g.subGroups[subGroupIdx].players.push(player);
+  logAudit('add_player', g.id, g.name, `הוסף: ${lastName} ${firstName}`);
   document.getElementById('addPlayerModal').classList.remove('open');
-  const g = groups[groupIdx];
   document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);
+  showToast(`${firstName} ${lastName} נוסף/ה ✅`);
 }
 
 async function loadExtraPlayers() {
