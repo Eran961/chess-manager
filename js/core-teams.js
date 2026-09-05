@@ -309,6 +309,7 @@ const PERMISSION_TABS = [
   { key: 'site-content',     label: '📝 עמוד הבית',         instructorDefault: false },
   { key: 'site-tournaments', label: '🏆 תחרויות במועדון',   instructorDefault: false },
   { key: 'site-contact',     label: '☎️ צרו קשר',           instructorDefault: false },
+  { key: 'site-whatsapp',    label: '💬 הודעות WhatsApp',   instructorDefault: false },
   { key: 'news-posts',       label: '📰 כתבות',             instructorDefault: false },
   { key: 'club-people',      label: '👥 אנשי המועדון',      instructorDefault: false },
   { key: 'tourn-cal',        label: '📅 גאנט תחרויות',      instructorDefault: false },

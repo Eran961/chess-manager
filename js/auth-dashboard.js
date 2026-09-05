@@ -1105,7 +1105,35 @@ function showSitePage(page) {
   if (page === 'home') { if (window.loadSiteContent) loadSiteContent(); }
   if (page === 'home') { if (window.loadUpcomingActivities) loadUpcomingActivities(); }
   try { localStorage.setItem('ccm_lastSitePage', page); } catch(e) {}
+  applyWaMessage(page);
 }
+
+// ── Per-page WhatsApp button text ───────────────────────────────────────
+// Admin-editable per site-page under ניהול אתר → הודעות WhatsApp
+// (federation-content-cms.js). Falls back to the "home" message, then to
+// this hardcoded default, so the button always has sensible text even
+// before any admin customization exists.
+const DEFAULT_WA_MESSAGE = 'שלום, אני מעוניין לשמוע עוד על מועדון השחמט';
+let _waMessagesCache = null;
+async function loadWaMessagesIfNeeded() {
+  if (_waMessagesCache) return _waMessagesCache;
+  try {
+    const snap = await db.ref('siteContent/whatsappMessages').get();
+    _waMessagesCache = snap.val() || {};
+  } catch(e) { _waMessagesCache = {}; }
+  return _waMessagesCache;
+}
+async function applyWaMessage(page) {
+  const btn = document.getElementById('wa-float-btn');
+  if (!btn || !db) return;
+  const msgs = await loadWaMessagesIfNeeded();
+  const msg = (msgs && msgs[page]) || (msgs && msgs.home) || DEFAULT_WA_MESSAGE;
+  btn.href = 'https://wa.me/972559573758?text=' + encodeURIComponent(msg);
+}
+window.applyWaMessage = applyWaMessage;
+// Invalidate the cache after an admin saves changes so the button picks
+// them up on the next page switch without needing a full reload.
+window.invalidateWaMessagesCache = function() { _waMessagesCache = null; };
 
 function showWeeklyModal() { document.getElementById("weekly-modal").classList.add("visible"); }
 function hideWeeklyModal() { document.getElementById("weekly-modal").classList.remove("visible"); }
@@ -1251,6 +1279,7 @@ function initAuth() {
   renderLandingSchedule();
   loadNewsCarousel();
   loadSiteContent();
+  applyWaMessage((document.querySelector('.site-page.active')?.id || 'page-home').replace('page-', ''));
   // monthly-calendar.js (which defines this) loads AFTER this script in index.html,
   // so on the very first page load it isn't defined yet at this exact point —
   // defer to the next tick, by which time every <script> tag has finished loading.
@@ -1736,6 +1765,15 @@ if (currentUser?.role === 'admin') {
   siteContactPanel.className = 'tab-panel'; siteContactPanel.id = 'panel-site-contact';
   siteContactPanel.innerHTML = '<div id="site-contact-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>';
   content.appendChild(siteContactPanel);
+  const siteWhatsappBtn = document.createElement('button');
+  siteWhatsappBtn.className = 'tab-btn'; siteWhatsappBtn.dataset.tab = 'site-whatsapp';
+  siteWhatsappBtn.textContent = '💬 הודעות WhatsApp';
+  siteWhatsappBtn.onclick = () => { switchTab('site-whatsapp'); loadSiteWhatsappAdmin(); };
+  tabsBar.appendChild(siteWhatsappBtn);
+  const siteWhatsappPanel = document.createElement('div');
+  siteWhatsappPanel.className = 'tab-panel'; siteWhatsappPanel.id = 'panel-site-whatsapp';
+  siteWhatsappPanel.innerHTML = '<div id="site-whatsapp-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>';
+  content.appendChild(siteWhatsappPanel);
   const newsAdminBtn = document.createElement('button');
   newsAdminBtn.className = 'tab-btn'; newsAdminBtn.dataset.tab = 'news-posts';
   newsAdminBtn.textContent = '📰 כתבות';
@@ -1914,6 +1952,7 @@ function buildTopNav() {
   if (isAdmin || hasTabPerm('site-content')) systemCards.push({ icon: '📝', label: 'עמוד הבית', tab: 'site-content' });
   if (isAdmin || hasTabPerm('site-tournaments')) systemCards.push({ icon: '🏆', label: 'תחרויות במועדון', tab: 'site-tournaments' });
   if (isAdmin || hasTabPerm('site-contact')) systemCards.push({ icon: '☎️', label: 'צרו קשר', tab: 'site-contact' });
+  if (isAdmin || hasTabPerm('site-whatsapp')) systemCards.push({ icon: '💬', label: 'הודעות WhatsApp', tab: 'site-whatsapp' });
   if (isAdmin || hasTabPerm('schedule-editor')) systemCards.push({ icon: '📅', label: 'לוח חוגים', tab: 'schedule-editor' });
   if (isAdmin || hasTabPerm('news-posts')) systemCards.push({ icon: '📰', label: 'כתבות', tab: 'news-posts' });
   if (isAdmin || hasTabPerm('club-people')) systemCards.push({ icon: '👥', label: 'אנשי המועדון', tab: 'club-people' });
@@ -2072,7 +2111,7 @@ function injectPermissionTabs() {
   const hasShach  = grantedExtras.includes('youth-players');
   const hasKlim   = grantedExtras.includes('hours');
   const hasCamps  = grantedExtras.includes('camps');
-  const hasMaarechet = ['audit','schedule-editor','site-content','site-tournaments','site-contact','news-posts','club-people','tourn-cal','monthly-cal'].some(k => grantedExtras.includes(k));
+  const hasMaarechet = ['audit','schedule-editor','site-content','site-tournaments','site-contact','site-whatsapp','news-posts','club-people','tourn-cal','monthly-cal'].some(k => grantedExtras.includes(k));
 
   if (hasLeague) {
     addLabel('ליגות');
@@ -2147,6 +2186,10 @@ function injectPermissionTabs() {
     if (grantedExtras.includes('site-contact')) {
       addTab('site-contact','☎️ צרו קשר', () => { switchTab('site-contact'); loadSiteContactAdmin(); },
         '<div id="site-contact-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
+    }
+    if (grantedExtras.includes('site-whatsapp')) {
+      addTab('site-whatsapp','💬 הודעות WhatsApp', () => { switchTab('site-whatsapp'); loadSiteWhatsappAdmin(); },
+        '<div id="site-whatsapp-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
     }
     if (grantedExtras.includes('news-posts')) {
       addTab('news-posts','📰 כתבות', () => { switchTab('news-posts'); loadNewsAdmin(); },

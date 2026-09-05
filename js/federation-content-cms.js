@@ -1244,6 +1244,116 @@ window.loadSiteContactAdmin = async function() {
   el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">☎️ ניהול פרטי יצירת קשר</h3>' + renderContactAdmin(data);
 };
 
+// ---- WhatsApp messages admin (per public page + free-form extras) ----
+const WA_BUILTIN_PAGES = [
+  { key: 'home',        label: 'עמוד הבית' },
+  { key: 'clubs',       label: 'חוגים במועדון' },
+  { key: 'tournaments', label: 'תחרויות במועדון' },
+  { key: 'calendar',    label: 'לוח פעילויות' },
+  { key: 'people',      label: 'אנשי המועדון' },
+  { key: 'contact',     label: 'צרו קשר' },
+];
+let _waCustomList = []; // [{id, label, message}] — extra named messages not tied to a page yet
+
+window.loadSiteWhatsappAdmin = async function() {
+  const el = document.getElementById('site-whatsapp-admin-container');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:30px;opacity:.5">⏳ טוען...</div>';
+  let msgs = {}, custom = {};
+  try {
+    const [s1, s2] = await Promise.all([
+      db.ref('siteContent/whatsappMessages').get(),
+      db.ref('siteContent/whatsappCustom').get(),
+    ]);
+    if (s1.exists()) msgs = s1.val();
+    if (s2.exists()) custom = s2.val();
+  } catch(e) {}
+  _waCustomList = Object.entries(custom).map(([id, c]) => ({ id, ...c }));
+  el.innerHTML = '<h3 style="margin:0 0 6px;font-size:18px">💬 ניהול הודעות WhatsApp</h3>' +
+    '<div style="font-size:12px;opacity:.65;margin-bottom:18px;line-height:1.6">' +
+    'ההודעה שנשלחת בלחיצה על כפתור הוואטסאפ באתר משתנה לפי העמוד בו הגולש נמצא. ' +
+    'עמוד שתשאיר ריק ישתמש בהודעת "עמוד הבית".' +
+    '</div>' +
+    renderWhatsappAdmin(msgs);
+  renderWaCustomList();
+};
+
+function renderWhatsappAdmin(msgs) {
+  msgs = msgs || {};
+  const rows = WA_BUILTIN_PAGES.map(p => (
+    '<div style="margin-bottom:14px">' +
+    '<label style="font-size:13px;font-weight:700;display:block;margin-bottom:4px">' + p.label + '</label>' +
+    '<textarea id="wa-msg-' + p.key + '" rows="2" placeholder="' + (p.key === 'home' ? DEFAULT_WA_MESSAGE_ADMIN_HINT : 'ריק = ישתמש בהודעת עמוד הבית') + '" ' +
+    'style="width:100%;box-sizing:border-box;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical">' +
+    (msgs[p.key] || '') + '</textarea>' +
+    '</div>'
+  )).join('');
+
+  return rows +
+    '<div style="margin:6px 0 26px"><button onclick="saveWaMessages()" style="background:#25d366;color:white;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור הודעות עמודים</button></div>' +
+    '<h4 style="margin:0 0 4px;font-size:14px">➕ הודעות נוספות</h4>' +
+    '<div style="font-size:12px;opacity:.6;margin-bottom:10px;line-height:1.6">' +
+    'למקרים שאינם עמוד קיים באתר (למשל כפתור עתידי או אירוע מיוחד) — נשמרות כאן לעריכה, אך כל שימוש חדש בהן דורש חיווט קטן בקוד.' +
+    '</div>' +
+    '<div id="wa-custom-list"></div>' +
+    '<button onclick="addWaCustom()" style="background:none;border:1px dashed rgba(255,255,255,.3);color:inherit;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;margin-top:6px">+ הוסף הודעה נוספת</button>' +
+    '<div style="margin-top:14px"><button onclick="saveWaCustom()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור הודעות נוספות</button></div>';
+}
+const DEFAULT_WA_MESSAGE_ADMIN_HINT = 'ריק = "שלום, אני מעוניין לשמוע עוד על מועדון השחמט"';
+
+function renderWaCustomList() {
+  const wrap = document.getElementById('wa-custom-list');
+  if (!wrap) return;
+  wrap.innerHTML = _waCustomList.length ? _waCustomList.map(c => (
+    '<div style="margin-bottom:14px;border-top:1px dashed rgba(255,255,255,.15);padding-top:12px">' +
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">' +
+    '<input value="' + (c.label||'').replace(/"/g,'&quot;') + '" oninput="updateWaCustomField(\'' + c.id + '\',\'label\',this.value)" ' +
+    'placeholder="שם (לדוגמה: מחנות קיץ)" style="flex:1;border-radius:8px;padding:6px 10px;font-family:inherit;font-size:13px">' +
+    '<button onclick="removeWaCustom(\'' + c.id + '\')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>' +
+    '</div>' +
+    '<textarea rows="2" oninput="updateWaCustomField(\'' + c.id + '\',\'message\',this.value)" ' +
+    'style="width:100%;box-sizing:border-box;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical">' + (c.message||'') + '</textarea>' +
+    '</div>'
+  )).join('') : '<div style="font-size:12px;opacity:.5">אין הודעות נוספות עדיין</div>';
+}
+
+window.updateWaCustomField = function(id, field, value) {
+  const item = _waCustomList.find(c => c.id === id);
+  if (item) item[field] = value;
+};
+
+window.addWaCustom = function() {
+  _waCustomList.push({ id: 'wa' + Date.now(), label: '', message: '' });
+  renderWaCustomList();
+};
+
+window.removeWaCustom = function(id) {
+  _waCustomList = _waCustomList.filter(c => c.id !== id);
+  renderWaCustomList();
+};
+
+window.saveWaMessages = async function() {
+  const obj = {};
+  WA_BUILTIN_PAGES.forEach(p => {
+    const v = document.getElementById('wa-msg-' + p.key)?.value?.trim();
+    if (v) obj[p.key] = v;
+  });
+  try {
+    await db.ref('siteContent/whatsappMessages').set(Object.keys(obj).length ? obj : null);
+    if (window.invalidateWaMessagesCache) window.invalidateWaMessagesCache();
+    showToast('הודעות ה-WhatsApp נשמרו ✅');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+};
+
+window.saveWaCustom = async function() {
+  const obj = {};
+  _waCustomList.forEach(c => { if ((c.label||'').trim() || (c.message||'').trim()) obj[c.id] = { label: c.label||'', message: c.message||'' }; });
+  try {
+    await db.ref('siteContent/whatsappCustom').set(Object.keys(obj).length ? obj : null);
+    showToast('הודעות נוספות נשמרו ✅');
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+};
+
 window.showSiteSec = function(sec) {
   document.querySelectorAll('.site-sec-panel').forEach(function(p){ p.style.display='none'; });
   const panel = document.getElementById('sec-' + sec);
