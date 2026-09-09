@@ -1359,7 +1359,12 @@ async function loadAttendanceDates() {
   try {
     const g = groups[attState.groupIdx];
     const snap = await db.ref(`attendance/${g.id}/${attState.subGroupIdx}`).get();
-    _attDatesWithData = new Set(snap.val() ? Object.keys(snap.val()) : []);
+    // Firebase keeps every date ever saved, across past seasons too — filter
+    // to the current season so a real session from a previous year doesn't
+    // show up here as an "orphan" date to select (same reasoning as the
+    // reports cache in loadReportsData()).
+    const data = snap.val();
+    _attDatesWithData = new Set(data ? Object.keys(data).filter(d => d >= YEAR_START && d <= YEAR_END) : []);
     applyDateMarkers();
   } catch(e) { console.error('loadAttendanceDates error:', e); }
 }

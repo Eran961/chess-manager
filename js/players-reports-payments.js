@@ -672,8 +672,19 @@ async function loadReportsData() {
       db.ref(`attendance/${g.id}/${reportsState.subGroupIdx}`).get(),
       db.ref(`notes/${g.id}/${reportsState.subGroupIdx}`).get(),
     ]);
-    _reportsCache.attendance = attSnap.val() || {};
-    _reportsCache.notes = notesSnap.val() || {};
+    // Firebase keeps every attendance date ever saved, across every past
+    // season — nothing archives or clears it when a new season starts. Left
+    // unfiltered, a real session from a past season (same weekday and all)
+    // shows up as an extra "meeting with data" in THIS season's yearly
+    // summary — e.g. one real 2025-09 Sunday session plus one real 2026-09
+    // Sunday session reads as "2 meetings this year" even though only one
+    // happened in the current season. Restrict the cache to the current
+    // season's range up front so every report view built on it (summary,
+    // monthly, by-date, the date dropdown) is automatically season-scoped.
+    const inSeason = (d) => d >= YEAR_START && d <= YEAR_END;
+    const filterToSeason = (obj) => Object.fromEntries(Object.entries(obj || {}).filter(([d]) => inSeason(d)));
+    _reportsCache.attendance = filterToSeason(attSnap.val());
+    _reportsCache.notes = filterToSeason(notesSnap.val());
     updateReportsDateDropdown();
     displayReports();
   } catch(e) {
