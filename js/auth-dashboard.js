@@ -1699,8 +1699,8 @@ campsPanel.className = 'tab-panel'; campsPanel.id = 'panel-camps'; campsPanel.in
 content.appendChild(campsPanel);
 
 const hoursBtn = document.createElement('button');
-hoursBtn.className = 'tab-btn'; hoursBtn.dataset.tab = 'hours'; hoursBtn.textContent = '⏱️ שעות';
-hoursBtn.onclick = () => { switchTab('hours'); loadHoursHistory(); };
+hoursBtn.className = 'tab-btn'; hoursBtn.dataset.tab = 'hours'; hoursBtn.textContent = '⚖️ שיפוט';
+hoursBtn.onclick = () => { switchTab('hours'); loadHoursHistory(); renderRefereeFields(); };
 tabsBar.appendChild(hoursBtn);
 const hoursPanel = document.createElement('div');
 hoursPanel.className = 'tab-panel'; hoursPanel.id = 'panel-hours'; hoursPanel.innerHTML = renderHoursPanel();
@@ -1911,10 +1911,10 @@ function buildTopNav() {
   const managLabel = hasT && hasG ? '🧰 ניהול נבחרות / חוגים' : hasT ? '🧰 ניהול נבחרות' : hasG ? '🧰 ניהול חוגים' : '🧰 ניהול שוטף';
   catDefs.push({ key: 'management', label: managLabel, cards: managCards });
 
-  // Hours reporting (own tab)
+  // Referee/judging reporting (own tab)
   if (isAdmin || hasTabPerm('hours')) {
     window._tabCatMap['hours'] = 'hours';
-    catDefs.push({ key: 'hours', label: '⏱️ דיווח שעות', direct: 'hours', onOpen: loadHoursHistory });
+    catDefs.push({ key: 'hours', label: '⚖️ דיווח שיפוט', direct: 'hours', onOpen: loadHoursHistory });
   }
 
   // Leagues/Tournaments hub
@@ -2155,7 +2155,7 @@ function injectPermissionTabs() {
       addTab('camps','🏕️ מחנות', () => { switchTab('camps'); loadDbCamps().then(loadCampPlayers).then(() => { document.getElementById('panel-camps').innerHTML = renderCampsPanel(); }); }, '<div style="padding:32px;text-align:center;color:#888;">לחץ על הלשונית לטעינת הנתונים</div>');
     }
     if (hasKlim) {
-      addTab('hours','⏱️ שעות', () => { switchTab('hours'); loadHoursHistory(); }, renderHoursPanel());
+      addTab('hours','⚖️ שיפוט', () => { switchTab('hours'); loadHoursHistory(); renderRefereeFields(); }, renderHoursPanel());
     }
   }
 

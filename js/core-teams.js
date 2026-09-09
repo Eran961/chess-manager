@@ -292,7 +292,7 @@ const PERMISSION_TABS = [
   { key: 'payments',         label: '💳 תשלומים',          instructorDefault: true  },
   { key: 'reports',          label: '📊 דוחות',            instructorDefault: true  },
   { key: 'calendar',         label: '📅 לוח שנה',          instructorDefault: true  },
-  { key: 'hours',            label: '⏱️ שעות',             instructorDefault: false },
+  { key: 'hours',            label: '⚖️ שיפוט',            instructorDefault: false },
   { key: 'friday',           label: '♟ ליגות שישי',        instructorDefault: false },
   { key: 'club-tournaments', label: '🏆 תחרויות',          instructorDefault: false },
   { key: 'league-adults',    label: '♟ ליגות בוגרים',      instructorDefault: false },
