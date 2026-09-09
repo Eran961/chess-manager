@@ -266,6 +266,8 @@ async function saveHoursEntry() {
 }
 
 const HOURS_HISTORY_MONTH_NAMES = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+let _hoursHistoryEntries = null;   // full (already role-filtered) list from the last Firebase load
+let _hoursHistoryMonth = null;     // currently viewed 'YYYY-MM', or '__undated__' for legacy rows with no date
 
 async function loadHoursHistory() {
   const container = document.getElementById('hours-history');
@@ -276,28 +278,85 @@ async function loadHoursHistory() {
     const entries = [];
     snap.forEach(child => { entries.push({ id: child.key, ...child.val() }); });
     const isAdmin = currentUser?.role === 'admin';
-    let filtered = isAdmin ? entries : entries.filter(e => e.instructorId === currentUser.uid);
-    if (!filtered.length) {
-      container.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:24px">אין דיווחים עדיין</div>';
-      return;
-    }
-    // Sort by the report's own date, not by when it was entered — a report
-    // backfilled out of order (or entered for someone on a different day)
-    // shouldn't jump around; entered-order (ts) only breaks same-date ties.
-    filtered = filtered.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.ts || 0) - (a.ts || 0));
+    _hoursHistoryEntries = isAdmin ? entries : entries.filter(e => e.instructorId === currentUser.uid);
+    renderHoursHistoryUI();
+  } catch(e) { container.innerHTML = `<div style="color:#c53030;padding:16px">שגיאה: ${e.message}</div>`; }
+}
 
-    // Older, pre-דיווח-שיפוט entries (hours-based) may still exist in
-    // Firebase — render them gracefully rather than assuming every row has
-    // the new referee shape, without giving them any special prominence.
-    const totalPay = filtered.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const thStyle = 'padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
-    const colCount = 5 + (isAdmin ? 2 : 0); // תאריך, פירוט, הערות, שכר, הוזן ב (+ שופט, מחיקה for admins)
+function onHoursHistoryMonthChange(val) {
+  _hoursHistoryMonth = val;
+  renderHoursHistoryUI();
+}
+window.onHoursHistoryMonthChange = onHoursHistoryMonthChange;
 
-    const rowHTML = (e) => {
-      const isRef = e.activityType === 'refereeing';
-      const detail = isRef ? [e.refereeTypeLabel, e.tournamentName].filter(Boolean).join(' · ') : '';
-      const valueCell = isRef ? `${(e.amount || 0).toLocaleString()} ₪` : (e.hours != null ? `${e.hours} ש׳` : '—');
-      return `
+// One month at a time, picked from a dropdown — instead of one long list of
+// every report ever made. The dropdown spans every month from the first
+// one anyone ever reported for through the current month (so a month with
+// zero reports is still visible and selectable — the point is to be able
+// to confirm nothing was entered for it, not just skip it), and defaults to
+// the current month.
+function renderHoursHistoryUI() {
+  const container = document.getElementById('hours-history');
+  if (!container) return;
+  const isAdmin = currentUser?.role === 'admin';
+  const all = _hoursHistoryEntries || [];
+  if (!all.length) {
+    container.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:24px">אין דיווחים עדיין</div>';
+    return;
+  }
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const dated = all.filter(e => e.date);
+  const undated = all.filter(e => !e.date); // very old, pre-migration rows with no date at all
+  const monthKeys = dated.map(e => e.date.slice(0, 7));
+  let minMonth = monthKeys.length ? monthKeys.reduce((a, b) => a < b ? a : b) : currentMonthKey;
+  let maxMonth = monthKeys.length ? monthKeys.reduce((a, b) => a > b ? a : b) : currentMonthKey;
+  if (currentMonthKey > maxMonth) maxMonth = currentMonthKey; // always include the current month, even with nothing in it yet
+  if (currentMonthKey < minMonth) minMonth = currentMonthKey;
+
+  const months = [];
+  let [y, m] = minMonth.split('-').map(Number);
+  const [ey, em] = maxMonth.split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+
+  if (!_hoursHistoryMonth || (_hoursHistoryMonth !== '__undated__' && !months.includes(_hoursHistoryMonth))) {
+    _hoursHistoryMonth = months.includes(currentMonthKey) ? currentMonthKey : months[months.length - 1];
+  }
+
+  const countForMonth = (mk) => dated.filter(e => e.date.slice(0, 7) === mk).length;
+  const monthOptions = months.map(mk => {
+    const [my, mm] = mk.split('-');
+    const label = `${HOURS_HISTORY_MONTH_NAMES[parseInt(mm, 10) - 1]} ${my}`;
+    const count = countForMonth(mk);
+    return `<option value="${mk}"${mk === _hoursHistoryMonth ? ' selected' : ''}>${label}${count ? ` (${count})` : ' — ריק'}</option>`;
+  }).join('') + (undated.length ? `<option value="__undated__"${_hoursHistoryMonth === '__undated__' ? ' selected' : ''}>ללא תאריך (${undated.length})</option>` : '');
+
+  const entriesForMonth = (_hoursHistoryMonth === '__undated__' ? undated : dated.filter(e => e.date.slice(0, 7) === _hoursHistoryMonth))
+    .slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.ts || 0) - (a.ts || 0));
+  const monthTotal = entriesForMonth.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+  const selectorHTML = `
+    <select id="hours-history-month" onchange="onHoursHistoryMonthChange(this.value)"
+      style="padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;font-weight:700;color:#2d3748">
+      ${monthOptions}
+    </select>`;
+
+  if (!entriesForMonth.length) {
+    container.innerHTML = `
+      <div style="margin-bottom:14px">${selectorHTML}</div>
+      <div style="text-align:center;color:#a0aec0;padding:24px">אין דיווחים בחודש זה</div>`;
+    return;
+  }
+
+  const thStyle = 'padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+  const rows = entriesForMonth.map(e => {
+    const isRef = e.activityType === 'refereeing';
+    const detail = isRef ? [e.refereeTypeLabel, e.tournamentName].filter(Boolean).join(' · ') : '';
+    const valueCell = isRef ? `${(e.amount || 0).toLocaleString()} ₪` : (e.hours != null ? `${e.hours} ש׳` : '—');
+    return `
       <tr style="border-bottom:1px solid #f0f4f8">
         ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}${e.enteredByAdmin ? `<div style="font-size:11px;font-weight:400;color:#a0aec0">הוזן ע"י ${e.enteredByAdmin}</div>` : ''}</td>` : ''}
         <td style="padding:10px 12px;font-size:13px">${e.date || '—'}</td>
@@ -307,49 +366,27 @@ async function loadHoursHistory() {
         <td style="padding:10px 12px;font-size:12px;color:#a0aec0">${new Date(e.ts).toLocaleDateString('he-IL')}</td>
         ${isAdmin ? `<td style="padding:10px 8px;text-align:center"><button onclick="deleteHoursEntry('${e.id}')" title="מחק" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1">🗑</button></td>` : ''}
       </tr>`;
-    };
+  }).join('');
 
-    // Group into one section per month (YYYY-MM of the report's own date —
-    // entries already sorted, so this is a single pass); reports missing a
-    // date (very old, pre-migration rows) fall into their own group.
-    const groups = [];
-    let curKey = null, curGroup = null;
-    filtered.forEach(e => {
-      const key = e.date ? e.date.slice(0, 7) : '—';
-      if (key !== curKey) { curKey = key; curGroup = { key, entries: [] }; groups.push(curGroup); }
-      curGroup.entries.push(e);
-    });
-    const bodyHTML = groups.map(g => {
-      const [y, m] = g.key.split('-');
-      const label = (y && m) ? `${HOURS_HISTORY_MONTH_NAMES[parseInt(m, 10) - 1]} ${y}` : 'ללא תאריך';
-      const monthTotal = g.entries.reduce((sum, e) => sum + (e.amount || 0), 0);
-      return `
-        <tr><td colspan="${colCount}" style="padding:9px 12px;background:#edf2f7;font-size:13px;font-weight:800;color:#2d3748">
-          ${label}${monthTotal > 0 ? ` <span style="font-weight:600;color:#718096;font-size:12px">· ${monthTotal.toLocaleString()} ₪</span>` : ''}
-        </td></tr>
-        ${g.entries.map(rowHTML).join('')}`;
-    }).join('');
-
-    container.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <span style="font-size:14px;font-weight:700;color:#2d3748">היסטוריית דיווחים (${filtered.length})</span>
-        ${totalPay > 0 ? `<span style="font-size:15px;font-weight:800;color:#553c9a">סה"כ: ${totalPay.toLocaleString()} ₪</span>` : ''}
-      </div>
-      <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr>
-            ${isAdmin ? `<th style="${thStyle}">שופט</th>` : ''}
-            <th style="${thStyle}">תאריך</th>
-            <th style="${thStyle}">פירוט</th>
-            <th style="${thStyle}">הערות</th>
-            <th style="${thStyle};text-align:center">שכר</th>
-            <th style="${thStyle}">הוזן ב</th>
-            ${isAdmin ? `<th style="${thStyle}"></th>` : ''}
-          </tr></thead>
-          <tbody>${bodyHTML}</tbody>
-        </table>
-      </div>`;
-  } catch(e) { container.innerHTML = `<div style="color:#c53030;padding:16px">שגיאה: ${e.message}</div>`; }
+  container.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      ${selectorHTML}
+      <span style="font-size:14px;font-weight:700;color:#2d3748">דיווחים: ${entriesForMonth.length}${monthTotal > 0 ? ` &nbsp;·&nbsp; <span style="color:#553c9a;font-weight:800">סה"כ: ${monthTotal.toLocaleString()} ₪</span>` : ''}</span>
+    </div>
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          ${isAdmin ? `<th style="${thStyle}">שופט</th>` : ''}
+          <th style="${thStyle}">תאריך</th>
+          <th style="${thStyle}">פירוט</th>
+          <th style="${thStyle}">הערות</th>
+          <th style="${thStyle};text-align:center">שכר</th>
+          <th style="${thStyle}">הוזן ב</th>
+          ${isAdmin ? `<th style="${thStyle}"></th>` : ''}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 async function deleteHoursEntry(id) {
