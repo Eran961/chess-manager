@@ -1236,14 +1236,22 @@ async function loadExtraPlayers() {
 
 function getGroupDates(dayOfWeek) {
   if (dayOfWeek < 0) return [];
-  const start = new Date(YEAR_START);
-  const end = new Date(YEAR_END);
+  // Pure UTC arithmetic throughout — mixing local getDay()/setDate() with
+  // toISOString()'s UTC output caused a real 1-day drift for any date past
+  // Israel's DST transition (the object's wall-clock hour, fixed once at the
+  // start of the search, ends up representing a different UTC offset once
+  // DST changes, shifting the extracted date back a day). Using getUTCDay/
+  // setUTCDate/Date.UTC keeps everything in one timezone-less frame, so the
+  // generated date always matches the weekday it was searched for.
+  const [sy, sm, sd] = YEAR_START.split('-').map(Number);
+  const [ey, em, ed] = YEAR_END.split('-').map(Number);
+  let d = new Date(Date.UTC(sy, sm - 1, sd));
+  const end = new Date(Date.UTC(ey, em - 1, ed));
+  while (d.getUTCDay() !== dayOfWeek) d.setUTCDate(d.getUTCDate() + 1);
   const dates = [];
-  let d = new Date(start);
-  while (d.getDay() !== dayOfWeek) d.setDate(d.getDate() + 1);
   while (d <= end) {
     dates.push(d.toISOString().split('T')[0]);
-    d.setDate(d.getDate() + 7);
+    d.setUTCDate(d.getUTCDate() + 7);
   }
   return dates;
 }
@@ -1489,17 +1497,20 @@ function defaultDateForTeam(team) {
   return selected;
 }
 
-// Every day of a camp's date range, excluding Friday/Saturday (the Israeli weekend)
+// Every day of a camp's date range, excluding Friday/Saturday (the Israeli weekend).
+// Pure UTC arithmetic — see getGroupDates for why (avoids a 1-day drift for
+// ranges that cross Israel's DST transition).
 function getCampDates(camp) {
   if (!camp || !camp.startDate || !camp.endDate) return [];
-  const start = new Date(camp.startDate);
-  const end = new Date(camp.endDate);
+  const [sy, sm, sd] = camp.startDate.split('-').map(Number);
+  const [ey, em, ed] = camp.endDate.split('-').map(Number);
+  const d = new Date(Date.UTC(sy, sm - 1, sd));
+  const end = new Date(Date.UTC(ey, em - 1, ed));
   const dates = [];
-  const d = new Date(start);
   while (d <= end) {
-    const day = d.getDay(); // 0=Sunday ... 5=Friday, 6=Saturday
+    const day = d.getUTCDay(); // 0=Sunday ... 5=Friday, 6=Saturday
     if (day !== 5 && day !== 6) dates.push(d.toISOString().split('T')[0]);
-    d.setDate(d.getDate() + 1);
+    d.setUTCDate(d.getUTCDate() + 1);
   }
   return dates;
 }

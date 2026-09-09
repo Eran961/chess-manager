@@ -199,21 +199,27 @@ window.tcSaveCats=async function(){
 };
 
 // ===== FRIDAY LEAGUES =====
+// Pure UTC arithmetic throughout — mixing local getDay()/setDate() with
+// toISOString()'s UTC output caused a real 1-day drift for dates past
+// Israel's DST transition (same bug as getGroupDates in core-teams.js).
 function getFridaysBetween(start, end) {
+  const [sy, sm, sd] = start.split('-').map(Number);
+  const [ey, em, ed] = end.split('-').map(Number);
+  let d = new Date(Date.UTC(sy, sm - 1, sd));
+  const endDate = new Date(Date.UTC(ey, em - 1, ed));
+  while (d.getUTCDay() !== 5) d.setUTCDate(d.getUTCDate() + 1);
   const dates = [];
-  const d = new Date(start);
-  while (d.getDay() !== 5) d.setDate(d.getDate() + 1);
-  const endDate = new Date(end);
   while (d <= endDate) {
     dates.push(d.toISOString().split('T')[0]);
-    d.setDate(d.getDate() + 7);
+    d.setUTCDate(d.getUTCDate() + 7);
   }
   return dates;
 }
 
 function getLastFriday() {
-  const d = new Date();
-  while (d.getDay() !== 5) d.setDate(d.getDate() - 1);
+  const now = new Date();
+  let d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  while (d.getUTCDay() !== 5) d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().split('T')[0];
 }
 const FRIDAY_LEAGUES = [
