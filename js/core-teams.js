@@ -1221,12 +1221,20 @@ async function loadExtraPlayers() {
   if (!db) return;
   try {
     const snap = await db.ref('extra_players').get();
-    if (!snap.val()) return;
-    const data = snap.val();
+    const data = snap.val() || {};
     groups.forEach((g, groupIdx) => {
-      if (!data[g.id]) return;
       g.subGroups.forEach((sg, subGroupIdx) => {
-        const extra = data[g.id][subGroupIdx];
+        // Idempotent: always rebuild from the base (non-extra) roster before
+        // re-adding extras. buildApp() — and therefore initData() and this
+        // function — can legitimately run more than once in the same
+        // session (e.g. after archiving teams, which rebuilds the UI without
+        // a full page reload) without groups ever being reset. Without this,
+        // every manually-added player got pushed again on each re-run —
+        // showing up as a genuine duplicate entry with its own (empty)
+        // attendance history, and making an already-hidden player look like
+        // it "came back" since the fresh duplicate isn't hidden.
+        sg.players = sg.players.filter(p => !p.added);
+        const extra = data[g.id]?.[subGroupIdx];
         if (!extra) return;
         Object.values(extra).forEach(p => {
           sg.players.push({ name: `${p.firstName} ${p.lastName}`, birthYear: p.birthYear, fedId: p.fedId || null, joinDate: p.joinDate || null, added: true, rating: p.rating || null, cardExpiry: p.cardExpiry || null });
