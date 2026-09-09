@@ -1306,12 +1306,7 @@ function initAuth() {
     // Kick off the club-wide data fetch (groups/teams/camps) now, in parallel with
     // loadUserRole — it's the same for every user, so it doesn't need to wait for
     // the role lookup to finish before starting.
-    // loadDbTeams() must run AFTER loadDeletedTeamNames() resolves, not in
-    // parallel with it — seedDefaultTeams() (called from inside loadDbTeams
-    // when dbTeams is empty) checks _deletedTeamNames synchronously, and a
-    // race where the teams read wins would silently seed back a team that
-    // was already deleted, since the exclusion set would still be empty.
-    const clubDataPromise = db ? Promise.all([loadDeletedGroups(), loadDeletedTeamNames().then(loadDbTeams), loadDbGroups(), loadDbCamps()]) : null;
+    const clubDataPromise = db ? Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()]) : null;
     let roleData = await loadUserRole(firebaseUser.uid);
     if (!roleData && db) {
       // User exists in Auth but has no roles entry — auto-create as instructor
@@ -1370,13 +1365,15 @@ function toggleSidebar(forceOpen) {
 window.toggleSidebar = toggleSidebar;
 
 function buildApp() {
-// Only fall back to the hardcoded ALL_GROUPS/ALL_TEAMS rosters when there's no
-// Firebase connection at all (local/demo mode). Gating this on the in-memory
-// _useDbGroups/_useDbTeams flags instead was unreliable: if loadDbGroups()/
-// loadDbTeams() hit a transient read error, they'd stay at their default
-// false/[] state even with Firebase connected, and this fallback would
-// silently substitute the hardcoded defaults — looking exactly like deleted
-// groups/teams "came back" even though nothing was written to Firebase.
+// Only fall back to the hardcoded ALL_GROUPS roster when there's no Firebase
+// connection at all (local/demo mode). Gating this on the in-memory
+// _useDbGroups flag instead was unreliable: if loadDbGroups() hit a
+// transient read error, it would stay at its default [] state even with
+// Firebase connected, and this fallback would silently substitute the
+// hardcoded default — looking exactly like deleted groups "came back" even
+// though nothing was written to Firebase. Teams have no such fallback
+// (and no hardcoded default roster at all) — same as groups behave when
+// genuinely empty in Firebase.
 if (!db && (!groups || groups.length === 0)) {
   groups = ALL_GROUPS.filter(g => !_deletedGroupIds.has(g.id));
 }
@@ -1389,15 +1386,6 @@ if (currentUser?.role !== 'admin') {
     const legacy = ALL_GROUPS.find(ag => ag.name === g.name);
     return legacy ? allowedIds.includes(legacy.id) : false;
   });
-}
-if (!db && teams.length === 0) {
-  teams = ALL_TEAMS.map((t, i) => ({
-    id: 'default-team-' + i,
-    name: t.name,
-    coach: t.coach,
-    region: t.region,
-    subGroups: [{ time: 'נבחרת א', players: [] }, { time: 'נבחרת ב', players: [] }]
-  }));
 }
 // Filter teams for non-admin users
 if (currentUser?.role !== 'admin') {

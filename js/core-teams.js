@@ -285,8 +285,6 @@ let _useDbGroups = false; // true = groups come from Firebase, don't fallback to
 let _deletedGroupIds = new Set(); // persisted in Firebase so ALL_GROUPS deletions survive refresh
 
 let teams = [];
-let _deletedTeamNames = new Set(); // persisted in Firebase so deleting a default-roster team survives any future reseed
-function _teamNameKey(name) { return String(name).replace(/[.#$\[\]\/]/g, '_'); } // sanitize for use as an RTDB key
 
 const PERMISSION_TABS = [
   { key: 'camps',            label: '🏕️ מחנות',            instructorDefault: false },
@@ -354,87 +352,24 @@ async function loadDbGroups() {
   } catch(e) { console.error('loadDbGroups error:', e); }
 }
 
-const ALL_TEAMS = [
-  // ── מערב ──
-  { name: 'נגבה',       coach: 'אריק',            region: 'מערב' },
-  { name: 'כרמים',      coach: 'אריק',            region: 'מערב' },
-  { name: 'נוה עוז',    coach: 'אדוארד',          region: 'מערב' },
-  { name: 'מרחבים',     coach: 'אדוארד',          region: 'מערב' },
-  { name: 'שקמה',       coach: 'אדוארד',          region: 'מערב' },
-  { name: 'נווה חוף',   coach: 'אדוארד',          region: 'מערב' },
-  { name: 'חופית',      coach: 'אדוארד',          region: 'מערב' },
-  { name: 'מיתרים',     coach: 'ליבי',            region: 'מערב' },
-  { name: 'נווה דקלים', coach: 'יבגני',           region: 'מערב' },
-  { name: 'ידלין',      coach: 'גלב',             region: 'מערב' },
-  { name: 'ניצנים',     coach: 'יבגני',           region: 'מערב' },
-  { name: 'עין הקורא',  coach: 'גלב',             region: 'מערב' },
-  { name: 'בארי',       coach: 'יבגני',           region: 'מערב' },
-  // ── מזרח ──
-  { name: 'יפה נוף',    coach: 'גלב',             region: 'מזרח' },
-  { name: 'יסוד המעלה', coach: 'יבגני',           region: 'מזרח' },
-  { name: 'אריאל שרון', coach: 'ליבי',            region: 'מזרח' },
-  { name: 'הדרים',      coach: 'ליבי',            region: 'מזרח' },
-  { name: 'מישור הנוף', coach: 'ליבי',            region: 'מזרח' },
-  { name: 'עדיני',      coach: 'ליבי',            region: 'מזרח' },
-  { name: 'אשכולות',    coach: 'גלב',             region: 'מזרח' },
-  { name: 'אלונים',     coach: 'שמוליק',          region: 'מזרח' },
-  { name: 'אליאב',      coach: 'זאב',             region: 'מזרח' },
-  { name: 'רקפות',      coach: 'יבגני לבנזוב',   region: 'מזרח' },
-  { name: 'תמיר',       coach: 'זאב',             region: 'מזרח' },
-];
-
 async function loadDbTeams() {
   if (!db) return;
   try {
     const snap = await db.ref('dbTeams').get();
     const data = snap.val();
-    if (data) {
-      _useDbTeams = true;
-      teams = Object.entries(data).map(([id, t]) => ({
-        id,
-        name:     t.name || t.teamName || t.label || id.replace(/^team-/,'').replace(/-\d{3,}$/,'').replace(/-/g,' ').trim(),
-        coach:    t.coach    || '',
-        region:   t.region   || '',
-        dayOfWeek: t.dayOfWeek ?? 0,
-        meetings: t.meetings  || [],
-        subGroups: (t.subGroups || [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }])
-                    .map(sg => ({ time: sg.time || '', day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '', players: [] }))
-      }));
-      await db.ref('settings/teamsSeeded').set(true);
-    } else {
-      const seededSnap = await db.ref('settings/teamsSeeded').get();
-      if (seededSnap.val()) {
-        // Teams were already initialized before (via Firebase) and are now
-        // genuinely empty — e.g. the admin deleted all of them, or year-end
-        // archiving cleared them. Don't silently repopulate the hardcoded
-        // default roster; leave it empty, same as groups behave.
-        _useDbTeams = true;
-        teams = [];
-      } else {
-        await seedDefaultTeams();
-        await db.ref('settings/teamsSeeded').set(true);
-      }
-    }
+    if (!data) return; // no hardcoded default roster — leave teams empty, same as loadDbGroups()
+    _useDbTeams = true;
+    teams = Object.entries(data).map(([id, t]) => ({
+      id,
+      name:     t.name || t.teamName || t.label || id.replace(/^team-/,'').replace(/-\d{3,}$/,'').replace(/-/g,' ').trim(),
+      coach:    t.coach    || '',
+      region:   t.region   || '',
+      dayOfWeek: t.dayOfWeek ?? 0,
+      meetings: t.meetings  || [],
+      subGroups: (t.subGroups || [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }])
+                  .map(sg => ({ time: sg.time || '', day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '', players: [] }))
+    }));
   } catch(e) { console.error('loadDbTeams error:', e); }
-}
-
-async function seedDefaultTeams() {
-  _useDbTeams = true;
-  const subGroups = [{ time: 'נבחרת א' }, { time: 'נבחרת ב' }];
-  for (const t of ALL_TEAMS) {
-    // Skip default teams the admin explicitly deleted before — otherwise every
-    // future reseed (or any other code path that ends up re-running this) would
-    // silently bring them back, which is exactly the "deleted team keeps
-    // coming back" bug this guards against, independent of what triggers it.
-    if (_deletedTeamNames.has(_teamNameKey(t.name))) continue;
-    const id = 'team-' + t.name.replace(/[^א-תa-zA-Z0-9]/g, '-').replace(/-+/g,'-') + '-' + Date.now() % 100000;
-    const def = { name: t.name, coach: t.coach, region: t.region, subGroups };
-    try {
-      await db.ref(`dbTeams/${id}`).set(def);
-      teams.push({ id, ...def, subGroups: subGroups.map(sg => ({ time: sg.time, players: [] })) });
-    } catch(e) { console.error('seedDefaultTeams error for ' + t.name, e); }
-  }
-  showToast(`${teams.length} נבחרות נטענו ✅`);
 }
 
 async function loadTeamPlayers() {
@@ -521,22 +456,8 @@ async function loadDeletedGroups() {
   } catch(e) { console.warn('loadDeletedGroups error:', e); }
 }
 
-async function loadDeletedTeamNames() {
-  if (!db) return;
-  try {
-    const snap = await db.ref('deletedTeamNames').get();
-    const data = snap.val();
-    if (data) _deletedTeamNames = new Set(Object.keys(data));
-  } catch(e) { console.warn('loadDeletedTeamNames error:', e); }
-}
-
 async function initializeApp(clubDataPromise) {
-  // loadDbTeams() reads _deletedTeamNames (inside seedDefaultTeams) to decide
-  // which default-roster teams to skip re-creating — it MUST NOT run before
-  // loadDeletedTeamNames() has actually populated that set, or the check
-  // silently sees an empty set and the "deleted team keeps coming back" bug
-  // resurfaces on a race, not every time (matches how it was reported).
-  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDeletedTeamNames().then(loadDbTeams), loadDbGroups(), loadDbCamps()])); }
+  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()])); }
   buildApp();
   injectPermissionTabs();
   buildTopNav();
