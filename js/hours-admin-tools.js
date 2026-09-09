@@ -1,9 +1,48 @@
+// ===== REFEREE PAYMENT RATES (מחירון שיפוט וניהול תחרויות) =====
+// Confirmed formula (per user): chief referee ("ניהלתי" only) → chiefManage;
+// chief referee ("שפטתי" only) → chiefJudge; chief referee ("גם וגם") → sum
+// of both. Second/third referee always gets the single secondThird rate,
+// regardless of the ניהלתי/שפטתי/גם וגם choice (the table only has one
+// number for that role).
+const DEFAULT_REFEREE_RATES = [
+  { id: 'r1',  label: 'ניהול ושיפוט סבב 7 סיבובים',                                     chiefManage: 200, chiefJudge: 400, secondThird: 200 },
+  { id: 'r2',  label: 'ניהול ושיפוט תחרות לא מדורגים בשבת או חג',                         chiefManage: 100, chiefJudge: 500, secondThird: 300 },
+  { id: 'r3',  label: 'ניהול ושיפוט תחרות לא מדורגים בשבת או חג (כפולה — בוקר וגם אחה"צ)', chiefManage: 100, chiefJudge: 750, secondThird: 450 },
+  { id: 'r4',  label: 'ניהול ושיפוט תחרות מיוחדת בשבת או חג',                             chiefManage: 200, chiefJudge: 600, secondThird: 300 },
+  { id: 'r5',  label: 'ניהול ליגה בשבת',                                                 chiefManage: 0,   chiefJudge: 500, secondThird: 250 },
+  { id: 'r6',  label: 'ניהול ליגה באמצע השבוע',                                          chiefManage: 0,   chiefJudge: 350, secondThird: 0   },
+  { id: 'r7',  label: 'ניהול תחרות של 50 דקות (סבב)',                                    chiefManage: 100, chiefJudge: 250, secondThird: 150 },
+  { id: 'r8',  label: 'ניהול תחרות שתי בסבב בימי שישי',                                   chiefManage: 100, chiefJudge: 300, secondThird: 200 },
+  { id: 'r9',  label: 'ניהול תחרות בימי שישי (15+10)',                                    chiefManage: 100, chiefJudge: 350, secondThird: 250 },
+  { id: 'r10', label: 'ניהול תחרות בזק באמצע השבוע',                                      chiefManage: 100, chiefJudge: 300, secondThird: 250 },
+];
+let _refereeRates = null;
+async function loadRefereeRates() {
+  if (_refereeRates) return _refereeRates;
+  try {
+    const snap = await db.ref('refereeRates').get();
+    _refereeRates = snap.exists() ? Object.entries(snap.val()).map(([id, v]) => ({ id, ...v })) : DEFAULT_REFEREE_RATES.slice();
+  } catch(e) { _refereeRates = DEFAULT_REFEREE_RATES.slice(); }
+  return _refereeRates;
+}
+
+function computeRefereePay(rate, role, duty) {
+  if (!rate) return 0;
+  if (role === 'second') return rate.secondThird || 0;
+  if (duty === 'manage') return rate.chiefManage || 0;
+  if (duty === 'judge')  return rate.chiefJudge  || 0;
+  return (rate.chiefManage || 0) + (rate.chiefJudge || 0); // both
+}
+
 // ===== HOURS LOGGING =====
 function renderHoursPanel() {
   const today = new Date().toISOString().split('T')[0];
   return `
     <div class="att-card" style="max-width:720px">
-      <div class="att-card-header">⏱️ דיווח שעות</div>
+      <div class="att-card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>⏱️ דיווח שעות</span>
+        ${currentUser?.role === 'admin' ? `<button onclick="openRefereeRatesModal()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✏️ מחירון שיפוט</button>` : ''}
+      </div>
       <div style="padding:20px">
         <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
           <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
@@ -13,20 +52,22 @@ function renderHoursPanel() {
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
               <label style="font-size:13px;font-weight:600;color:#4a5568">סוג פעילות</label>
-              <select id="hours-type" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+              <select id="hours-type" onchange="onHoursTypeChange(this.value)" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
                 <option value="friday">יום שישי</option>
                 <option value="tournament">תחרות</option>
                 <option value="league">ליגה</option>
+                <option value="refereeing">שיפוט/ניהול תחרות 🏆</option>
                 <option value="other">אחר</option>
               </select>
             </div>
-            <div style="display:flex;flex-direction:column;gap:4px;min-width:90px">
+            <div id="hours-count-wrap" style="display:flex;flex-direction:column;gap:4px;min-width:90px">
               <label style="font-size:13px;font-weight:600;color:#4a5568">שעות</label>
               <input type="number" id="hours-count" min="0.5" max="24" step="0.5" placeholder="2.5" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;width:90px">
             </div>
           </div>
+          <div id="hours-referee-fields" style="display:none"></div>
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:13px;font-weight:600;color:#4a5568">תיאור</label>
+            <label style="font-size:13px;font-weight:600;color:#4a5568">הערות</label>
             <input type="text" id="hours-desc" placeholder="לדוגמא: ליגת הנוער רמת גן" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
           </div>
           <button onclick="saveHoursEntry()" style="align-self:flex-start;background:#2b6cb0;color:white;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">💾 שמור דיווח</button>
@@ -37,29 +78,141 @@ function renderHoursPanel() {
     </div>`;
 }
 
+function onHoursTypeChange(val) {
+  const countWrap = document.getElementById('hours-count-wrap');
+  const refWrap = document.getElementById('hours-referee-fields');
+  if (!countWrap || !refWrap) return;
+  if (val === 'refereeing') {
+    countWrap.style.display = 'none';
+    refWrap.style.display = '';
+    renderRefereeFields();
+  } else {
+    countWrap.style.display = '';
+    refWrap.style.display = 'none';
+    refWrap.innerHTML = '';
+  }
+}
+window.onHoursTypeChange = onHoursTypeChange;
+
+async function renderRefereeFields() {
+  const wrap = document.getElementById('hours-referee-fields');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="color:#a0aec0;font-size:13px">⏳ טוען מחירון...</div>';
+  const rates = await loadRefereeRates();
+  if (typeof loadTournaments === 'function' && Object.keys(window._tournaments || {}).length === 0) {
+    try { await loadTournaments(); } catch(e) {}
+  }
+  const tournOptions = Object.entries(window._tournaments || {})
+    .sort((a, b) => (b[1].startDate || '').localeCompare(a[1].startDate || ''))
+    .map(([id, t]) => `<option value="${id}">${t.name}</option>`).join('');
+  const typeOptions = rates.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
+  wrap.innerHTML = `
+    <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">סוג תחרות (לפי מחירון)</label>
+          <select id="ref-type" onchange="updateRefereeSalary()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">${typeOptions}</select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">תפקיד</label>
+          <select id="ref-role" onchange="updateRefereeSalary()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="chief">שופט ראשי</option>
+            <option value="second">שופט שני/שלישי</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div id="ref-duty-wrap" style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">תפקיד בפועל</label>
+          <select id="ref-duty" onchange="updateRefereeSalary()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="manage">ניהלתי</option>
+            <option value="judge">שפטתי</option>
+            <option value="both">גם וגם</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">תחרות מקושרת (לא חובה)</label>
+          <select id="ref-tournament" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="">— ללא קישור —</option>
+            ${tournOptions}
+          </select>
+        </div>
+      </div>
+      <div style="background:#e6fffa;border:1px solid #b2f5ea;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:600;color:#234e52">שכר מחושב</span>
+        <span id="ref-salary-display" style="font-size:20px;font-weight:800;color:#2c7a7b">0 ₪</span>
+      </div>
+    </div>`;
+  updateRefereeSalary();
+}
+window.renderRefereeFields = renderRefereeFields;
+
+function updateRefereeSalary() {
+  const rates = _refereeRates || DEFAULT_REFEREE_RATES;
+  const typeId = document.getElementById('ref-type')?.value;
+  const role = document.getElementById('ref-role')?.value;
+  const duty = document.getElementById('ref-duty')?.value;
+  const dutyWrap = document.getElementById('ref-duty-wrap');
+  const rate = rates.find(r => r.id === typeId);
+  // The ניהלתי/שפטתי/גם וגם split only applies to the chief referee —
+  // second/third has one flat rate per type regardless of duty.
+  if (dutyWrap) dutyWrap.style.opacity = role === 'second' ? '0.4' : '1';
+  const disp = document.getElementById('ref-salary-display');
+  if (disp) disp.textContent = computeRefereePay(rate, role, duty).toLocaleString() + ' ₪';
+}
+window.updateRefereeSalary = updateRefereeSalary;
+
 async function saveHoursEntry() {
   const date = document.getElementById('hours-date').value;
   const type = document.getElementById('hours-type').value;
-  const hoursVal = document.getElementById('hours-count').value;
   const desc = document.getElementById('hours-desc').value.trim();
-  if (!date || !hoursVal || parseFloat(hoursVal) <= 0) {
-    showToast('יש למלא תאריך ושעות', 'error'); return;
+  if (!date) { showToast('יש למלא תאריך', 'error'); return; }
+
+  let entry;
+  if (type === 'refereeing') {
+    const rates = _refereeRates || DEFAULT_REFEREE_RATES;
+    const typeId = document.getElementById('ref-type')?.value;
+    const role = document.getElementById('ref-role')?.value;
+    const duty = document.getElementById('ref-duty')?.value;
+    const tournamentId = document.getElementById('ref-tournament')?.value || null;
+    const rate = rates.find(r => r.id === typeId);
+    if (!rate) { showToast('יש לבחור סוג תחרות', 'error'); return; }
+    entry = {
+      instructorId: currentUser.uid,
+      instructorName: currentUser.name,
+      date,
+      activityType: type,
+      activityLabel: 'שיפוט/ניהול תחרות',
+      description: desc,
+      refereeTypeId: typeId,
+      refereeTypeLabel: rate.label,
+      refereeRole: role,
+      refereeDuty: duty,
+      tournamentId,
+      tournamentName: tournamentId ? (window._tournaments?.[tournamentId]?.name || '') : '',
+      amount: computeRefereePay(rate, role, duty),
+      ts: Date.now()
+    };
+  } else {
+    const hoursVal = document.getElementById('hours-count').value;
+    if (!hoursVal || parseFloat(hoursVal) <= 0) { showToast('יש למלא שעות', 'error'); return; }
+    const typeLabels = { friday: 'יום שישי', tournament: 'תחרות', league: 'ליגה', other: 'אחר' };
+    entry = {
+      instructorId: currentUser.uid,
+      instructorName: currentUser.name,
+      date,
+      activityType: type,
+      activityLabel: typeLabels[type],
+      description: desc,
+      hours: parseFloat(hoursVal),
+      ts: Date.now()
+    };
   }
-  const typeLabels = { friday: 'יום שישי', tournament: 'תחרות', league: 'ליגה', other: 'אחר' };
-  const entry = {
-    instructorId: currentUser.uid,
-    instructorName: currentUser.name,
-    date,
-    activityType: type,
-    activityLabel: typeLabels[type],
-    description: desc,
-    hours: parseFloat(hoursVal),
-    ts: Date.now()
-  };
+
   try {
     await db.ref('hourLogs').push(entry);
     showToast('הדיווח נשמר ✅');
-    document.getElementById('hours-count').value = '';
+    const countEl = document.getElementById('hours-count'); if (countEl) countEl.value = '';
     document.getElementById('hours-desc').value = '';
     loadHoursHistory();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
@@ -80,22 +233,35 @@ async function loadHoursHistory() {
       container.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:24px">אין דיווחים עדיין</div>';
       return;
     }
-    const totalHours = filtered.reduce((sum, e) => sum + (e.hours || 0), 0);
-    const rows = filtered.map(e => `
+    const totalHours = filtered.filter(e => e.activityType !== 'refereeing').reduce((sum, e) => sum + (e.hours || 0), 0);
+    const totalPay = filtered.filter(e => e.activityType === 'refereeing').reduce((sum, e) => sum + (e.amount || 0), 0);
+    const rows = filtered.map(e => {
+      const isRef = e.activityType === 'refereeing';
+      const desc = isRef
+        ? [e.refereeTypeLabel, e.tournamentName, e.description].filter(Boolean).join(' · ')
+        : (e.description || '<span style="color:#cbd5e0">—</span>');
+      const valueCell = isRef ? `${(e.amount || 0).toLocaleString()} ₪` : e.hours;
+      const badgeBg = isRef ? '#faf5ff' : '#ebf4ff';
+      const badgeColor = isRef ? '#553c9a' : '#2b6cb0';
+      return `
       <tr style="border-bottom:1px solid #f0f4f8">
         ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}</td>` : ''}
         <td style="padding:10px 12px;font-size:13px">${e.date || '—'}</td>
-        <td style="padding:10px 12px"><span style="background:#ebf4ff;color:#2b6cb0;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;white-space:nowrap">${e.activityLabel || e.activityType}</span></td>
-        <td style="padding:10px 12px;font-size:13px;color:#4a5568">${e.description || '<span style="color:#cbd5e0">—</span>'}</td>
-        <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:15px;color:#2b6cb0">${e.hours}</td>
+        <td style="padding:10px 12px"><span style="background:${badgeBg};color:${badgeColor};padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;white-space:nowrap">${e.activityLabel || e.activityType}</span></td>
+        <td style="padding:10px 12px;font-size:13px;color:#4a5568">${desc || '<span style="color:#cbd5e0">—</span>'}</td>
+        <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:15px;color:${badgeColor}">${valueCell}</td>
         <td style="padding:10px 12px;font-size:12px;color:#a0aec0">${new Date(e.ts).toLocaleDateString('he-IL')}</td>
         ${isAdmin ? `<td style="padding:10px 8px;text-align:center"><button onclick="deleteHoursEntry('${e.id}')" title="מחק" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1">🗑</button></td>` : ''}
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     const thStyle = 'padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
     container.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <span style="font-size:14px;font-weight:700;color:#2d3748">היסטוריית דיווחים (${filtered.length})</span>
-        <span style="font-size:15px;font-weight:800;color:#2b6cb0">סה"כ: ${totalHours} שעות</span>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          ${totalHours > 0 ? `<span style="font-size:15px;font-weight:800;color:#2b6cb0">סה"כ שעות: ${totalHours}</span>` : ''}
+          ${totalPay > 0 ? `<span style="font-size:15px;font-weight:800;color:#553c9a">סה"כ שיפוט: ${totalPay.toLocaleString()} ₪</span>` : ''}
+        </div>
       </div>
       <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
         <table style="width:100%;border-collapse:collapse">
@@ -103,8 +269,8 @@ async function loadHoursHistory() {
             ${isAdmin ? `<th style="${thStyle}">מדריך</th>` : ''}
             <th style="${thStyle}">תאריך</th>
             <th style="${thStyle}">סוג</th>
-            <th style="${thStyle}">תיאור</th>
-            <th style="${thStyle};text-align:center">שעות</th>
+            <th style="${thStyle}">פירוט</th>
+            <th style="${thStyle};text-align:center">שעות / שכר</th>
             <th style="${thStyle}">הוזן ב</th>
             ${isAdmin ? `<th style="${thStyle}"></th>` : ''}
           </tr></thead>
@@ -122,6 +288,91 @@ async function deleteHoursEntry(id) {
     loadHoursHistory();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
+
+async function openRefereeRatesModal() {
+  await loadRefereeRates();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" id="refRatesOverlay" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:760px">
+        <div class="modal-header">
+          <span class="modal-title">✏️ מחירון שיפוט וניהול תחרויות</span>
+          <button class="modal-close" onclick="document.getElementById('refRatesOverlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;max-height:70vh;overflow-y:auto">
+          <div style="font-size:12px;color:#718096;margin-bottom:14px;line-height:1.6">
+            "ניהול (ראשי)" = השכר כשבוחרים "ניהלתי" בלבד · "שיפוט (ראשי)" = השכר כשבוחרים "שפטתי" בלבד ·
+            "גם וגם" משלם את סכום שני העמודות יחד · "שני/שלישי" = שכר קבוע לתפקיד שני/שלישי, ללא קשר לבחירת ניהול/שיפוט.
+          </div>
+          <div id="ref-rates-rows" style="display:flex;flex-direction:column;gap:10px"></div>
+          <button onclick="addRefereeRateRow()" style="margin-top:10px;background:none;border:1px dashed #cbd5e0;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;color:#4a5568">+ הוסף סוג</button>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-form-cancel" onclick="document.getElementById('refRatesOverlay').remove()">ביטול</button>
+          <button class="btn-form-submit" onclick="saveRefereeRates()">💾 שמור מחירון</button>
+        </div>
+      </div>
+    </div>`);
+  renderRefereeRateRows();
+}
+window.openRefereeRatesModal = openRefereeRatesModal;
+
+function renderRefereeRateRows() {
+  const wrap = document.getElementById('ref-rates-rows');
+  if (!wrap) return;
+  wrap.innerHTML = _refereeRates.map((r, i) => `
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #f0f4f8;padding-bottom:8px">
+      <input value="${(r.label || '').replace(/"/g,'&quot;')}" oninput="updateRefRateField(${i},'label',this.value)" placeholder="סוג תחרות"
+        style="flex:2;min-width:180px;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <label style="font-size:10px;color:#a0aec0">ניהול (ראשי)</label>
+        <input type="number" value="${r.chiefManage || 0}" oninput="updateRefRateField(${i},'chiefManage',parseFloat(this.value)||0)"
+          style="width:70px;padding:6px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;text-align:center;font-family:inherit">
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <label style="font-size:10px;color:#a0aec0">שיפוט (ראשי)</label>
+        <input type="number" value="${r.chiefJudge || 0}" oninput="updateRefRateField(${i},'chiefJudge',parseFloat(this.value)||0)"
+          style="width:70px;padding:6px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;text-align:center;font-family:inherit">
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <label style="font-size:10px;color:#a0aec0">שני/שלישי</label>
+        <input type="number" value="${r.secondThird || 0}" oninput="updateRefRateField(${i},'secondThird',parseFloat(this.value)||0)"
+          style="width:70px;padding:6px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;text-align:center;font-family:inherit">
+      </div>
+      <button onclick="removeRefereeRateRow(${i})" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">🗑</button>
+    </div>`).join('');
+}
+
+function updateRefRateField(i, field, value) {
+  if (_refereeRates[i]) _refereeRates[i][field] = value;
+}
+window.updateRefRateField = updateRefRateField;
+
+function addRefereeRateRow() {
+  _refereeRates.push({ id: 'r' + Date.now(), label: '', chiefManage: 0, chiefJudge: 0, secondThird: 0 });
+  renderRefereeRateRows();
+}
+window.addRefereeRateRow = addRefereeRateRow;
+
+function removeRefereeRateRow(i) {
+  _refereeRates.splice(i, 1);
+  renderRefereeRateRows();
+}
+window.removeRefereeRateRow = removeRefereeRateRow;
+
+async function saveRefereeRates() {
+  try {
+    const obj = {};
+    _refereeRates.forEach(r => {
+      if (r.label?.trim()) obj[r.id] = { label: r.label.trim(), chiefManage: r.chiefManage || 0, chiefJudge: r.chiefJudge || 0, secondThird: r.secondThird || 0 };
+    });
+    await db.ref('refereeRates').set(Object.keys(obj).length ? obj : null);
+    _refereeRates = Object.entries(obj).map(([id, v]) => ({ id, ...v }));
+    showToast('המחירון נשמר ✅');
+    document.getElementById('refRatesOverlay')?.remove();
+    if (document.getElementById('hours-type')?.value === 'refereeing') renderRefereeFields();
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveRefereeRates = saveRefereeRates;
 
 async function loadSubmissions() {
   const panel = document.getElementById('panel-submissions');
