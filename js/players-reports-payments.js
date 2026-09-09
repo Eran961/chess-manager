@@ -459,7 +459,7 @@ function renderGroupReportsContent() {
     `<option value="${i}"${i === reportsState.subGroupIdx ? ' selected' : ''}>${sg.time || 'קבוצה'}</option>`
   ).join('');
   const subGroupDisabled = g.subGroups.length === 1 ? 'disabled' : '';
-  const dateOptions = getGroupDates(g.dayOfWeek).map(d =>
+  const dateOptions = getSubGroupMeetingDates(g, reportsState.subGroupIdx).map(d =>
     `<option value="${d}"${d === reportsState.date ? ' selected' : ''}>${formatDate(d)}</option>`
   ).join('');
 
@@ -808,8 +808,8 @@ function renderMonthlyTable() {
   const month = reportsState.month;
   const monthLabel = getSchoolMonths().find(m => m.value === month)?.label || month;
 
-  // כל תאריכי הקבוצה בחודש זה (לפי יום בשבוע)
-  const allGroupDates = getGroupDates(g.dayOfWeek).filter(d => d.startsWith(month));
+  // כל תאריכי הקבוצה בחודש זה (לפי היום הספציפי של תת-הקבוצה הנבחרת)
+  const allGroupDates = getSubGroupMeetingDates(g, reportsState.subGroupIdx).filter(d => d.startsWith(month));
   if (allGroupDates.length === 0) {
     return `<div style="padding:24px;text-align:center;color:#718096">אין מפגשים מתוכננים ל${monthLabel}.</div>`;
   }
@@ -915,13 +915,20 @@ function onReportsGroupChange(val) {
   reportsState.groupIdx = parseInt(val);
   reportsState.subGroupIdx = 0;
   const g = groups[reportsState.groupIdx];
-  reportsState.date = g ? defaultDateForGroup(g.dayOfWeek) : '';
+  reportsState.date = g ? defaultDateForGroup(g, 0) : '';
   document.getElementById('panel-reports').innerHTML = renderReportsPanel();
   loadReportsData();
 }
 
 function onReportsSubGroupChange(val) {
   reportsState.subGroupIdx = parseInt(val);
+  const g = groups[reportsState.groupIdx];
+  reportsState.date = g ? defaultDateForGroup(g, reportsState.subGroupIdx) : '';
+  // Sub-groups can meet on different days — the date dropdown and the
+  // monthly view's date columns are both specific to the selected
+  // sub-group's day, so they need a full re-render, not just a data reload
+  // (this was the actual bug: switching sub-group never rebuilt either).
+  document.getElementById('panel-reports').innerHTML = renderReportsPanel();
   loadReportsData();
 }
 
@@ -1936,11 +1943,16 @@ async function loadWeeklyAttendanceAlerts() {
   try {
     for (let gi = 0; gi < groups.length; gi++) {
       const g = groups[gi];
-      const weekDates = getGroupDates(g.dayOfWeek).filter(d => {
-        const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
-      });
-      for (const date of weekDates) {
-        for (let si = 0; si < g.subGroups.length; si++) {
+      // Each sub-group can meet on its own day (see getSubGroupMeetingDates) —
+      // computing weekDates once per group from g.dayOfWeek and reusing it
+      // for every sub-group meant a group with e.g. Sunday+Wednesday
+      // sub-groups only ever got checked against one of those two days,
+      // same bug as the attendance-entry and reports date pickers.
+      for (let si = 0; si < g.subGroups.length; si++) {
+        const weekDates = getSubGroupMeetingDates(g, si).filter(d => {
+          const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
+        });
+        for (const date of weekDates) {
           try {
             const snap = await db.ref(`attendance/${g.id}/${si}/${date}`).get();
             if (!snap.val()) missingGroups.push({ groupName: g.name, subGroupName: g.subGroups[si].time || '', date: formatDate(date), instructor: g.instructor || '', instructorWa: groupPhones[g.id] || '' });
