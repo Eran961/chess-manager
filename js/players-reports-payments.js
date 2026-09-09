@@ -1645,6 +1645,16 @@ async function saveTeamMeetings(teamIdx) {
   team.meetings = meetings;
   if (db && team.id) {
     try {
+      // Same guard as saveEditedTeam: a stale tab shouldn't be able to
+      // resurrect a team someone else already deleted just by saving its
+      // meeting times.
+      const liveSnap = await db.ref(`dbTeams/${team.id}`).get();
+      if (!liveSnap.exists()) {
+        showToast('הנבחרת הזו כבר נמחקה (אולי במסך אחר) — לא נשמר', 'error');
+        document.getElementById('teamMeetingsOverlay')?.remove();
+        teams = teams.filter(t => t.id !== team.id);
+        return;
+      }
       await db.ref(`dbTeams/${team.id}/meetings`).set(meetings.length ? meetings : null);
     } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); return; }
   }

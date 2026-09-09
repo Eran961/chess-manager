@@ -1149,6 +1149,20 @@ async function saveEditedTeam(teamId) {
 
   if (db && teamId) {
     try {
+      // A stale tab (open since before someone else deleted this team)
+      // could otherwise .update() a since-removed dbTeams path — Firebase
+      // just creates it fresh with whatever fields are in the update,
+      // silently resurrecting a "deleted" team. Check it's still really
+      // there first.
+      const liveSnap = await db.ref(`dbTeams/${teamId}`).get();
+      if (!liveSnap.exists()) {
+        showToast('הנבחרת הזו כבר נמחקה (אולי במסך אחר) — לא נשמר', 'error');
+        document.getElementById('editTeamOverlay')?.remove();
+        teams = teams.filter(t => t.id !== teamId);
+        const tp = document.getElementById('panel-teams-admin');
+        if (tp) tp.innerHTML = renderTeamsAdminPanel();
+        return;
+      }
       await db.ref(`dbTeams/${teamId}`).update({
         name, coach, region, dayOfWeek,
         subGroups: newSubGroups.map(sg => ({ time: sg.time, day: sg.day ?? null, meetingTime: sg.meetingTime || '', location: sg.location || '' }))

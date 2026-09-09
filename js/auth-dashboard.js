@@ -1306,7 +1306,12 @@ function initAuth() {
     // Kick off the club-wide data fetch (groups/teams/camps) now, in parallel with
     // loadUserRole — it's the same for every user, so it doesn't need to wait for
     // the role lookup to finish before starting.
-    const clubDataPromise = db ? Promise.all([loadDeletedGroups(), loadDeletedTeamNames(), loadDbGroups(), loadDbTeams(), loadDbCamps()]) : null;
+    // loadDbTeams() must run AFTER loadDeletedTeamNames() resolves, not in
+    // parallel with it — seedDefaultTeams() (called from inside loadDbTeams
+    // when dbTeams is empty) checks _deletedTeamNames synchronously, and a
+    // race where the teams read wins would silently seed back a team that
+    // was already deleted, since the exclusion set would still be empty.
+    const clubDataPromise = db ? Promise.all([loadDeletedGroups(), loadDeletedTeamNames().then(loadDbTeams), loadDbGroups(), loadDbCamps()]) : null;
     let roleData = await loadUserRole(firebaseUser.uid);
     if (!roleData && db) {
       // User exists in Auth but has no roles entry — auto-create as instructor

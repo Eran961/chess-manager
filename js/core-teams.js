@@ -531,7 +531,12 @@ async function loadDeletedTeamNames() {
 }
 
 async function initializeApp(clubDataPromise) {
-  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDeletedTeamNames(), loadDbGroups(), loadDbTeams(), loadDbCamps()])); }
+  // loadDbTeams() reads _deletedTeamNames (inside seedDefaultTeams) to decide
+  // which default-roster teams to skip re-creating — it MUST NOT run before
+  // loadDeletedTeamNames() has actually populated that set, or the check
+  // silently sees an empty set and the "deleted team keeps coming back" bug
+  // resurfaces on a race, not every time (matches how it was reported).
+  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDeletedTeamNames().then(loadDbTeams), loadDbGroups(), loadDbCamps()])); }
   buildApp();
   injectPermissionTabs();
   buildTopNav();
