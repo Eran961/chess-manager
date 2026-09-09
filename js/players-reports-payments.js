@@ -696,13 +696,22 @@ function updateReportsDateDropdown() {
 }
 
 function getSchoolMonths() {
-  const months = [
-    { value: '2025-09', label: 'ספטמבר 2025' }, { value: '2025-10', label: 'אוקטובר 2025' },
-    { value: '2025-11', label: 'נובמבר 2025' },  { value: '2025-12', label: 'דצמבר 2025' },
-    { value: '2026-01', label: 'ינואר 2026' },   { value: '2026-02', label: 'פברואר 2026' },
-    { value: '2026-03', label: 'מרץ 2026' },     { value: '2026-04', label: 'אפריל 2026' },
-    { value: '2026-05', label: 'מאי 2026' },     { value: '2026-06', label: 'יוני 2026' },
-  ];
+  // Generated from the real, currently-configured season (YEAR_START/
+  // YEAR_END) instead of a fixed list — a hardcoded list silently goes
+  // stale every single year once a new season starts (this exact bug was
+  // reported live: the dropdown only had 2025–2026 months, so the browser
+  // fell back to showing its first option even though the actual data being
+  // shown was correctly for the new season).
+  const heMonthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const months = [];
+  const [sy, sm] = YEAR_START.split('-').map(Number);
+  const [ey, em] = YEAR_END.split('-').map(Number);
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    months.push({ value: `${y}-${String(m).padStart(2, '0')}`, label: `${heMonthNames[m - 1]} ${y}` });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
   return months;
 }
 

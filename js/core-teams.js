@@ -457,7 +457,15 @@ async function loadDeletedGroups() {
 }
 
 async function initializeApp(clubDataPromise) {
-  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps()])); }
+  // loadSettings() (YEAR_START/YEAR_END) MUST resolve before buildApp() runs —
+  // buildApp() synchronously renders the attendance/reports/hours panels,
+  // whose date dropdowns are all computed from those two variables. It used
+  // to only load later, inside initData() at the very end of buildApp(),
+  // meaning every panel's dates were built from the hardcoded code defaults
+  // (2025-09 to 2026-06) instead of the real admin-configured season, with
+  // nothing re-rendering once the real values arrived — so attendance entry,
+  // reports, and the monthly view all showed last season's dates.
+  if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps(), loadSettings()])); }
   buildApp();
   injectPermissionTabs();
   buildTopNav();
