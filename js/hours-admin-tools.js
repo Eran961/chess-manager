@@ -265,6 +265,8 @@ async function saveHoursEntry() {
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 
+const HOURS_HISTORY_MONTH_NAMES = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
 async function loadHoursHistory() {
   const container = document.getElementById('hours-history');
   if (!container) return;
@@ -273,34 +275,61 @@ async function loadHoursHistory() {
     const snap = await db.ref('hourLogs').orderByChild('ts').get();
     const entries = [];
     snap.forEach(child => { entries.push({ id: child.key, ...child.val() }); });
-    entries.reverse();
     const isAdmin = currentUser?.role === 'admin';
-    const filtered = isAdmin ? entries : entries.filter(e => e.instructorId === currentUser.uid);
+    let filtered = isAdmin ? entries : entries.filter(e => e.instructorId === currentUser.uid);
     if (!filtered.length) {
       container.innerHTML = '<div style="text-align:center;color:#a0aec0;padding:24px">אין דיווחים עדיין</div>';
       return;
     }
+    // Sort by the report's own date, not by when it was entered — a report
+    // backfilled out of order (or entered for someone on a different day)
+    // shouldn't jump around; entered-order (ts) only breaks same-date ties.
+    filtered = filtered.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.ts || 0) - (a.ts || 0));
+
     // Older, pre-דיווח-שיפוט entries (hours-based) may still exist in
     // Firebase — render them gracefully rather than assuming every row has
     // the new referee shape, without giving them any special prominence.
     const totalPay = filtered.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const rows = filtered.map(e => {
+    const thStyle = 'padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+    const colCount = 5 + (isAdmin ? 2 : 0); // תאריך, פירוט, הערות, שכר, הוזן ב (+ שופט, מחיקה for admins)
+
+    const rowHTML = (e) => {
       const isRef = e.activityType === 'refereeing';
-      const desc = isRef
-        ? [e.refereeTypeLabel, e.tournamentName, e.description].filter(Boolean).join(' · ')
-        : (e.description || '<span style="color:#cbd5e0">—</span>');
+      const detail = isRef ? [e.refereeTypeLabel, e.tournamentName].filter(Boolean).join(' · ') : '';
       const valueCell = isRef ? `${(e.amount || 0).toLocaleString()} ₪` : (e.hours != null ? `${e.hours} ש׳` : '—');
       return `
       <tr style="border-bottom:1px solid #f0f4f8">
         ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}${e.enteredByAdmin ? `<div style="font-size:11px;font-weight:400;color:#a0aec0">הוזן ע"י ${e.enteredByAdmin}</div>` : ''}</td>` : ''}
         <td style="padding:10px 12px;font-size:13px">${e.date || '—'}</td>
-        <td style="padding:10px 12px;font-size:13px;color:#4a5568">${desc || '<span style="color:#cbd5e0">—</span>'}</td>
+        <td style="padding:10px 12px;font-size:13px;color:#4a5568">${detail || '<span style="color:#cbd5e0">—</span>'}</td>
+        <td style="padding:10px 12px;font-size:13px;color:#718096">${e.description || '<span style="color:#cbd5e0">—</span>'}</td>
         <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:15px;color:#553c9a">${valueCell}</td>
         <td style="padding:10px 12px;font-size:12px;color:#a0aec0">${new Date(e.ts).toLocaleDateString('he-IL')}</td>
         ${isAdmin ? `<td style="padding:10px 8px;text-align:center"><button onclick="deleteHoursEntry('${e.id}')" title="מחק" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1">🗑</button></td>` : ''}
       </tr>`;
+    };
+
+    // Group into one section per month (YYYY-MM of the report's own date —
+    // entries already sorted, so this is a single pass); reports missing a
+    // date (very old, pre-migration rows) fall into their own group.
+    const groups = [];
+    let curKey = null, curGroup = null;
+    filtered.forEach(e => {
+      const key = e.date ? e.date.slice(0, 7) : '—';
+      if (key !== curKey) { curKey = key; curGroup = { key, entries: [] }; groups.push(curGroup); }
+      curGroup.entries.push(e);
+    });
+    const bodyHTML = groups.map(g => {
+      const [y, m] = g.key.split('-');
+      const label = (y && m) ? `${HOURS_HISTORY_MONTH_NAMES[parseInt(m, 10) - 1]} ${y}` : 'ללא תאריך';
+      const monthTotal = g.entries.reduce((sum, e) => sum + (e.amount || 0), 0);
+      return `
+        <tr><td colspan="${colCount}" style="padding:9px 12px;background:#edf2f7;font-size:13px;font-weight:800;color:#2d3748">
+          ${label}${monthTotal > 0 ? ` <span style="font-weight:600;color:#718096;font-size:12px">· ${monthTotal.toLocaleString()} ₪</span>` : ''}
+        </td></tr>
+        ${g.entries.map(rowHTML).join('')}`;
     }).join('');
-    const thStyle = 'padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;background:#f7fafc';
+
     container.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <span style="font-size:14px;font-weight:700;color:#2d3748">היסטוריית דיווחים (${filtered.length})</span>
@@ -312,11 +341,12 @@ async function loadHoursHistory() {
             ${isAdmin ? `<th style="${thStyle}">שופט</th>` : ''}
             <th style="${thStyle}">תאריך</th>
             <th style="${thStyle}">פירוט</th>
+            <th style="${thStyle}">הערות</th>
             <th style="${thStyle};text-align:center">שכר</th>
             <th style="${thStyle}">הוזן ב</th>
             ${isAdmin ? `<th style="${thStyle}"></th>` : ''}
           </tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${bodyHTML}</tbody>
         </table>
       </div>`;
   } catch(e) { container.innerHTML = `<div style="color:#c53030;padding:16px">שגיאה: ${e.message}</div>`; }
