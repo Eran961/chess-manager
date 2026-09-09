@@ -1515,35 +1515,6 @@ async function saveAttendance() {
   btn.textContent = '💾 שמור נוכחות';
 }
 
-// Admin-only escape hatch for leftover/incorrect attendance entries — e.g. a
-// phantom date created by a since-fixed bug (like the stale-attState.date
-// one), which shows up as a real "meeting with data" in the yearly report
-// even though no actual session happened on it. Removes the Firebase entry
-// entirely (not just unchecking everyone, which is a valid meeting with 0
-// present — this deletes the date's entry so it's not counted at all).
-async function deleteAttendanceDate() {
-  if (!db) return;
-  const g = groups[attState.groupIdx];
-  if (!g) return;
-  const dateLabel = formatDate(attState.date);
-  if (!confirm(`למחוק לצמיתות את נתוני הנוכחות של ${dateLabel}?\nהפעולה בלתי הפיכה — התאריך לא ייספר יותר כמפגש בדוחות.`)) return;
-  try {
-    await db.ref(attPath()).remove();
-    logAudit('delete_attendance', g.id, g.name, attState.date);
-    // The deleted date may only have been in the dropdown as an "orphan"
-    // (mismatched weekday) — pick a real default date again, same as
-    // switching groups does, then rebuild everything around it.
-    attState.date = defaultDateForGroup(g, attState.subGroupIdx);
-    rebuildDateSelect();
-    await loadAttendanceDates();
-    await loadAttendance();
-    showToast('נתוני הנוכחות לתאריך נמחקו', 'success');
-  } catch(e) {
-    console.error('deleteAttendanceDate error:', e);
-    showToast('שגיאה במחיקה: ' + e.message, 'error');
-  }
-}
-
 // ===== TEAM ATTENDANCE =====
 
 function getTeamMeetingDates(team) {
@@ -1865,7 +1836,6 @@ function renderGroupAttendanceContent() {
         <button class="btn-att btn-clear-all" onclick="attClearAll()">✗ נקה הכל</button>
         <button class="btn-att btn-save" id="btnSave" onclick="saveAttendance()">💾 שמור נוכחות</button>
         <button class="btn-att" onclick="toggleVacation()" style="background:#fff5f5;color:#e53e3e;border:1px solid #fed7d7">🚫 חופשה</button>
-        ${currentUser?.role === 'admin' ? `<button class="btn-att" onclick="deleteAttendanceDate()" style="background:#fff5f5;color:#c53030;border:1px solid #fed7d7">🗑 מחק תאריך זה</button>` : ''}
         <span class="save-status" id="saveStatus"></span>
       </div>
       <div class="att-player-list" id="attPlayerList">
