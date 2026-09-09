@@ -467,6 +467,16 @@ async function initializeApp(clubDataPromise) {
   // reports, and the monthly view all showed last season's dates.
   if (db) { await (clubDataPromise || Promise.all([loadDeletedGroups(), loadDbGroups(), loadDbTeams(), loadDbCamps(), loadSettings()])); }
   buildApp();
+  // buildApp() fires initData() (extra players, hidden players, vacations,
+  // overrides, etc.) without awaiting it internally. buildTopNav(), right
+  // below, can immediately restore the last-viewed tab (persisted across
+  // refreshes) — e.g. attendance — which re-renders the player list and
+  // re-fetches checkmarks itself. Without this await, that restore can race
+  // initData()'s own render/fetch and lose: a page refresh landing back on
+  // the attendance tab would show the right date but everyone unchecked,
+  // fixed only by leaving the tab and returning. Waiting here first makes
+  // initData() always finish before any tab is restored.
+  await window._lastInitDataPromise;
   injectPermissionTabs();
   buildTopNav();
 }

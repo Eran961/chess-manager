@@ -1396,6 +1396,24 @@ if (currentUser?.role !== 'admin') {
   const allowedTeamIds = Object.keys(currentUser?.teams || {});
   teams = teams.filter(t => allowedTeamIds.includes(t.id));
 }
+// attState.date's initial value (set once, at script-parse time, in
+// core-teams.js) is computed from the hardcoded ALL_GROUPS[0]'s dayOfWeek —
+// a fallback constant that has no relation to the real groups[0] once actual
+// Firebase dbGroups data loads (which is reordered/edited independently by
+// admins). If they don't happen to share the same dayOfWeek, that stale date
+// matches none of the real group's meeting-date options: the date <select>
+// silently falls back to showing its first option (which can coincidentally
+// carry its own ✓, if that date happens to have data) while attState.date —
+// what the checkbox fetch actually reads by — stays pointed at the wrong,
+// unrelated date, so every checkbox loads unchecked no matter what data
+// exists. Recomputing it here, now that groups reflects the real data,
+// keeps it correct — same as picking a group from the dropdown already does
+// (onAttGroupChange), just applied automatically on every (re)build.
+if (groups.length > 0) {
+  attState.groupIdx = 0;
+  attState.subGroupIdx = 0;
+  attState.date = defaultDateForGroup(groups[0], 0);
+}
 // Build tabs
 const tabsBar = document.getElementById('tabsBar');
 const content = document.getElementById('content');
@@ -1829,7 +1847,16 @@ const settingsBtn = document.createElement('button');
   }
 }
 
-  initData();
+  // Stored (not just fired) so initializeApp() can await it before buildTopNav()
+  // runs — buildTopNav() can immediately restore the last-viewed tab (e.g.
+  // attendance), which re-renders the player list and re-fetches checkmarks.
+  // If that fires before initData() has finished loading extra players /
+  // hidden players / vacations / etc., two renders race: whichever
+  // renderPlayerList() call happens to land last wins, and it can land AFTER
+  // the tab's own checkmark fetch already applied — leaving freshly-rebuilt,
+  // blank rows with no further fetch to re-check them. Awaiting this promise
+  // first makes the order deterministic instead.
+  window._lastInitDataPromise = initData();
 } // end buildApp
 
 function buildTopNav() {
