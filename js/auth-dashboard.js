@@ -1535,7 +1535,14 @@ const attBtn = document.createElement('button');
 attBtn.className = 'tab-btn'; attBtn.dataset.tab = 'attendance'; attBtn.textContent = '🗓 נוכחות';
 attBtn.onclick = () => {
   switchTab('attendance');
-  if (groups.length > 0) { loadAttendanceDates(); loadAttendanceFromFirebase(); }
+  // loadAttendance() rebuilds the player rows fresh (renderPlayerList) AND
+  // then applies the real saved checkmarks — not just loadAttendanceFromFirebase()
+  // alone, which only updates whatever .att-player-row elements already
+  // happen to exist in the DOM (built once by initData() at login). Opening
+  // this tab a second time with the rows still matching by coincidence
+  // worked; if attState had changed (or the rows were never built for this
+  // exact group/sub-group yet), the checkmarks silently applied to nothing.
+  if (groups.length > 0) { loadAttendanceDates(); loadAttendance(); }
   if (groups.length > 0 && teams.length > 0) {
     document.getElementById('att-content-groups').style.display='';
     document.getElementById('att-content-teams').style.display='none';
