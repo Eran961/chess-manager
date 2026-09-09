@@ -1350,11 +1350,27 @@ function applyDateMarkers() {
   const sel = document.getElementById('attDateSel');
   if (!sel) return;
   const g = groups[attState.groupIdx];
+  const existing = new Set(Array.from(sel.options).map(o => o.value));
+  // A date can have recorded attendance without matching the sub-group's
+  // expected weekday — a makeup session, or (concretely, what surfaced this)
+  // a record saved under a date computed by an older, buggy version of this
+  // date logic. Either way that data must stay reachable — otherwise there's
+  // no way to view or clear it — so add it as its own option instead of
+  // only marking the ones already in the list.
+  const orphanDates = [..._attDatesWithData].filter(d => !existing.has(d)).sort();
+  orphanDates.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d;
+    sel.appendChild(opt);
+  });
   Array.from(sel.options).forEach(opt => {
     const has = _attDatesWithData.has(opt.value);
+    const isOrphan = orphanDates.includes(opt.value);
     const isVac = _vacations[g.id]?.has(opt.value);
     if (isVac) {
       opt.text = '🚫 ' + formatDate(opt.value);
+    } else if (isOrphan) {
+      opt.text = '⚠️ ' + formatDate(opt.value) + ' (לא תואם את יום הקבוצה)';
     } else {
       opt.text = (has ? '✓ ' : '') + formatDate(opt.value);
     }

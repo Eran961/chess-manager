@@ -686,12 +686,26 @@ function updateReportsDateDropdown() {
   const sel = document.getElementById('repDateSel');
   if (!sel) return;
   const att = _reportsCache.attendance;
+  // Same reasoning as applyDateMarkers() in core-teams.js: a date with real
+  // attendance data that doesn't match any option in the list (a makeup
+  // session, or leftover data from an older buggy date computation) must
+  // still be selectable here, or there's no way to see/clear it.
+  const existing = new Set(Array.from(sel.options).map(o => o.value));
+  const orphanDates = Object.keys(att).filter(d => !existing.has(d)).sort();
+  orphanDates.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d;
+    sel.appendChild(opt);
+  });
   Array.from(sel.options).forEach(opt => {
     const dateData = att[opt.value];
     const count = dateData ? Object.keys(dateData).length : 0;
-    opt.text = count > 0
-      ? `✓ ${formatDate(opt.value)} — ${count} משתתפים`
-      : formatDate(opt.value);
+    const isOrphan = orphanDates.includes(opt.value);
+    if (count > 0) {
+      opt.text = `✓ ${formatDate(opt.value)} — ${count} משתתפים` + (isOrphan ? ' ⚠️ (לא תואם את יום הקבוצה)' : '');
+    } else {
+      opt.text = formatDate(opt.value);
+    }
   });
 }
 
