@@ -76,6 +76,49 @@ function renderHoursPanel() {
 // so this always has something real to show immediately, with no loading
 // state: only the optional "תחרות מקושרת" list can lag a moment behind on
 // a first visit, filling in silently once loadTournaments() resolves.
+// Admin-only "reporting for" row: lets an admin enter a report as themselves
+// (default), as any other known user (so it lands in that user's own
+// history exactly as if they'd entered it), or for someone with no system
+// account at all (a plain name, no uid) — covers both cases the club asked
+// for: referees who never get a login, and entering on behalf of someone
+// who does have one.
+let _allUsersForHours = null;
+async function loadUsersForHoursOnBehalf() {
+  if (_allUsersForHours || !db) return _allUsersForHours || [];
+  try {
+    const snap = await db.ref('roles').get();
+    const data = snap.val() || {};
+    _allUsersForHours = Object.entries(data).map(([uid, r]) => ({ uid, name: r.name || r.email || uid }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  } catch(e) { _allUsersForHours = []; }
+  return _allUsersForHours;
+}
+
+function onBehalfHTML() {
+  if (currentUser?.role !== 'admin') return '';
+  const options = (_allUsersForHours || [])
+    .filter(u => u.uid !== currentUser.uid)
+    .map(u => `<option value="${u.uid}">${u.name}</option>`).join('');
+  return `
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:320px">
+      <label style="font-size:13px;font-weight:600;color:#4a5568">מדווח עבור</label>
+      <select id="ref-on-behalf" onchange="onRefOnBehalfChange()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+        <option value="">עצמי</option>
+        ${options}
+        <option value="__other__">אדם ללא משתמש במערכת...</option>
+      </select>
+      <input type="text" id="ref-on-behalf-name" placeholder="שם מלא" hidden
+        style="margin-top:4px;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+    </div>`;
+}
+
+function onRefOnBehalfChange() {
+  const sel = document.getElementById('ref-on-behalf');
+  const nameInput = document.getElementById('ref-on-behalf-name');
+  if (nameInput) nameInput.hidden = sel.value !== '__other__';
+}
+window.onRefOnBehalfChange = onRefOnBehalfChange;
+
 function refereeFieldsHTML() {
   const tournOptions = Object.entries(_tournaments || {})
     .sort((a, b) => (b[1].startDate || '').localeCompare(a[1].startDate || ''))
@@ -83,6 +126,7 @@ function refereeFieldsHTML() {
   const typeOptions = _refereeRates.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
   return `
     <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px">
+      ${onBehalfHTML()}
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px">
           <label style="font-size:13px;font-weight:600;color:#4a5568">סוג תחרות (לפי מחירון)</label>
@@ -100,9 +144,9 @@ function refereeFieldsHTML() {
         <div id="ref-duty-wrap" style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
           <label style="font-size:13px;font-weight:600;color:#4a5568">תפקיד בפועל</label>
           <select id="ref-duty" onchange="updateRefereeSalary()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
-            <option value="manage">ניהלתי</option>
-            <option value="judge">שפטתי</option>
-            <option value="both">גם וגם</option>
+            <option value="manage">ניהול</option>
+            <option value="judge">שיפוט</option>
+            <option value="both">ניהול ושיפוט</option>
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px">
@@ -138,6 +182,11 @@ function renderRefereeFields() {
       if (document.getElementById('hours-referee-fields')) { wrap.innerHTML = refereeFieldsHTML(); updateRefereeSalary(); }
     }).catch(() => {});
   }
+  if (currentUser?.role === 'admin' && !_allUsersForHours) {
+    loadUsersForHoursOnBehalf().then(() => {
+      if (document.getElementById('hours-referee-fields')) { wrap.innerHTML = refereeFieldsHTML(); updateRefereeSalary(); }
+    });
+  }
 }
 window.renderRefereeFields = renderRefereeFields;
 
@@ -169,9 +218,31 @@ async function saveHoursEntry() {
   const rate = rates.find(r => r.id === typeId);
   if (!rate) { showToast('יש לבחור סוג תחרות', 'error'); return; }
 
+  // Admin-only: who this report is actually attributed to. Left on "עצמי"
+  // (no #ref-on-behalf element for non-admins at all), it's the person
+  // saving the report, same as always.
+  let instructorId = currentUser.uid;
+  let instructorName = currentUser.name;
+  let enteredByAdmin = null;
+  const onBehalfSel = document.getElementById('ref-on-behalf');
+  if (onBehalfSel && onBehalfSel.value) {
+    if (onBehalfSel.value === '__other__') {
+      const name = document.getElementById('ref-on-behalf-name')?.value?.trim();
+      if (!name) { showToast('יש להזין שם', 'error'); return; }
+      instructorId = null; // no system account — nothing to link the report to
+      instructorName = name;
+    } else {
+      const u = (_allUsersForHours || []).find(u => u.uid === onBehalfSel.value);
+      instructorId = onBehalfSel.value;
+      instructorName = u?.name || instructorName;
+    }
+    enteredByAdmin = currentUser.name;
+  }
+
   const entry = {
-    instructorId: currentUser.uid,
-    instructorName: currentUser.name,
+    instructorId,
+    instructorName,
+    enteredByAdmin,
     date,
     activityType: 'refereeing',
     activityLabel: 'שיפוט/ניהול תחרות',
@@ -181,7 +252,7 @@ async function saveHoursEntry() {
     refereeRole: role,
     refereeDuty: duty,
     tournamentId,
-    tournamentName: tournamentId ? (window._tournaments?.[tournamentId]?.name || '') : '',
+    tournamentName: tournamentId ? (_tournaments?.[tournamentId]?.name || '') : '',
     amount: computeRefereePay(rate, role, duty),
     ts: Date.now()
   };
@@ -221,7 +292,7 @@ async function loadHoursHistory() {
       const valueCell = isRef ? `${(e.amount || 0).toLocaleString()} ₪` : (e.hours != null ? `${e.hours} ש׳` : '—');
       return `
       <tr style="border-bottom:1px solid #f0f4f8">
-        ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}</td>` : ''}
+        ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}${e.enteredByAdmin ? `<div style="font-size:11px;font-weight:400;color:#a0aec0">הוזן ע"י ${e.enteredByAdmin}</div>` : ''}</td>` : ''}
         <td style="padding:10px 12px;font-size:13px">${e.date || '—'}</td>
         <td style="padding:10px 12px;font-size:13px;color:#4a5568">${desc || '<span style="color:#cbd5e0">—</span>'}</td>
         <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:15px;color:#553c9a">${valueCell}</td>
@@ -271,8 +342,8 @@ async function openRefereeRatesModal() {
         </div>
         <div class="modal-body" style="padding:20px;max-height:70vh;overflow-y:auto">
           <div style="font-size:12px;color:#718096;margin-bottom:14px;line-height:1.6">
-            "ניהול (ראשי)" = השכר כשבוחרים "ניהלתי" בלבד · "שיפוט (ראשי)" = השכר כשבוחרים "שפטתי" בלבד ·
-            "גם וגם" משלם את סכום שני העמודות יחד · "שני/שלישי" = שכר קבוע לתפקיד שני/שלישי, ללא קשר לבחירת ניהול/שיפוט.
+            "ניהול (ראשי)" = השכר כשבוחרים "ניהול" בלבד · "שיפוט (ראשי)" = השכר כשבוחרים "שיפוט" בלבד ·
+            "ניהול ושיפוט" משלם את סכום שני העמודות יחד · "שני/שלישי" = שכר קבוע לתפקיד שני/שלישי, ללא קשר לבחירת ניהול/שיפוט.
           </div>
           <div id="ref-rates-rows" style="display:flex;flex-direction:column;gap:10px"></div>
           <button onclick="addRefereeRateRow()" style="margin-top:10px;background:none;border:1px dashed #cbd5e0;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;color:#4a5568">+ הוסף סוג</button>
