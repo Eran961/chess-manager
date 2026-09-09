@@ -16,13 +16,21 @@ const DEFAULT_REFEREE_RATES = [
   { id: 'r9',  label: 'ניהול תחרות בימי שישי (15+10)',                                    chiefManage: 100, chiefJudge: 350, secondThird: 250 },
   { id: 'r10', label: 'ניהול תחרות בזק באמצע השבוע',                                      chiefManage: 100, chiefJudge: 300, secondThird: 250 },
 ];
-let _refereeRates = null;
+// The rate table is fixed club policy, not something that changes per
+// report — it's seeded here as a real value from the start (not null), so
+// every screen that reads it has a real, complete table with zero waiting,
+// same as the rest of the app's other hardcoded constants. loadRefereeRates()
+// still exists to pick up an admin override saved in Settings → תעריף
+// שופטים, but nothing outside that edit flow should ever block on it.
+let _refereeRates = DEFAULT_REFEREE_RATES.slice();
+let _refereeRatesLoaded = false;
 async function loadRefereeRates() {
-  if (_refereeRates) return _refereeRates;
+  if (_refereeRatesLoaded) return _refereeRates;
   try {
     const snap = await db.ref('refereeRates').get();
-    _refereeRates = snap.exists() ? Object.entries(snap.val()).map(([id, v]) => ({ id, ...v })) : DEFAULT_REFEREE_RATES.slice();
-  } catch(e) { _refereeRates = DEFAULT_REFEREE_RATES.slice(); }
+    if (snap.exists()) _refereeRates = Object.entries(snap.val()).map(([id, v]) => ({ id, ...v }));
+  } catch(e) { /* keep the fixed default table */ }
+  _refereeRatesLoaded = true;
   return _refereeRates;
 }
 
@@ -39,9 +47,8 @@ function renderHoursPanel() {
   const today = new Date().toISOString().split('T')[0];
   return `
     <div class="att-card" style="max-width:720px">
-      <div class="att-card-header" style="display:flex;justify-content:space-between;align-items:center">
+      <div class="att-card-header">
         <span>⚖️ דיווח שיפוט</span>
-        ${currentUser?.role === 'admin' ? `<button onclick="openRefereeRatesModal()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">✏️ מחירון שיפוט</button>` : ''}
       </div>
       <div style="padding:20px">
         <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
@@ -49,7 +56,7 @@ function renderHoursPanel() {
             <label style="font-size:13px;font-weight:600;color:#4a5568">תאריך</label>
             <input type="date" id="hours-date" value="${today}" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
           </div>
-          <div id="hours-referee-fields"><div style="color:#a0aec0;font-size:13px">⏳ טוען מחירון...</div></div>
+          <div id="hours-referee-fields">${refereeFieldsHTML()}</div>
           <div style="display:flex;flex-direction:column;gap:4px">
             <label style="font-size:13px;font-weight:600;color:#4a5568">הערות</label>
             <input type="text" id="hours-desc" placeholder="לדוגמא: פרטים נוספים" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
@@ -62,19 +69,19 @@ function renderHoursPanel() {
     </div>`;
 }
 
-async function renderRefereeFields() {
-  const wrap = document.getElementById('hours-referee-fields');
-  if (!wrap) return;
-  wrap.innerHTML = '<div style="color:#a0aec0;font-size:13px">⏳ טוען מחירון...</div>';
-  const rates = await loadRefereeRates();
-  if (typeof loadTournaments === 'function' && Object.keys(window._tournaments || {}).length === 0) {
-    try { await loadTournaments(); } catch(e) {}
-  }
-  const tournOptions = Object.entries(window._tournaments || {})
+// The rate table (מחירון שיפוט) is fixed club policy — editable only from
+// Settings → ⚖️ תעריף שופטים, never from this screen. It's a plain, pure
+// function of the already-in-memory _refereeRates/_tournaments (both real,
+// complete values from the moment the app starts — see their declarations),
+// so this always has something real to show immediately, with no loading
+// state: only the optional "תחרות מקושרת" list can lag a moment behind on
+// a first visit, filling in silently once loadTournaments() resolves.
+function refereeFieldsHTML() {
+  const tournOptions = Object.entries(_tournaments || {})
     .sort((a, b) => (b[1].startDate || '').localeCompare(a[1].startDate || ''))
     .map(([id, t]) => `<option value="${id}">${t.name}</option>`).join('');
-  const typeOptions = rates.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
-  wrap.innerHTML = `
+  const typeOptions = _refereeRates.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
+  return `
     <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px">
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px">
@@ -111,12 +118,31 @@ async function renderRefereeFields() {
         <span id="ref-salary-display" style="font-size:20px;font-weight:800;color:#2c7a7b">0 ₪</span>
       </div>
     </div>`;
+}
+
+// Re-renders the referee fields into the live DOM (unlike refereeFieldsHTML()
+// above, which just returns markup) and kicks off the two background
+// refreshes that can silently improve it after the fact — an admin-saved
+// rate override, and the club-tournament list for the optional link field —
+// without ever blocking the form or showing a loading state.
+function renderRefereeFields() {
+  const wrap = document.getElementById('hours-referee-fields');
+  if (!wrap) return;
+  wrap.innerHTML = refereeFieldsHTML();
   updateRefereeSalary();
+  loadRefereeRates().then(() => {
+    if (document.getElementById('hours-referee-fields')) { wrap.innerHTML = refereeFieldsHTML(); updateRefereeSalary(); }
+  });
+  if (typeof loadTournaments === 'function' && Object.keys(_tournaments || {}).length === 0) {
+    loadTournaments().then(() => {
+      if (document.getElementById('hours-referee-fields')) { wrap.innerHTML = refereeFieldsHTML(); updateRefereeSalary(); }
+    }).catch(() => {});
+  }
 }
 window.renderRefereeFields = renderRefereeFields;
 
 function updateRefereeSalary() {
-  const rates = _refereeRates || DEFAULT_REFEREE_RATES;
+  const rates = _refereeRates;
   const typeId = document.getElementById('ref-type')?.value;
   const role = document.getElementById('ref-role')?.value;
   const duty = document.getElementById('ref-duty')?.value;
@@ -784,6 +810,7 @@ function renderSettingsPanel() {
     { icon: '🏫', label: 'ניהול חוגים',   key: 'groups' },
     { icon: '🏅', label: 'ניהול נבחרות',  key: 'teams' },
     { icon: '🏕️', label: 'ניהול מחנות',   key: 'camps' },
+    ...(isAdmin ? [{ icon: '⚖️', label: 'תעריף שופטים', key: 'refereeRates' }] : []),
     { icon: '👥', label: 'ניהול מדריכים', key: 'instructors' },
     ...(isAdmin ? [{ icon: '🔐', label: 'ניהול משתמשים', key: 'users' }] : []),
     { icon: '📊', label: 'פעילות מדריכים', key: 'audit' },
@@ -812,6 +839,11 @@ window.openSettingsSection = function(key) {
     if (window._tabCatMap) window._tabCatMap['audit'] = 'settings';
     switchTab('audit');
     loadAuditLog();
+    return;
+  }
+  if (key === 'refereeRates') {
+    document.getElementById('settings-section-modal')?.remove();
+    openRefereeRatesModal();
     return;
   }
   if (key === 'camps') {
