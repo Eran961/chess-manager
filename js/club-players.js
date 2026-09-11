@@ -10,7 +10,7 @@
 const CLUB_PLAYERS_API = 'https://chess-manager-7wkr.onrender.com';
 const CLUB_PLAYERS_CLUB_ID = 31;
 
-let _clubPlayersRoster = null;      // cached [{fedId, name, rating, birthYear, gender}, ...]
+let _clubPlayersRoster = null;      // cached [{fedId, name, rating, age}, ...]
 let _clubPlayersRosterLoading = false;
 let _clubPlayerSelected = null;     // full profile of the currently displayed player
 let _clubPlayerChartMode = 'line';  // 'line' (rating over time) | 'bar' (monthly W/D/L)
@@ -96,7 +96,7 @@ function onClubPlayerSearchInput(val) {
       style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f4f8;display:flex;justify-content:space-between;align-items:center;gap:10px"
       onmouseenter="this.style.background='#f7fafc'" onmouseleave="this.style.background=''">
       <span style="font-weight:600;color:#2d3748">${p.name}</span>
-      <span style="font-size:12px;color:#718096;white-space:nowrap">${p.rating ? 'מד כושר ' + p.rating : ''}${p.birthYear ? ' · ' + p.birthYear : ''}</span>
+      <span style="font-size:12px;color:#718096;white-space:nowrap">${p.rating ? 'מד כושר ' + p.rating : ''}${p.age != null ? ' · גיל ' + p.age : ''}</span>
     </div>`).join('');
 }
 window.onClubPlayerSearchInput = onClubPlayerSearchInput;
@@ -116,6 +116,7 @@ async function selectClubPlayer(fedId) {
     if (!data.name) throw new Error('שחקן לא נמצא');
     _clubPlayerSelected = data;
     _clubPlayerChartMode = 'line';
+    _clubPlayerTournPage = 1;
     dash.innerHTML = renderClubPlayerDashboard(data);
   } catch (e) {
     dash.innerHTML = `<div style="text-align:center;padding:50px;color:#c53030">❌ שגיאה בשליפת נתוני השחקן: ${e.message}</div>`;
@@ -159,7 +160,7 @@ function renderClubPlayerDashboard(p) {
       <div style="flex:1;min-width:240px">${renderClubPlayerWldDonut(totalWins, totalDraws, totalLosses)}</div>
       <div style="flex:2;min-width:320px" id="cp-history-chart">${renderClubPlayerHistoryChart(p)}</div>
     </div>
-    ${renderClubPlayerTournamentTable(tournaments)}`;
+    <div id="cp-tourn-table">${renderClubPlayerTournamentTable(tournaments)}</div>`;
 }
 
 function renderClubPlayerHeader(p) {
@@ -174,8 +175,8 @@ function renderClubPlayerHeader(p) {
         <div style="margin-top:6px;font-size:13px;color:#718096">
           מועדון השחמט ראשון לציון${p.birthYear ? ' · שנת לידה: ' + p.birthYear : ''}
         </div>
-        <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap">
-          ${p.fide ? `<a href="https://ratings.fide.com/profile/${p.fide}" target="_blank" style="font-size:13px;color:#2b6cb0;text-decoration:none">🔗 FIDE</a>` : ''}
+        <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+          ${p.fideId ? `<a href="https://ratings.fide.com/profile/${p.fideId}" target="_blank" style="font-size:13px;color:#2b6cb0;text-decoration:none">🔗 FIDE${p.fide ? ' (' + p.fide + ')' : ''}</a>` : (p.fide ? `<span style="font-size:13px;color:#718096">FIDE ${p.fide}</span>` : '')}
           <a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="font-size:13px;color:#2b6cb0;text-decoration:none">🔗 chess.org.il</a>
         </div>
       </div>
@@ -255,7 +256,7 @@ function renderClubPlayerHistoryChart(p) {
         <div style="font-size:14px;font-weight:700;color:#2d3748">היסטוריית דירוג</div>
         ${toggle}
       </div>
-      ${body}
+      <div dir="ltr">${body}</div>
     </div>`;
 }
 
@@ -305,7 +306,7 @@ function clubPlayerRatingLineSvg(ratingHistory) {
     const isLatest = i === n - 1;
     dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLatest ? 5.5 : 3.8}" fill="${isLatest ? '#553c9a' : '#805ad5'}" stroke="white" stroke-width="1.6"><title>${r.date}: ${r.rating}</title></circle>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;max-width:100%;height:auto">
     <defs><linearGradient id="cp-rg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#805ad5" stop-opacity="0.30"/>
       <stop offset="100%" stop-color="#805ad5" stop-opacity="0.02"/>
@@ -352,18 +353,35 @@ function clubPlayerMonthlyBarSvg(tournaments) {
     const [yr, mo] = m.split('-');
     labels += `<text x="${(x + barW / 2).toFixed(1)}" y="${PT + cH + 14}" font-size="9" fill="#9f7aea" text-anchor="middle" font-weight="600">${monthShort[+mo - 1]} ${yr.slice(2)}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;max-width:100%;height:auto">
     <line x1="${PL}" y1="${PT + cH}" x2="${W - PR}" y2="${PT + cH}" stroke="#e2e8f0" stroke-width="1"/>
     ${bars}${labels}
   </svg>`;
 }
+
+let _clubPlayerTournPage = 1;
+const CP_TOURN_PAGE_SIZE = 10;
+
+function setClubPlayerTournPage(page) {
+  _clubPlayerTournPage = page;
+  const holder = document.getElementById('cp-tourn-table');
+  if (holder && _clubPlayerSelected) holder.innerHTML = renderClubPlayerTournamentTable(_clubPlayerSelected.tournaments || []);
+}
+window.setClubPlayerTournPage = setClubPlayerTournPage;
 
 function renderClubPlayerTournamentTable(tournaments) {
   if (!tournaments.length) {
     return `<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:24px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני תחרויות</div>`;
   }
   const sorted = tournaments.slice().sort((a, b) => (cpDdmmyyyyToIso(b.date) || '').localeCompare(cpDdmmyyyyToIso(a.date) || ''));
-  const rows = sorted.map((t, i) => {
+  const totalPages = Math.max(1, Math.ceil(sorted.length / CP_TOURN_PAGE_SIZE));
+  if (_clubPlayerTournPage > totalPages) _clubPlayerTournPage = totalPages;
+  if (_clubPlayerTournPage < 1) _clubPlayerTournPage = 1;
+  const startIdx = (_clubPlayerTournPage - 1) * CP_TOURN_PAGE_SIZE;
+  const pageItems = sorted.slice(startIdx, startIdx + CP_TOURN_PAGE_SIZE);
+
+  const rows = pageItems.map((t, i) => {
+    const isFirstOverall = (startIdx + i) === 0;
     const changeNum = t.ratingChange;
     const changeColor = changeNum > 0 ? '#276749' : changeNum < 0 ? '#c53030' : '#718096';
     const changeStr = t.ratingChangeRaw || (changeNum != null ? String(changeNum) : '—');
@@ -373,7 +391,7 @@ function renderClubPlayerTournamentTable(tournaments) {
       t.losses ? `<span style="background:#fff5f5;color:#c53030;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${t.losses}ה</span>` : '',
     ].filter(Boolean).join(' ');
     const pendingBadge = t.isPending ? `<span style="background:#fefcbf;color:#744210;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-inline-start:6px">בעדכון הבא</span>` : '';
-    const newBadge = i === 0 ? `<span style="background:#ebf8ff;color:#2b6cb0;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-inline-start:6px">חדש</span>` : '';
+    const newBadge = isFirstOverall ? `<span style="background:#ebf8ff;color:#2b6cb0;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-inline-start:6px">חדש</span>` : '';
     return `
       <tr style="border-bottom:1px solid #f0f4f8">
         <td style="padding:9px 12px;font-size:12px;color:#718096;white-space:nowrap">${t.date}</td>
@@ -383,9 +401,19 @@ function renderClubPlayerTournamentTable(tournaments) {
         <td style="padding:9px 12px;text-align:center;font-weight:700;color:${changeColor};font-size:13px">${changeStr}</td>
       </tr>`;
   }).join('');
+
+  const pagerHtml = totalPages > 1 ? `
+    <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:10px;border-top:1px solid #f0f4f8">
+      <button onclick="setClubPlayerTournPage(${_clubPlayerTournPage - 1})" ${_clubPlayerTournPage === 1 ? 'disabled' : ''}
+        style="background:${_clubPlayerTournPage === 1 ? '#f7fafc' : '#553c9a'};color:${_clubPlayerTournPage === 1 ? '#cbd5e0' : 'white'};border:none;border-radius:6px;padding:5px 14px;cursor:${_clubPlayerTournPage === 1 ? 'default' : 'pointer'};font-size:13px;font-weight:600">הקודם</button>
+      <span style="font-size:13px;color:#718096">עמוד ${_clubPlayerTournPage} מתוך ${totalPages}</span>
+      <button onclick="setClubPlayerTournPage(${_clubPlayerTournPage + 1})" ${_clubPlayerTournPage === totalPages ? 'disabled' : ''}
+        style="background:${_clubPlayerTournPage === totalPages ? '#f7fafc' : '#553c9a'};color:${_clubPlayerTournPage === totalPages ? '#cbd5e0' : 'white'};border:none;border-radius:6px;padding:5px 14px;cursor:${_clubPlayerTournPage === totalPages ? 'default' : 'pointer'};font-size:13px;font-weight:600">הבא</button>
+    </div>` : '';
+
   return `
     <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
-      <div style="padding:12px 16px;font-size:14px;font-weight:700;color:#2d3748;border-bottom:1px solid #e2e8f0">תוצאות טורנירים</div>
+      <div style="padding:12px 16px;font-size:14px;font-weight:700;color:#2d3748;border-bottom:1px solid #e2e8f0">תוצאות טורנירים (${sorted.length})</div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:#f7fafc">
@@ -398,5 +426,6 @@ function renderClubPlayerTournamentTable(tournaments) {
           <tbody>${rows}</tbody>
         </table>
       </div>
+      ${pagerHtml}
     </div>`;
 }
