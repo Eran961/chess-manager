@@ -174,6 +174,55 @@ function cpFilteredTournaments(tournaments) {
   });
 }
 
+// Every month from the cutoff month through the current one, inclusive —
+// the fixed X-axis grid both charts are built on, so they always start at
+// exactly the same place (the cutoff) regardless of where each one's real
+// data happens to begin, and the line chart always has one point per month
+// (see cpMonthlyRatingSeries) rather than only months with an actual update.
+function cpMonthGrid() {
+  const cutoff = cpTwoYearCutoff();
+  const now = new Date();
+  const months = [];
+  let y = parseInt(cutoff.iso.slice(0, 4), 10);
+  let m = parseInt(cutoff.iso.slice(5, 7), 10);
+  const endY = now.getFullYear(), endM = now.getMonth() + 1;
+  while (y < endY || (y === endY && m <= endM)) {
+    months.push({ year: y, month: m, iso: `${y}-${String(m).padStart(2, '0')}-01` });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return months;
+}
+
+// One entry per grid month: a real rating update that month if there is one,
+// else the most recently known rating carried forward (isReal:false) — so
+// hovering any month in the window always shows "that month's rating", not
+// just the months chess.org.il happened to report a change in. A month
+// before the player's very first known rating is left out entirely (nothing
+// to carry forward from).
+function cpMonthlyRatingSeries(ratingHistoryAll) {
+  const months = cpMonthGrid();
+  const sorted = (ratingHistoryAll || []).filter(r => r && r.date).slice().sort((a, b) => a.date.localeCompare(b.date));
+  const byMonth = {};
+  sorted.forEach(r => { byMonth[r.date.slice(0, 7)] = r; }); // last entry per month wins
+  let lastKnown = null;
+  for (const r of sorted) { if (r.date < months[0].iso) lastKnown = r; else break; }
+
+  const series = [];
+  months.forEach(mo => {
+    const key = `${mo.year}-${String(mo.month).padStart(2, '0')}`;
+    const real = byMonth[key];
+    if (real) { lastKnown = real; series.push({ date: mo.iso, rating: real.rating, isReal: true }); }
+    else if (lastKnown) { series.push({ date: mo.iso, rating: lastKnown.rating, isReal: false }); }
+  });
+  return series;
+}
+
+function cpMonthLabel(iso) {
+  const [y, m] = iso.split('-');
+  return `${CP_MONTH_NAMES_FULL[+m - 1]} ${y}`;
+}
+
 function setClubPlayerChartMode(mode) {
   _clubPlayerChartMode = mode;
   const holder = document.getElementById('cp-history-chart');
@@ -289,12 +338,12 @@ function renderClubPlayerHistoryChart(p) {
       <button onclick="setClubPlayerChartMode('line')" title="גרף קו" style="background:${_clubPlayerChartMode === 'line' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'line' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📈</button>
       <button onclick="setClubPlayerChartMode('bar')" title="גרף עמודות" style="background:${_clubPlayerChartMode === 'bar' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'bar' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📊</button>
     </div>`;
-  // Capped to the last two years — otherwise a player with years of history
-  // crams dozens of points/bars into one small chart, unreadable in either
-  // view (this is what was actually breaking the bar view specifically:
-  // every single month got its own label with nothing to skip overlap).
-  const ratingHistoryRecent = (p.ratingHistory || []).filter(r => r && r.date >= cutoff.iso);
-  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(ratingHistoryRecent) : clubPlayerMonthlyBarSvg(cpFilteredTournaments(p.tournaments));
+  // Both views are built on the same fixed month grid (cpMonthGrid) so they
+  // always start at the same cutoff month regardless of where each one's
+  // real data happens to begin — passing the full (unfiltered) history/
+  // tournaments in lets each one do its own grid-based windowing, the line
+  // chart's needing to look further back to seed carry-forward correctly.
+  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(p.ratingHistory || []) : clubPlayerMonthlyBarSvg(p.tournaments || []);
   return `
     <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;height:100%;box-sizing:border-box">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -306,10 +355,9 @@ function renderClubPlayerHistoryChart(p) {
     </div>`;
 }
 
-function clubPlayerRatingLineSvg(ratingHistory) {
-  const history = ratingHistory.filter(r => r && r.date && typeof r.rating === 'number');
-  if (!history.length) return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני היסטוריית דירוג</div>`;
-  const chrono = [...history].sort((a, b) => a.date.localeCompare(b.date));
+function clubPlayerRatingLineSvg(ratingHistoryAll) {
+  const chrono = cpMonthlyRatingSeries(ratingHistoryAll);
+  if (!chrono.length) return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני היסטוריית דירוג</div>`;
   const monthShort = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
   const ratings = chrono.map(r => r.rating);
   const pad = 25;
@@ -350,7 +398,14 @@ function clubPlayerRatingLineSvg(ratingHistory) {
   pts.forEach(([x, y], i) => {
     const r = chrono[i];
     const isLatest = i === n - 1;
-    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLatest ? 5.5 : 3.8}" fill="${isLatest ? '#553c9a' : '#805ad5'}" stroke="white" stroke-width="1.6"><title>${r.date}: ${r.rating}</title></circle>`;
+    // Carried-forward months (no real update that month — see
+    // cpMonthlyRatingSeries) get a smaller, lighter dot so it's visually
+    // clear which months are real vs. "still the same rating as before",
+    // while every month is still a real hoverable point either way.
+    const radius = isLatest ? 5.5 : (r.isReal ? 3.8 : 2.6);
+    const color = isLatest ? '#553c9a' : (r.isReal ? '#805ad5' : '#c4b5e0');
+    const tooltip = r.isReal ? `${cpMonthLabel(r.date)}: ${r.rating}` : `${cpMonthLabel(r.date)}: ${r.rating} (ללא עדכון החודש)`;
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius}" fill="${color}" stroke="white" stroke-width="1.6"><title>${tooltip}</title></circle>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;max-width:100%;height:auto">
     <defs><linearGradient id="cp-rg" x1="0" y1="0" x2="0" y2="1">
@@ -364,9 +419,9 @@ function clubPlayerRatingLineSvg(ratingHistory) {
   </svg>`;
 }
 
-function clubPlayerMonthlyBarSvg(tournaments) {
+function clubPlayerMonthlyBarSvg(tournamentsAll) {
   const byMonth = {};
-  tournaments.forEach(t => {
+  (tournamentsAll || []).forEach(t => {
     const iso = cpDdmmyyyyToIso(t.updateDate) || cpDdmmyyyyToIso(t.date);
     if (!iso) return;
     const key = iso.slice(0, 7);
@@ -375,10 +430,14 @@ function clubPlayerMonthlyBarSvg(tournaments) {
     byMonth[key].draws += t.draws || 0;
     byMonth[key].losses += t.losses || 0;
   });
-  const months = Object.keys(byMonth).sort();
-  if (!months.length) return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתונים חודשיים</div>`;
+  // Every month in the window, not just months with a tournament in them —
+  // same reason as the line chart: without this, the chart silently starts
+  // wherever this player's first tournament in the window happens to fall
+  // (e.g. April) instead of the real cutoff month, disagreeing with both the
+  // caption above it and the line view right next to it.
+  const months = cpMonthGrid().map(mo => `${mo.year}-${String(mo.month).padStart(2, '0')}`);
   const monthShort = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
-  const totals = months.map(m => byMonth[m].wins + byMonth[m].draws + byMonth[m].losses);
+  const totals = months.map(m => { const b = byMonth[m]; return b ? b.wins + b.draws + b.losses : 0; });
   const maxTotal = Math.max(...totals, 1);
   const W = 480, H = 200, PL = 30, PR = 10, PT = 14, PB = 42;
   const cW = W - PL - PR, cH = H - PT - PB;
@@ -394,13 +453,13 @@ function clubPlayerMonthlyBarSvg(tournaments) {
   let bars = '', labels = '';
   months.forEach((m, i) => {
     const x = PL + i * (cW / n) + ((cW / n) - barW) / 2;
-    const { wins, draws, losses } = byMonth[m];
+    const { wins, draws, losses } = byMonth[m] || { wins: 0, draws: 0, losses: 0 };
     let y = PT + cH;
     [{ n: losses, color: '#e53e3e' }, { n: draws, color: '#a0aec0' }, { n: wins, color: '#38a169' }].forEach(seg => {
       if (!seg.n) return;
       const h = (seg.n / maxTotal) * cH;
       y -= h;
-      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${seg.color}"><title>${m}: ${seg.n}</title></rect>`;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${seg.color}"><title>${cpMonthLabel(m + '-01')}: ${seg.n}</title></rect>`;
     });
     if (i % labelEvery !== 0 && i !== n - 1) return;
     const [yr, mo] = m.split('-');
