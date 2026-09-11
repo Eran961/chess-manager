@@ -604,7 +604,7 @@ function renderClubPlayerTournamentTable(tournaments) {
     return `
       <tr style="border-bottom:1px solid #f0f4f8">
         <td style="padding:9px 12px;font-size:12px;color:#718096;white-space:nowrap">${t.date}</td>
-        <td style="padding:9px 12px;font-size:13px">${t.name || '—'}${newBadge}${pendingBadge}</td>
+        <td style="padding:9px 12px;font-size:13px">${t.tournamentUrl ? `<a href="${t.tournamentUrl}" target="_blank" style="color:#2b6cb0;text-decoration:none">${t.name || '—'}</a>` : (t.name || '—')}${newBadge}${pendingBadge}</td>
         <td style="padding:9px 12px;text-align:center;font-size:13px">${t.games || '—'}</td>
         <td style="padding:9px 12px;text-align:center;white-space:nowrap">${badges || '—'}</td>
         <td style="padding:9px 12px;text-align:center;font-weight:700;color:${changeColor};font-size:13px">${changeStr}</td>

@@ -9,6 +9,7 @@ import re
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urljoin
 
 # In-memory cache: {teamId: {"rounds": [...], "ts": float}}
 _team_cache: dict = {}
@@ -958,7 +959,8 @@ def _parse_tourn_rows(tourn_table) -> tuple:
         return tournaments, max_page
     for tr in tourn_table.find_all("tr")[1:]:
         # Use recursive=False to avoid picking up TDs from nested pager tables
-        cells = [clean_text(td) for td in tr.find_all("td", recursive=False)]
+        raw_cells = tr.find_all("td", recursive=False)
+        cells = [clean_text(td) for td in raw_cells]
         if not cells:
             continue
         # Pager row has exactly 1 direct TD (colspan spanning all columns)
@@ -980,11 +982,22 @@ def _parse_tourn_rows(tourn_table) -> tuple:
         result_raw = cells[6] if len(cells) > 6 else ""
         wld = parse_result_wld(result_raw)
         update_date, is_pending = parse_update_date_cell(cells[1] if len(cells) > 1 else "")
+        # The tournament-name cell's link goes to THIS player's own results
+        # page for that tournament (PlayerInTournament.aspx?Id=...), not a
+        # generic tournament page — exactly what a "see this player's result
+        # here" link should point at. Relative to chess.org.il/Players/, so
+        # urljoin against that base resolves the leading "../" correctly.
+        tournament_url = None
+        if len(raw_cells) > 2:
+            link = raw_cells[2].find("a", href=True)
+            if link:
+                tournament_url = urljoin("https://www.chess.org.il/Players/Player.aspx", link["href"])
         tournaments.append({
             "date":            cells[0],
             "updateDate":      update_date,
             "isPending":       is_pending,
             "name":            cells[2] if len(cells) > 2 else "",
+            "tournamentUrl":   tournament_url,
             "games":           cells[3] if len(cells) > 3 else "",
             "points":          cells[4] if len(cells) > 4 else "",
             "performance":     cells[5] if len(cells) > 5 else "",
