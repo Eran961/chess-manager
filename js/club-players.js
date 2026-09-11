@@ -27,7 +27,7 @@ function renderClubPlayersPanel() {
       <div class="att-card-header" style="border-radius:12px 12px 0 0">🎖️ שחקני המועדון</div>
       <div style="background:white;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-radius:0 0 12px 12px;padding:20px">
         <div style="font-size:13px;color:#718096;margin-bottom:14px">
-          חיפוש בזמן אמת מתוך שחקני מועדון השחמט ראשון לציון הרשומים באיגוד — הצגה בלבד, שום דבר לא נשמר.
+          חיפוש בזמן אמת מתוך שחקני מועדון השחמט ראשון לציון הרשומים באיגוד.
         </div>
         <div id="cp-search-wrap" style="position:relative;max-width:420px">
           <input id="cp-search" type="text" placeholder="🔍 חפש שחקן לפי שם..." autocomplete="off"
@@ -141,6 +141,24 @@ function cpDdmmyyyyToIso(raw) {
   return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
 }
 
+const CP_MONTH_NAMES_FULL = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
+// The rating-history chart (both line and bar view) only ever shows the last
+// two years, counted back from today — a player with several years of
+// history otherwise crams dozens of points/bars into one small chart,
+// unreadable regardless of view. First day of the month, 24 months back
+// (e.g. viewed in 2026-09 -> cutoff 2024-09-01), so the caption's "from
+// <month>" always names a clean, real calendar month.
+function cpTwoYearCutoff() {
+  const now = new Date();
+  const year = now.getFullYear() - 2;
+  const month = now.getMonth(); // 0-indexed, unchanged
+  return {
+    iso: `${year}-${String(month + 1).padStart(2, '0')}-01`,
+    label: `${CP_MONTH_NAMES_FULL[month]} ${year}`,
+  };
+}
+
 function setClubPlayerChartMode(mode) {
   _clubPlayerChartMode = mode;
   const holder = document.getElementById('cp-history-chart');
@@ -155,7 +173,8 @@ function renderClubPlayerDashboard(p) {
   const totalWins = tournaments.reduce((s, t) => s + (t.wins || 0), 0);
   const totalLosses = tournaments.reduce((s, t) => s + (t.losses || 0), 0);
   const totalDraws = tournaments.reduce((s, t) => s + (t.draws || 0), 0);
-  const history = (p.ratingHistory || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+  const cutoff = cpTwoYearCutoff();
+  const history = (p.ratingHistory || []).filter(r => r && r.date >= cutoff.iso).sort((a, b) => a.date.localeCompare(b.date));
   const cumulativeChange = history.length >= 2 ? history[history.length - 1].rating - history[0].rating : null;
 
   return `
@@ -249,18 +268,29 @@ function renderClubPlayerWldDonut(wins, draws, losses) {
 }
 
 function renderClubPlayerHistoryChart(p) {
+  const cutoff = cpTwoYearCutoff();
   const toggle = `
     <div style="display:flex;gap:4px">
       <button onclick="setClubPlayerChartMode('line')" title="גרף קו" style="background:${_clubPlayerChartMode === 'line' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'line' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📈</button>
       <button onclick="setClubPlayerChartMode('bar')" title="גרף עמודות" style="background:${_clubPlayerChartMode === 'bar' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'bar' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📊</button>
     </div>`;
-  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(p.ratingHistory || []) : clubPlayerMonthlyBarSvg(p.tournaments || []);
+  // Capped to the last two years — otherwise a player with years of history
+  // crams dozens of points/bars into one small chart, unreadable in either
+  // view (this is what was actually breaking the bar view specifically:
+  // every single month got its own label with nothing to skip overlap).
+  const ratingHistoryRecent = (p.ratingHistory || []).filter(r => r && r.date >= cutoff.iso);
+  const tournamentsRecent = (p.tournaments || []).filter(t => {
+    const iso = cpDdmmyyyyToIso(t.updateDate) || cpDdmmyyyyToIso(t.date);
+    return iso && iso >= cutoff.iso;
+  });
+  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(ratingHistoryRecent) : clubPlayerMonthlyBarSvg(tournamentsRecent);
   return `
     <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;height:100%;box-sizing:border-box">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
         <div style="font-size:14px;font-weight:700;color:#2d3748">היסטוריית דירוג</div>
         ${toggle}
       </div>
+      <div style="font-size:12px;font-weight:700;color:#553c9a;margin-bottom:10px">נתוני השנתיים האחרונות (מ-${cutoff.label})</div>
       <div dir="ltr">${body}</div>
     </div>`;
 }
@@ -344,6 +374,12 @@ function clubPlayerMonthlyBarSvg(tournaments) {
   const n = months.length;
   const gap = 6;
   const barW = Math.max(6, cW / n - gap);
+  // Same overlap risk the line chart already guards against (D-01): with the
+  // two-year cap this rarely exceeds ~24 bars, but a label per bar, upright
+  // and centered, still crowds well before that — skip + rotate exactly like
+  // the line chart's X labels, which tolerate density far better upright text
+  // can't.
+  const labelEvery = Math.max(1, Math.ceil(n / 10));
   let bars = '', labels = '';
   months.forEach((m, i) => {
     const x = PL + i * (cW / n) + ((cW / n) - barW) / 2;
@@ -355,8 +391,10 @@ function clubPlayerMonthlyBarSvg(tournaments) {
       y -= h;
       bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${seg.color}"><title>${m}: ${seg.n}</title></rect>`;
     });
+    if (i % labelEvery !== 0 && i !== n - 1) return;
     const [yr, mo] = m.split('-');
-    labels += `<text x="${(x + barW / 2).toFixed(1)}" y="${PT + cH + 14}" font-size="9" fill="#9f7aea" text-anchor="middle" font-weight="600">${monthShort[+mo - 1]} ${yr.slice(2)}</text>`;
+    const lx = (x + barW / 2).toFixed(1), ly = (PT + cH + 8).toFixed(1);
+    labels += `<text x="${lx}" y="${ly}" font-size="9" fill="#9f7aea" text-anchor="end" font-weight="600" transform="rotate(-40,${lx},${ly})">${monthShort[+mo - 1]} ${yr.slice(2)}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;max-width:100%;height:auto">
     <line x1="${PL}" y1="${PT + cH}" x2="${W - PR}" y2="${PT + cH}" stroke="#e2e8f0" stroke-width="1"/>
