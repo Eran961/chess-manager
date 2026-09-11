@@ -15,6 +15,12 @@ let _clubPlayersRosterLoading = false;
 let _clubPlayerSelected = null;     // full profile of the currently displayed player
 let _clubPlayersOutsideClickBound = false;
 
+// gender isn't in the roster above at all (the simple roster table has no
+// such column) — loaded separately, lazily, only once a gender filter is
+// actually used (see loadClubPlayersGenderMap / cpSetFilter below).
+let _clubPlayersGenderMap = null;   // {fedIdStr: 'זכר'|'נקבה'}
+let _clubPlayersGenderMapLoading = false;
+
 function renderClubPlayersPanel() {
   // Deliberately NOT wrapped in .att-card (used everywhere else in the app) —
   // that class sets overflow:hidden (needed elsewhere to clip its header's
@@ -39,6 +45,7 @@ function renderClubPlayersPanel() {
             onfocus="this.style.borderColor='#553c9a'" onblur="this.style.borderColor='#e2e8f0'">
           <div id="cp-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:320px;overflow-y:auto;z-index:20"></div>
         </div>
+        ${renderClubPlayerFilterBar('cp', '#553c9a')}
         <div id="cp-status" style="margin-top:10px;font-size:13px;color:#718096"></div>
         <div id="cp-dashboard" style="margin-top:22px"></div>
       </div>
@@ -83,20 +90,158 @@ function clubPlayerNameMatches(name, query) {
   return words.every(w => name.includes(w));
 }
 
+// ── Advanced filters (age range / rating range / gender) ────────────────────
+// Shared by both search boxes that browse the club roster — שחקני המועדון's
+// own search (instanceId 'cp') and שחקני נוער's "add player" search
+// (instanceId 'yt-add', see youth-tracking.js) — so a filter improvement here
+// benefits both at once instead of being duplicated per screen.
+let _cpFilterState = {};
+function cpGetFilterState(instanceId) {
+  if (!_cpFilterState[instanceId]) _cpFilterState[instanceId] = { ageMin: null, ageMax: null, ratingMin: null, ratingMax: null, gender: null };
+  return _cpFilterState[instanceId];
+}
+
+function cpFilterActive(instanceId) {
+  const f = cpGetFilterState(instanceId);
+  return f.ageMin != null || f.ageMax != null || f.ratingMin != null || f.ratingMax != null || !!f.gender;
+}
+
+function clubPlayerMatchesFilters(p, filters) {
+  if (filters.ageMin != null && (p.age == null || p.age < filters.ageMin)) return false;
+  if (filters.ageMax != null && (p.age == null || p.age > filters.ageMax)) return false;
+  if (filters.ratingMin != null && (p.rating == null || p.rating < filters.ratingMin)) return false;
+  if (filters.ratingMax != null && (p.rating == null || p.rating > filters.ratingMax)) return false;
+  if (filters.gender) {
+    const g = _clubPlayersGenderMap ? _clubPlayersGenderMap[String(p.fedId)] : null;
+    if (g !== filters.gender) return false;
+  }
+  return true;
+}
+
+// Name substring + active filters combined. With filters active but an empty
+// query, this still returns matches ("browse by filter" — e.g. list every
+// girl rated 800-1000 without typing a name first).
+function clubPlayerSearchAndFilter(query, instanceId) {
+  if (!_clubPlayersRoster) return null;
+  const q = (query || '').trim();
+  let list = _clubPlayersRoster;
+  if (q) list = list.filter(p => p.name && clubPlayerNameMatches(p.name, q));
+  if (cpFilterActive(instanceId)) {
+    const filters = cpGetFilterState(instanceId);
+    list = list.filter(p => clubPlayerMatchesFilters(p, filters));
+  }
+  return list.slice(0, 20);
+}
+
+// Gender doesn't exist on the plain roster (see _clubPlayersGenderMap above) —
+// fetched lazily from a dedicated backend endpoint only once a gender filter
+// is actually touched, not on every tab open.
+async function loadClubPlayersGenderMap() {
+  if (_clubPlayersGenderMap || _clubPlayersGenderMapLoading) return;
+  _clubPlayersGenderMapLoading = true;
+  try {
+    const res = await fetch(`${CLUB_PLAYERS_API}/api/club-player-genders?clubId=${CLUB_PLAYERS_CLUB_ID}`, { signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+    _clubPlayersGenderMap = await res.json();
+  } catch (e) {
+    _clubPlayersGenderMap = {}; // fail open — filter just matches nobody rather than blocking forever; retried next tab visit
+  } finally {
+    _clubPlayersGenderMapLoading = false;
+  }
+}
+
+function renderClubPlayerFilterBar(instanceId, accent) {
+  const S = 'width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:inherit;box-sizing:border-box';
+  const L = t => `<label style="display:block;font-size:10px;color:#718096;font-weight:700;margin-bottom:3px">${t}</label>`;
+  return `
+    <div style="margin-top:8px;max-width:420px">
+      <button type="button" onclick="cpToggleFilterBar('${instanceId}')" style="background:none;border:none;color:${accent};font-size:12px;font-weight:700;cursor:pointer;padding:0">⚙️ סינון מתקדם (גיל · מד-כושר · מגדר)</button>
+      <div id="${instanceId}-filter-bar" style="display:none;margin-top:8px;padding:12px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:10px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:8px">
+          <div>${L('מגיל')}<input type="number" min="0" max="120" id="${instanceId}-f-ageMin" oninput="cpSetFilter('${instanceId}','ageMin',this.value)" style="${S}"></div>
+          <div>${L('עד גיל')}<input type="number" min="0" max="120" id="${instanceId}-f-ageMax" oninput="cpSetFilter('${instanceId}','ageMax',this.value)" style="${S}"></div>
+          <div>${L('ממד כושר')}<input type="number" min="0" max="3000" id="${instanceId}-f-ratingMin" oninput="cpSetFilter('${instanceId}','ratingMin',this.value)" style="${S}"></div>
+          <div>${L('עד מד כושר')}<input type="number" min="0" max="3000" id="${instanceId}-f-ratingMax" oninput="cpSetFilter('${instanceId}','ratingMax',this.value)" style="${S}"></div>
+          <div>${L('מגדר')}
+            <select id="${instanceId}-f-gender" onchange="cpSetFilter('${instanceId}','gender',this.value)" style="${S}">
+              <option value="">הכל</option>
+              <option value="זכר">זכר</option>
+              <option value="נקבה">נקבה</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+          <span id="${instanceId}-filter-status" style="font-size:11px;color:#a0aec0"></span>
+          <button type="button" onclick="cpClearFilters('${instanceId}')" style="background:none;border:none;color:#c53030;font-size:11px;font-weight:700;cursor:pointer">נקה סינון</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function cpToggleFilterBar(instanceId) {
+  const bar = document.getElementById(`${instanceId}-filter-bar`);
+  if (bar) bar.style.display = bar.style.display === 'none' ? 'block' : 'none';
+}
+window.cpToggleFilterBar = cpToggleFilterBar;
+
+function cpSetFilter(instanceId, key, rawVal) {
+  const st = cpGetFilterState(instanceId);
+  if (key === 'gender') {
+    st.gender = rawVal || null;
+    if (st.gender && !_clubPlayersGenderMap) {
+      const statusEl = document.getElementById(`${instanceId}-filter-status`);
+      if (statusEl) statusEl.textContent = '⏳ טוען נתוני מגדר...';
+      loadClubPlayersGenderMap().then(() => {
+        if (statusEl) statusEl.textContent = '';
+        cpRefreshFilteredSearch(instanceId);
+      });
+      return; // refresh happens once the map finishes loading
+    }
+  } else {
+    const n = rawVal === '' ? null : parseInt(rawVal, 10);
+    st[key] = Number.isFinite(n) ? n : null;
+  }
+  cpRefreshFilteredSearch(instanceId);
+}
+window.cpSetFilter = cpSetFilter;
+
+function cpClearFilters(instanceId) {
+  _cpFilterState[instanceId] = { ageMin: null, ageMax: null, ratingMin: null, ratingMax: null, gender: null };
+  ['ageMin', 'ageMax', 'ratingMin', 'ratingMax'].forEach(k => { const el = document.getElementById(`${instanceId}-f-${k}`); if (el) el.value = ''; });
+  const g = document.getElementById(`${instanceId}-f-gender`);
+  if (g) g.value = '';
+  cpRefreshFilteredSearch(instanceId);
+}
+window.cpClearFilters = cpClearFilters;
+
+// Re-runs whichever search box's own input handler currently owns this
+// instanceId, so a filter change updates results the same way typing does —
+// each screen keeps its own render/markup, only the matching logic is shared.
+function cpRefreshFilteredSearch(instanceId) {
+  if (instanceId === 'cp') {
+    const el = document.getElementById('cp-search');
+    onClubPlayerSearchInput(el ? el.value : '');
+  } else if (instanceId === 'yt-add') {
+    const el = document.getElementById('yt-add-search');
+    if (typeof onYtAddSearchInput === 'function') onYtAddSearchInput(el ? el.value : '');
+  }
+}
+window.cpRefreshFilteredSearch = cpRefreshFilteredSearch;
+
 function onClubPlayerSearchInput(val) {
   const resultsEl = document.getElementById('cp-search-results');
   if (!resultsEl) return;
   const q = (val || '').trim();
-  if (!q) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  if (!q && !cpFilterActive('cp')) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
   if (!_clubPlayersRoster) {
     resultsEl.style.display = 'block';
     resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">עדיין טוען את רשימת השחקנים...</div>';
     return;
   }
-  const matches = _clubPlayersRoster.filter(p => p.name && clubPlayerNameMatches(p.name, q)).slice(0, 10);
+  const matches = clubPlayerSearchAndFilter(q, 'cp') || [];
   resultsEl.style.display = 'block';
   if (!matches.length) {
-    resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">לא נמצאו שחקנים תואמים במועדון</div>';
+    resultsEl.innerHTML = `<div style="padding:10px 14px;color:#a0aec0;font-size:13px">לא נמצאו שחקנים תואמים${cpFilterActive('cp') ? ' לפי הסינון שנבחר' : ' במועדון'}</div>`;
     return;
   }
   resultsEl.innerHTML = matches.map(p => `

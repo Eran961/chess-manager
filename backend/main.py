@@ -144,6 +144,77 @@ def club_players(clubId: int = Query(...)):
     return JSONResponse(content=players)
 
 
+# ── Club player genders (bulk, via the federation's advanced search) ───────────
+# /api/club-players (above) has no gender at all — the plain roster table it
+# scrapes genuinely doesn't have that column. The only place gender exists in
+# bulk is chess.org.il's "advanced search" form (SearchPlayers.aspx, revealed
+# via a postback on AdvancedSearchLinkButton) — but its GenderDDL has no "all"
+# option, only 'ז'/'נ', so "everyone tagged by gender" means one submission per
+# gender, merged by fedId. Scoped to clubId + "בעלי כרטיס בתוקף" (active card)
+# + "מייצגים ישראל" (verified live: zero of our club's currently-active players
+# are tagged as representing a foreign country, so this loses nobody real) —
+# this keeps each submission's result count safely under the results grid's
+# ~500-row cap, which has no pager at all (confirmed: no "Pager" markup, no
+# page-size control — a broader query, e.g. including lapsed/historical cards,
+# silently truncates at 500 with nothing telling you it did).
+ADV_SEARCH_URL = "https://www.chess.org.il/Players/SearchPlayers.aspx"
+_club_gender_cache: dict = {}
+CLUB_GENDER_CACHE_TTL = 24 * 3600
+
+
+def _fetch_gender_fedids(club_id: int, gender: str) -> set:
+    """One full advanced-search round trip (reveal + submit) for a single gender."""
+    html1 = fetch_url(ADV_SEARCH_URL)
+    state1 = get_form_state(BeautifulSoup(html1, "html.parser"))
+    reveal_html = fetch_post(ADV_SEARCH_URL, {
+        **state1,
+        "__EVENTTARGET": "ctl00$ContentPlaceHolder1$AdvancedSearchLinkButton",
+        "__EVENTARGUMENT": "",
+    })
+    state2 = get_form_state(BeautifulSoup(reveal_html, "html.parser"))
+    results_html = fetch_post(ADV_SEARCH_URL, {
+        **state2,
+        "ctl00$ContentPlaceHolder1$AdvancedSearchNameTextBox": "",
+        "ctl00$ContentPlaceHolder1$ClubsDDL": str(club_id),
+        "ctl00$ContentPlaceHolder1$RatingFromTB": "",
+        "ctl00$ContentPlaceHolder1$RatingUptoTB": "",
+        "ctl00$ContentPlaceHolder1$AgeFromTB": "",
+        "ctl00$ContentPlaceHolder1$AgeTillTB": "",
+        "ctl00$ContentPlaceHolder1$GenderDDL": gender,
+        "ctl00$ContentPlaceHolder1$ForeignDDL": "ISR",
+        "ctl00$ContentPlaceHolder1$CountriesDDL": "ISR",
+        "ctl00$ContentPlaceHolder1$MembershipStatusDDL": "בתוקף",
+        "ctl00$ContentPlaceHolder1$PlayerStatusDDL": "0",
+        "ctl00$ContentPlaceHolder1$AdvancedSearchButton": "חיפוש",
+    })
+    return {int(m) for m in re.findall(r'PlayerIdHF"\s+value="(\d+)"', results_html)}
+
+
+@app.get("/api/club-player-genders")
+def club_player_genders(clubId: int = Query(...)):
+    """Returns {fedId_str: 'זכר'|'נקבה'} for every currently-active-card player
+    tagged to this club — used to add a gender filter on top of the (gender-less)
+    /api/club-players roster without switching that endpoint's data source."""
+    cached = _club_gender_cache.get(clubId)
+    if cached and time.time() - cached["ts"] < CLUB_GENDER_CACHE_TTL:
+        return JSONResponse(content=cached["data"])
+
+    try:
+        results = list(executor.map(lambda g: (g, _fetch_gender_fedids(clubId, g)), ["ז", "נ"]))
+    except Exception as e:
+        if cached:
+            return JSONResponse(content=cached["data"])
+        raise HTTPException(status_code=502, detail=str(e))
+
+    gender_map = {}
+    for gender, fed_ids in results:
+        for fid in fed_ids:
+            gender_map[str(fid)] = gender
+
+    _club_gender_cache[clubId] = {"data": gender_map, "ts": time.time()}
+    return JSONResponse(content=gender_map)
+
+
 # ── Club teams ─────────────────────────────────────────────────────────────────
 
 

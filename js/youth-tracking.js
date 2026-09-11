@@ -131,6 +131,11 @@ window.backToYtList = backToYtList;
 function openYtAddPlayer() {
   const root = document.getElementById('yt-root');
   if (!root) return;
+  // This view's markup (including the filter bar's inputs) is rebuilt fresh
+  // every time it's entered, so the filter state must reset with it — otherwise
+  // a filter set on a previous visit would keep silently filtering results
+  // while its own input shows "הכל" again, invisible and confusing.
+  _cpFilterState['yt-add'] = { ageMin: null, ageMax: null, ratingMin: null, ratingMax: null, gender: null };
   root.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <button onclick="renderYouthTracking()" style="background:none;border:none;color:#276749;font-size:13px;font-weight:700;cursor:pointer">→ ביטול</button>
@@ -143,6 +148,7 @@ function openYtAddPlayer() {
         style="width:100%;box-sizing:border-box;padding:11px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit">
       <div id="yt-add-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:320px;overflow-y:auto;z-index:20"></div>
     </div>
+    <div style="max-width:420px;margin:0 auto">${renderClubPlayerFilterBar('yt-add', '#276749')}</div>
     <div id="yt-add-status" style="margin-top:10px;font-size:13px;color:#718096;text-align:center"></div>`;
   if (!_ytOutsideClickBound) {
     _ytOutsideClickBound = true;
@@ -165,16 +171,16 @@ function onYtAddSearchInput(val) {
   const resultsEl = document.getElementById('yt-add-search-results');
   if (!resultsEl) return;
   const q = (val || '').trim();
-  if (!q) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  if (!q && !cpFilterActive('yt-add')) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
   if (!_clubPlayersRoster) {
     resultsEl.style.display = 'block';
     resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">עדיין טוען את רשימת השחקנים...</div>';
     return;
   }
-  const matches = _clubPlayersRoster.filter(p => p.name && clubPlayerNameMatches(p.name, q)).slice(0, 10);
+  const matches = clubPlayerSearchAndFilter(q, 'yt-add') || [];
   resultsEl.style.display = 'block';
   if (!matches.length) {
-    resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">לא נמצאו שחקנים תואמים במועדון</div>';
+    resultsEl.innerHTML = `<div style="padding:10px 14px;color:#a0aec0;font-size:13px">לא נמצאו שחקנים תואמים${cpFilterActive('yt-add') ? ' לפי הסינון שנבחר' : ' במועדון'}</div>`;
     return;
   }
   resultsEl.innerHTML = matches.map(p => {
