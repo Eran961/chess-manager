@@ -142,20 +142,24 @@ function openYtAddPlayer() {
       <div style="font-size:15px;font-weight:800;color:#2d3748">הוספת שחקן למעקב</div>
       <span></span>
     </div>
-    <div id="yt-add-search-wrap" style="position:relative;max-width:420px;margin:0 auto">
-      <input id="yt-add-search" type="text" placeholder="🔍 חפש שחקן לפי שם..." autocomplete="off"
-        oninput="onYtAddSearchInput(this.value)"
-        style="width:100%;box-sizing:border-box;padding:11px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit">
-      <div id="yt-add-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:320px;overflow-y:auto;z-index:20"></div>
+    <div id="yt-add-search-area" style="max-width:420px;margin:0 auto">
+      <div id="yt-add-search-wrap" style="position:relative">
+        <input id="yt-add-search" type="text" placeholder="🔍 חפש שחקן לפי שם..." autocomplete="off"
+          oninput="onYtAddSearchInput(this.value)"
+          style="width:100%;box-sizing:border-box;padding:11px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit">
+        <div id="yt-add-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:320px;overflow-y:auto;z-index:20"></div>
+      </div>
+      ${renderClubPlayerFilterBar('yt-add', '#276749')}
     </div>
-    <div style="max-width:420px;margin:0 auto">${renderClubPlayerFilterBar('yt-add', '#276749')}</div>
     <div id="yt-add-status" style="margin-top:10px;font-size:13px;color:#718096;text-align:center"></div>`;
   if (!_ytOutsideClickBound) {
     _ytOutsideClickBound = true;
+    // Bounded by the whole search+filter area, not just the bare input wrap —
+    // see the identical fix/reasoning in club-players.js's initClubPlayersTab.
     document.addEventListener('click', (e) => {
-      const wrap = document.getElementById('yt-add-search-wrap');
+      const area = document.getElementById('yt-add-search-area');
       const results = document.getElementById('yt-add-search-results');
-      if (wrap && results && !wrap.contains(e.target)) results.style.display = 'none';
+      if (area && results && !area.contains(e.target)) results.style.display = 'none';
     });
   }
   // Reuse the exact same cached club roster שחקני המועדון already loads —

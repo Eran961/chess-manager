@@ -38,14 +38,16 @@ function renderClubPlayersPanel() {
         <div style="font-size:13px;color:#718096;margin-bottom:14px">
           חיפוש בזמן אמת מתוך שחקני מועדון השחמט ראשון לציון הרשומים באיגוד.
         </div>
-        <div id="cp-search-wrap" style="position:relative;max-width:420px">
-          <input id="cp-search" type="text" placeholder="🔍 חפש שחקן לפי שם..." autocomplete="off"
-            oninput="onClubPlayerSearchInput(this.value)"
-            style="width:100%;box-sizing:border-box;padding:11px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit"
-            onfocus="this.style.borderColor='#553c9a'" onblur="this.style.borderColor='#e2e8f0'">
-          <div id="cp-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:320px;overflow-y:auto;z-index:20"></div>
+        <div id="cp-search-area">
+          <div id="cp-search-wrap" style="position:relative;max-width:420px">
+            <input id="cp-search" type="text" placeholder="🔍 חפש שחקן לפי שם..." autocomplete="off"
+              oninput="onClubPlayerSearchInput(this.value)"
+              style="width:100%;box-sizing:border-box;padding:11px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit"
+              onfocus="this.style.borderColor='#553c9a'" onblur="this.style.borderColor='#e2e8f0'">
+            <div id="cp-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:320px;overflow-y:auto;z-index:20"></div>
+          </div>
+          ${renderClubPlayerFilterBar('cp', '#553c9a')}
         </div>
-        ${renderClubPlayerFilterBar('cp', '#553c9a')}
         <div id="cp-status" style="margin-top:10px;font-size:13px;color:#718096"></div>
         <div id="cp-dashboard" style="margin-top:22px"></div>
       </div>
@@ -55,10 +57,15 @@ function renderClubPlayersPanel() {
 async function initClubPlayersTab() {
   if (!_clubPlayersOutsideClickBound) {
     _clubPlayersOutsideClickBound = true;
+    // Bounded by the whole search+filter area (#cp-search-area), not just the
+    // bare input wrap — the filter bar sits right below the input as a
+    // sibling, so a boundary of just the input wrap treated every click into
+    // an age/rating/gender filter field as "outside", closing the results
+    // the instant you touched a filter (before you could even see them).
     document.addEventListener('click', (e) => {
-      const wrap = document.getElementById('cp-search-wrap');
+      const area = document.getElementById('cp-search-area');
       const results = document.getElementById('cp-search-results');
-      if (wrap && results && !wrap.contains(e.target)) results.style.display = 'none';
+      if (area && results && !area.contains(e.target)) results.style.display = 'none';
     });
   }
   if (_clubPlayersRoster || _clubPlayersRosterLoading) return;
