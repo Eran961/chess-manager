@@ -44,16 +44,6 @@ function renderDashboard(missingAtt = { groups: [], teams: [] }) {
   const generalAlerts = [];
   if (totalPending > 0) generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${totalPending}</strong> ממתינים לתשלום — <a href="#" onclick="switchTab('payments');return false" style="color:#2b6cb0">לתשלומים</a></span></div>`);
   if (totalTrial > 0)   generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🟡</span><span><strong>${totalTrial}</strong> שחקנים בשיעור ניסיון</span></div>`);
-  const todayIso = today.toISOString().split('T')[0];
-  if (currentUser?.role === 'admin') {
-    const expiredCards = Object.values(_fedPlayers||{}).filter(p => p.cardExpiry && p.cardExpiry < todayIso);
-    const soonCards    = Object.values(_fedPlayers||{}).filter(p => {
-      if (!p.cardExpiry || p.cardExpiry <= todayIso) return false;
-      return Math.floor((new Date(p.cardExpiry) - today) / 86400000) <= 30;
-    });
-    if (expiredCards.length > 0) generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🔴</span><span><strong>${expiredCards.length}</strong> כרטיסי שחמטאי פגי תוקף — <a href="#" onclick="switchTab('youth-players');return false" style="color:#2b6cb0">למאגר</a></span></div>`);
-    if (soonCards.length > 0)    generalAlerts.push(`<div class="dash-alert-row"><span class="dash-alert-icon">🟡</span><span><strong>${soonCards.length}</strong> כרטיסי שחמטאי יפקעו תוך 30 יום</span></div>`);
-  }
 
   const _attAlertRow = (m, isAdmin) => {
     const waBtn = (isAdmin && m.instructorWa)
