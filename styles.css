@@ -355,6 +355,10 @@
       color: #718096;
     }
 
+    /* ===== שחקני המועדון ===== */
+    .cp-tourn-link { color: #2b6cb0; text-decoration: none; }
+    .cp-tourn-link:hover { text-decoration: underline; }
+
     /* ===== ATTENDANCE STYLES ===== */
     .att-card {
       background: white;

@@ -601,11 +601,17 @@ function renderClubPlayerTournamentTable(tournaments) {
     ].filter(Boolean).join(' ');
     const pendingBadge = t.isPending ? `<span style="background:#fefcbf;color:#744210;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-inline-start:6px">בעדכון הבא</span>` : '';
     const newBadge = isFirstOverall ? `<span style="background:#ebf8ff;color:#2b6cb0;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-inline-start:6px">חדש</span>` : '';
+    // Score, not raw game count: win=1, draw=0.5, loss=0 — "3.5/5" reads
+    // directly as "3.5 points out of 5 games", clearer at a glance than the
+    // separate נ/ת/ה badges next to it for judging how well a tournament went.
+    const scoreTotal = (t.wins || 0) + (t.draws || 0) + (t.losses || 0);
+    const scorePoints = (t.wins || 0) + (t.draws || 0) * 0.5;
+    const scoreText = scoreTotal > 0 ? `${scorePoints % 1 === 0 ? scorePoints : scorePoints.toFixed(1)}/${scoreTotal}` : '—';
     return `
       <tr style="border-bottom:1px solid #f0f4f8">
         <td style="padding:9px 12px;font-size:12px;color:#718096;white-space:nowrap">${t.date}</td>
-        <td style="padding:9px 12px;font-size:13px">${t.tournamentUrl ? `<a href="${t.tournamentUrl}" target="_blank" style="color:#2b6cb0;text-decoration:none">${t.name || '—'}</a>` : (t.name || '—')}${newBadge}${pendingBadge}</td>
-        <td style="padding:9px 12px;text-align:center;font-size:13px">${t.games || '—'}</td>
+        <td style="padding:9px 12px;font-size:13px">${t.tournamentUrl ? `<a href="${t.tournamentUrl}" target="_blank" class="cp-tourn-link">${t.name || '—'}</a>` : (t.name || '—')}${newBadge}${pendingBadge}</td>
+        <td style="padding:9px 12px;text-align:center;font-size:13px;font-weight:700">${scoreText}</td>
         <td style="padding:9px 12px;text-align:center;white-space:nowrap">${badges || '—'}</td>
         <td style="padding:9px 12px;text-align:center;font-weight:700;color:${changeColor};font-size:13px">${changeStr}</td>
       </tr>`;
@@ -628,7 +634,7 @@ function renderClubPlayerTournamentTable(tournaments) {
           <thead><tr style="background:#f7fafc">
             <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#a0aec0">תאריך</th>
             <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#a0aec0">טורניר</th>
-            <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#a0aec0">משחקים</th>
+            <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#a0aec0">תוצאה</th>
             <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#a0aec0">נ/ת/ה</th>
             <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#a0aec0">שינוי</th>
           </tr></thead>
