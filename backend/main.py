@@ -701,6 +701,10 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
         if m:
             profile["grade"] = m.group(1)
 
+        m = re.search(r"דירוג בישראל\s*:\s*(\d+)", text)
+        if m:
+            profile["rank"] = int(m.group(1))
+
         # Gender is not explicit; infer from player number pattern or leave absent
 
     # ── Tournament history from TournamentsGridView (all pages) ─────────────────
@@ -867,6 +871,24 @@ def _parse_league_rows(soup) -> list:
     return leagues
 
 
+def parse_result_wld(raw: str) -> dict:
+    """Parse '+3-1=0' -> {'wins': 3, 'losses': 1, 'draws': 0}. Missing/unparseable -> all zero."""
+    m = re.search(r"\+(\d+)-(\d+)=(\d+)", raw or "")
+    if not m:
+        return {"wins": 0, "losses": 0, "draws": 0}
+    return {"wins": int(m.group(1)), "losses": int(m.group(2)), "draws": int(m.group(3))}
+
+
+def parse_update_date_cell(raw: str) -> tuple:
+    """cells[1] of the tournaments table: 'בעדכון הבא' (pending) or 'עדכון DD/MM/YYYY'.
+    Returns (updateDate_DDMMYYYY_or_None, isPending)."""
+    text = (raw or "").strip()
+    if text == "בעדכון הבא":
+        return None, True
+    m = re.search(r"(\d{2}/\d{2}/\d{4})", text)
+    return (m.group(1) if m else None), False
+
+
 def _parse_tourn_rows(tourn_table) -> tuple:
     """Return (list_of_tournament_dicts, max_page_number)."""
     tournaments = []
@@ -894,13 +916,21 @@ def _parse_tourn_rows(tourn_table) -> tuple:
             rc_num = float(m.group(1)) if m.group(2) == "+" else -float(m.group(1))
         elif re.fullmatch(r"-?\d+(\.\d+)?", rc_raw):
             rc_num = float(rc_raw)
+        result_raw = cells[6] if len(cells) > 6 else ""
+        wld = parse_result_wld(result_raw)
+        update_date, is_pending = parse_update_date_cell(cells[1] if len(cells) > 1 else "")
         tournaments.append({
             "date":            cells[0],
+            "updateDate":      update_date,
+            "isPending":       is_pending,
             "name":            cells[2] if len(cells) > 2 else "",
             "games":           cells[3] if len(cells) > 3 else "",
             "points":          cells[4] if len(cells) > 4 else "",
             "performance":     cells[5] if len(cells) > 5 else "",
-            "result":          cells[6] if len(cells) > 6 else "",
+            "result":          result_raw,
+            "wins":            wld["wins"],
+            "losses":          wld["losses"],
+            "draws":           wld["draws"],
             "ratingChange":    rc_num,
             "ratingChangeRaw": rc_raw,
         })
