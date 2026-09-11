@@ -223,6 +223,12 @@ function cpMonthLabel(iso) {
   return `${CP_MONTH_NAMES_FULL[+m - 1]} ${y}`;
 }
 
+const CP_MONTH_NAMES_SHORT = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
+function cpMonthLabelShort(iso) {
+  const [y, m] = iso.split('-');
+  return `${CP_MONTH_NAMES_SHORT[+m - 1]} '${y.slice(2)}`;
+}
+
 function setClubPlayerChartMode(mode) {
   _clubPlayerChartMode = mode;
   const holder = document.getElementById('cp-history-chart');
@@ -273,13 +279,15 @@ function renderClubPlayerHeader(p) {
 }
 
 function renderClubPlayerMetricCards(p, totalGames, totalTournaments, cumulativeChange) {
+  const sinceLabel = `מאז ${cpTwoYearCutoff().label}`;
   const cards = [
     { label: 'שינוי מצטבר', value: cumulativeChange == null ? '—' : (cumulativeChange > 0 ? `+${cumulativeChange}` : `${cumulativeChange}`),
-      color: cumulativeChange > 0 ? '#276749' : cumulativeChange < 0 ? '#c53030' : '#4a5568', icon: '↕️' },
-    { label: 'משחקים', value: totalGames || '—', color: '#2b6cb0', icon: '⚔️' },
-    { label: 'טורנירים', value: totalTournaments || '—', color: '#2b6cb0', icon: '📅' },
+      color: cumulativeChange > 0 ? '#276749' : cumulativeChange < 0 ? '#c53030' : '#4a5568', icon: '↕️', sub: sinceLabel },
+    { label: 'משחקים', value: totalGames || '—', color: '#2b6cb0', icon: '⚔️', sub: sinceLabel },
+    { label: 'טורנירים', value: totalTournaments || '—', color: '#2b6cb0', icon: '📅', sub: sinceLabel },
     { label: 'דירוג ארצי', value: p.rank ? `#${p.rank}` : '—', color: '#553c9a', icon: '🏅' },
-    { label: 'דירוג נוכחי', value: p.rating || '—', color: '#276749', icon: '📈' },
+    { label: 'דירוג נוכחי', value: p.rating || '—', color: '#276749', icon: '📈',
+      sub: p.ratingExpected ? `צפוי: ${p.ratingExpected}` : null, subColor: '#b7791f' },
   ];
   return `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px">
@@ -288,6 +296,7 @@ function renderClubPlayerMetricCards(p, totalGames, totalTournaments, cumulative
           <div style="font-size:16px;margin-bottom:4px">${c.icon}</div>
           <div style="font-size:22px;font-weight:800;color:${c.color}">${c.value}</div>
           <div style="font-size:11px;color:#a0aec0;font-weight:600;margin-top:2px">${c.label}</div>
+          ${c.sub ? `<div style="font-size:10px;color:${c.subColor || '#cbd5e0'};font-weight:600;margin-top:2px">${c.sub}</div>` : ''}
         </div>`).join('')}
     </div>`;
 }
@@ -355,14 +364,19 @@ function renderClubPlayerHistoryChart(p) {
     </div>`;
 }
 
+// One shared, module-level record of the currently-rendered line chart's
+// point positions/values, in the SVG's own coordinate space — read by
+// cpChartHover() below on every pointer move so it doesn't have to
+// recompute chart geometry on each event, just look up the nearest point.
+let _cpLineChartData = null;
+
 function clubPlayerRatingLineSvg(ratingHistoryAll) {
   const chrono = cpMonthlyRatingSeries(ratingHistoryAll);
-  if (!chrono.length) return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני היסטוריית דירוג</div>`;
-  const monthShort = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
+  if (!chrono.length) { _cpLineChartData = null; return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני היסטוריית דירוג</div>`; }
   const ratings = chrono.map(r => r.rating);
   const pad = 25;
   const minR = Math.min(...ratings) - pad, maxR = Math.max(...ratings) + pad;
-  const W = 480, H = 200, PL = 50, PR = 10, PT = 14, PB = 42;
+  const W = 480, H = 210, PL = 50, PR = 14, PT = 14, PB = 30;
   const cW = W - PL - PR, cH = H - PT - PB;
   const n = chrono.length;
   const xPos = i => PL + (n < 2 ? cW / 2 : (i / (n - 1)) * cW);
@@ -385,14 +399,14 @@ function clubPlayerRatingLineSvg(ratingHistoryAll) {
     grids += `<line x1="${PL}" y1="${gy.toFixed(1)}" x2="${W - PR}" y2="${gy.toFixed(1)}" stroke="#ede9ff" stroke-width="0.8"/>`;
     grids += `<text x="${PL - 8}" y="${(gy + 4).toFixed(1)}" font-size="10" fill="#9f7aea" text-anchor="end" font-weight="700">${g}</text>`;
   }
-  const labelEvery = Math.max(1, Math.ceil(n / 10));
+  // Horizontal, evenly-spaced month labels (not rotated) — needs more room
+  // per label than the old rotated version, so fewer of them show at once.
+  const labelEvery = Math.max(1, Math.ceil(n / 7));
   let xLabels = '';
   chrono.forEach((r, i) => {
     if (i % labelEvery !== 0 && i !== n - 1) return;
-    const [yr, mo] = r.date.split('-');
-    const label = `${monthShort[+mo - 1]} ${yr.slice(2)}`;
-    const x = xPos(i).toFixed(1), y = (PT + cH + 8).toFixed(1);
-    xLabels += `<text x="${x}" y="${y}" font-size="9.5" fill="#9f7aea" text-anchor="end" font-weight="600" transform="rotate(-40,${x},${y})">${label}</text>`;
+    const x = xPos(i).toFixed(1);
+    xLabels += `<text x="${x}" y="${(PT + cH + 18).toFixed(1)}" font-size="10" fill="#9f7aea" text-anchor="middle" font-weight="600">${cpMonthLabelShort(r.date)}</text>`;
   });
   let dots = '';
   pts.forEach(([x, y], i) => {
@@ -404,10 +418,16 @@ function clubPlayerRatingLineSvg(ratingHistoryAll) {
     // while every month is still a real hoverable point either way.
     const radius = isLatest ? 5.5 : (r.isReal ? 3.8 : 2.6);
     const color = isLatest ? '#553c9a' : (r.isReal ? '#805ad5' : '#c4b5e0');
-    const tooltip = r.isReal ? `${cpMonthLabel(r.date)}: ${r.rating}` : `${cpMonthLabel(r.date)}: ${r.rating} (ללא עדכון החודש)`;
-    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius}" fill="${color}" stroke="white" stroke-width="1.6"><title>${tooltip}</title></circle>`;
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius}" fill="${color}" stroke="white" stroke-width="1.6"/>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;max-width:100%;height:auto">
+
+  _cpLineChartData = {
+    W, H, plotTop: PT, plotBottom: PT + cH,
+    points: chrono.map((r, i) => ({ x: pts[i][0], y: pts[i][1], date: r.date, rating: r.rating, isReal: r.isReal })),
+  };
+
+  return `<svg id="cp-line-svg" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet"
+      style="display:block;overflow:visible;max-width:100%;height:auto;touch-action:none">
     <defs><linearGradient id="cp-rg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#805ad5" stop-opacity="0.30"/>
       <stop offset="100%" stop-color="#805ad5" stop-opacity="0.02"/>
@@ -416,8 +436,84 @@ function clubPlayerRatingLineSvg(ratingHistoryAll) {
     <path d="${areaPath}" fill="url(#cp-rg)" stroke="none"/>
     <path d="${linePath}" fill="none" stroke="#6b46c1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
     ${dots}${xLabels}
+    <line id="cp-line-crosshair" x1="0" y1="${PT}" x2="0" y2="${PT + cH}" stroke="#805ad5" stroke-width="1" stroke-dasharray="3,3" opacity="0" pointer-events="none"/>
+    <circle id="cp-line-active-dot" r="5.5" fill="#553c9a" stroke="white" stroke-width="2" opacity="0" pointer-events="none"/>
+    <g id="cp-line-tooltip" opacity="0" pointer-events="none">
+      <rect id="cp-line-tooltip-bg" width="76" height="38" rx="7" fill="#2d3748"/>
+      <text id="cp-line-tooltip-rating" text-anchor="middle" font-size="13" font-weight="800" fill="white"></text>
+      <text id="cp-line-tooltip-month" text-anchor="middle" font-size="9.5" fill="#cbd5e0"></text>
+    </g>
+    <rect x="0" y="0" width="${W}" height="${H}" fill="transparent" style="cursor:crosshair"
+      onmousemove="cpChartHover(event)" onmouseleave="cpChartHoverEnd()"
+      ontouchstart="cpChartHover(event)" ontouchmove="cpChartHover(event)" ontouchend="cpChartHoverEnd()"/>
   </svg>`;
 }
+
+// Real interactive hover/touch, matching a normal charting library instead
+// of a native browser <title> tooltip (which doesn't work on touch at all,
+// and gives no visual crosshair): finds the month nearest the pointer,
+// regardless of exactly where over the chart it is, and moves a crosshair
+// line + highlighted dot + floating tooltip box there. getScreenCTM() does
+// the CSS-pixel-to-SVG-viewBox-unit conversion so this stays correct at any
+// rendered size.
+function cpChartHover(event) {
+  if (!_cpLineChartData) return;
+  const svg = document.getElementById('cp-line-svg');
+  if (!svg) return;
+  const touch = event.touches && event.touches[0];
+  if (touch && event.cancelable) event.preventDefault(); // block page scroll while dragging across the chart
+  const clientX = touch ? touch.clientX : event.clientX;
+  const clientY = touch ? touch.clientY : event.clientY;
+  if (clientX == null) return;
+
+  const pt = svg.createSVGPoint();
+  pt.x = clientX; pt.y = clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return;
+  const svgP = pt.matrixTransform(ctm.inverse());
+
+  const { points, W, plotTop, plotBottom } = _cpLineChartData;
+  let nearest = points[0], minDist = Infinity;
+  for (const p of points) {
+    const d = Math.abs(p.x - svgP.x);
+    if (d < minDist) { minDist = d; nearest = p; }
+  }
+
+  const crosshair = document.getElementById('cp-line-crosshair');
+  const dot = document.getElementById('cp-line-active-dot');
+  const tooltipG = document.getElementById('cp-line-tooltip');
+  const tooltipBg = document.getElementById('cp-line-tooltip-bg');
+  const tooltipRating = document.getElementById('cp-line-tooltip-rating');
+  const tooltipMonth = document.getElementById('cp-line-tooltip-month');
+  if (!crosshair || !dot || !tooltipG || !tooltipBg || !tooltipRating || !tooltipMonth) return;
+
+  crosshair.setAttribute('x1', nearest.x); crosshair.setAttribute('x2', nearest.x); crosshair.setAttribute('opacity', '1');
+  dot.setAttribute('cx', nearest.x); dot.setAttribute('cy', nearest.y); dot.setAttribute('opacity', '1');
+
+  const boxW = 76, boxH = 38, gap = 12;
+  let boxX = nearest.x - boxW / 2;
+  boxX = Math.max(2, Math.min(W - 2 - boxW, boxX));
+  let boxY = nearest.y - boxH - gap;
+  if (boxY < plotTop) boxY = Math.min(plotBottom - boxH, nearest.y + gap); // flip below if no room above
+
+  tooltipBg.setAttribute('x', boxX); tooltipBg.setAttribute('y', boxY);
+  tooltipRating.setAttribute('x', boxX + boxW / 2); tooltipRating.setAttribute('y', boxY + 17);
+  tooltipMonth.setAttribute('x', boxX + boxW / 2); tooltipMonth.setAttribute('y', boxY + 30);
+  tooltipRating.textContent = nearest.isReal ? nearest.rating : `${nearest.rating} (ק)`;
+  tooltipMonth.textContent = cpMonthLabelShort(nearest.date);
+  tooltipG.setAttribute('opacity', '1');
+}
+window.cpChartHover = cpChartHover;
+
+function cpChartHoverEnd() {
+  const crosshair = document.getElementById('cp-line-crosshair');
+  const dot = document.getElementById('cp-line-active-dot');
+  const tooltipG = document.getElementById('cp-line-tooltip');
+  if (crosshair) crosshair.setAttribute('opacity', '0');
+  if (dot) dot.setAttribute('opacity', '0');
+  if (tooltipG) tooltipG.setAttribute('opacity', '0');
+}
+window.cpChartHoverEnd = cpChartHoverEnd;
 
 function clubPlayerMonthlyBarSvg(tournamentsAll) {
   const byMonth = {};
