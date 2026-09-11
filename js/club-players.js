@@ -1,0 +1,402 @@
+// ===== שחקני המועדון — live lookup dashboard (no persistence) =====
+// Search is restricted to the federation's own roster for our club (clubId
+// 31, ראשון לציון) — fetched once per tab-open from our own Render backend
+// (same server chess-teams already uses for club-teams/player-profile, no
+// public CORS proxy involved). Selecting a result fetches that player's full
+// profile and renders a read-only dashboard. Nothing here is ever written to
+// Firebase or anywhere else — closing the tab or picking a different player
+// simply discards it; re-opening a player re-fetches fresh.
+
+const CLUB_PLAYERS_API = 'https://chess-manager-7wkr.onrender.com';
+const CLUB_PLAYERS_CLUB_ID = 31;
+
+let _clubPlayersRoster = null;      // cached [{fedId, name, rating, birthYear, gender}, ...]
+let _clubPlayersRosterLoading = false;
+let _clubPlayerSelected = null;     // full profile of the currently displayed player
+let _clubPlayerChartMode = 'line';  // 'line' (rating over time) | 'bar' (monthly W/D/L)
+let _clubPlayersOutsideClickBound = false;
+
+function renderClubPlayersPanel() {
+  return `
+    <div class="att-card" style="max-width:920px">
+      <div class="att-card-header">🎖️ שחקני המועדון</div>
+      <div style="padding:20px">
+        <div style="font-size:13px;color:#718096;margin-bottom:14px">
+          חיפוש בזמן אמת מתוך שחקני מועדון השחמט ראשון לציון הרשומים באיגוד — הצגה בלבד, שום דבר לא נשמר.
+        </div>
+        <div id="cp-search-wrap" style="position:relative;max-width:420px">
+          <input id="cp-search" type="text" placeholder="🔍 חפש שחקן לפי שם..." autocomplete="off"
+            oninput="onClubPlayerSearchInput(this.value)"
+            style="width:100%;box-sizing:border-box;padding:11px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;font-family:inherit"
+            onfocus="this.style.borderColor='#553c9a'" onblur="this.style.borderColor='#e2e8f0'">
+          <div id="cp-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:320px;overflow-y:auto;z-index:20"></div>
+        </div>
+        <div id="cp-status" style="margin-top:10px;font-size:13px;color:#718096"></div>
+        <div id="cp-dashboard" style="margin-top:22px"></div>
+      </div>
+    </div>`;
+}
+
+async function initClubPlayersTab() {
+  if (!_clubPlayersOutsideClickBound) {
+    _clubPlayersOutsideClickBound = true;
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('cp-search-wrap');
+      const results = document.getElementById('cp-search-results');
+      if (wrap && results && !wrap.contains(e.target)) results.style.display = 'none';
+    });
+  }
+  if (_clubPlayersRoster || _clubPlayersRosterLoading) return;
+  await loadClubPlayersRoster();
+}
+
+async function loadClubPlayersRoster() {
+  _clubPlayersRosterLoading = true;
+  const statusEl = document.getElementById('cp-status');
+  if (statusEl) { statusEl.style.color = '#718096'; statusEl.textContent = '⏳ טוען רשימת שחקני המועדון... (ייתכן עיכוב של עד דקה אם השרת נרדם)'; }
+  try {
+    const res = await fetch(`${CLUB_PLAYERS_API}/api/club-players?clubId=${CLUB_PLAYERS_CLUB_ID}`, { signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+    const list = await res.json();
+    if (!Array.isArray(list) || !list.length) throw new Error('לא נמצאו שחקנים');
+    _clubPlayersRoster = list;
+    if (statusEl) { statusEl.style.color = '#718096'; statusEl.textContent = `${list.length} שחקני מועדון נטענו — התחל להקליד שם לחיפוש`; }
+  } catch (e) {
+    _clubPlayersRoster = null;
+    if (statusEl) { statusEl.style.color = '#c53030'; statusEl.textContent = `❌ שגיאה בטעינת הרשימה: ${e.message}`; }
+  } finally {
+    _clubPlayersRosterLoading = false;
+  }
+}
+window.initClubPlayersTab = initClubPlayersTab;
+
+function clubPlayerNameMatches(name, query) {
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  return words.every(w => name.includes(w));
+}
+
+function onClubPlayerSearchInput(val) {
+  const resultsEl = document.getElementById('cp-search-results');
+  if (!resultsEl) return;
+  const q = (val || '').trim();
+  if (!q) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  if (!_clubPlayersRoster) {
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">עדיין טוען את רשימת השחקנים...</div>';
+    return;
+  }
+  const matches = _clubPlayersRoster.filter(p => p.name && clubPlayerNameMatches(p.name, q)).slice(0, 10);
+  resultsEl.style.display = 'block';
+  if (!matches.length) {
+    resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">לא נמצאו שחקנים תואמים במועדון</div>';
+    return;
+  }
+  resultsEl.innerHTML = matches.map(p => `
+    <div onclick="selectClubPlayer(${p.fedId})"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f4f8;display:flex;justify-content:space-between;align-items:center;gap:10px"
+      onmouseenter="this.style.background='#f7fafc'" onmouseleave="this.style.background=''">
+      <span style="font-weight:600;color:#2d3748">${p.name}</span>
+      <span style="font-size:12px;color:#718096;white-space:nowrap">${p.rating ? 'מד כושר ' + p.rating : ''}${p.birthYear ? ' · ' + p.birthYear : ''}</span>
+    </div>`).join('');
+}
+window.onClubPlayerSearchInput = onClubPlayerSearchInput;
+
+async function selectClubPlayer(fedId) {
+  const searchInput = document.getElementById('cp-search');
+  const resultsEl = document.getElementById('cp-search-results');
+  if (searchInput) searchInput.value = '';
+  if (resultsEl) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; }
+  const dash = document.getElementById('cp-dashboard');
+  if (!dash) return;
+  dash.innerHTML = '<div style="text-align:center;padding:50px;color:#a0aec0">⏳ טוען נתוני שחקן... (ייתכן עיכוב של עד דקה אם השרת נרדם)</div>';
+  try {
+    const res = await fetch(`${CLUB_PLAYERS_API}/api/player-profile?fedId=${fedId}`, { signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`שגיאת שרת ${res.status}`);
+    const data = await res.json();
+    if (!data.name) throw new Error('שחקן לא נמצא');
+    _clubPlayerSelected = data;
+    _clubPlayerChartMode = 'line';
+    dash.innerHTML = renderClubPlayerDashboard(data);
+  } catch (e) {
+    dash.innerHTML = `<div style="text-align:center;padding:50px;color:#c53030">❌ שגיאה בשליפת נתוני השחקן: ${e.message}</div>`;
+  }
+}
+window.selectClubPlayer = selectClubPlayer;
+
+function refreshClubPlayer() {
+  if (_clubPlayerSelected?.fedId != null) selectClubPlayer(_clubPlayerSelected.fedId);
+}
+window.refreshClubPlayer = refreshClubPlayer;
+
+// ── Small date helper: backend tournament dates are DD/MM/YYYY ──────────────
+function cpDdmmyyyyToIso(raw) {
+  const m = (raw || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
+function setClubPlayerChartMode(mode) {
+  _clubPlayerChartMode = mode;
+  const holder = document.getElementById('cp-history-chart');
+  if (holder && _clubPlayerSelected) holder.innerHTML = renderClubPlayerHistoryChart(_clubPlayerSelected);
+}
+window.setClubPlayerChartMode = setClubPlayerChartMode;
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+function renderClubPlayerDashboard(p) {
+  const tournaments = p.tournaments || [];
+  const totalGames = tournaments.reduce((s, t) => s + (parseInt(t.games) || 0), 0);
+  const totalWins = tournaments.reduce((s, t) => s + (t.wins || 0), 0);
+  const totalLosses = tournaments.reduce((s, t) => s + (t.losses || 0), 0);
+  const totalDraws = tournaments.reduce((s, t) => s + (t.draws || 0), 0);
+  const history = (p.ratingHistory || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+  const cumulativeChange = history.length >= 2 ? history[history.length - 1].rating - history[0].rating : null;
+
+  return `
+    ${renderClubPlayerHeader(p)}
+    ${renderClubPlayerMetricCards(p, totalGames, tournaments.length, cumulativeChange)}
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      <div style="flex:1;min-width:240px">${renderClubPlayerWldDonut(totalWins, totalDraws, totalLosses)}</div>
+      <div style="flex:2;min-width:320px" id="cp-history-chart">${renderClubPlayerHistoryChart(p)}</div>
+    </div>
+    ${renderClubPlayerTournamentTable(tournaments)}`;
+}
+
+function renderClubPlayerHeader(p) {
+  return `
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:20px;font-weight:800;color:#1a202c">${p.name}</span>
+          ${p.grade ? `<span style="background:#ebf8ff;color:#2b6cb0;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">${p.grade}</span>` : ''}
+          <span style="font-size:13px;color:#a0aec0">#${p.fedId}</span>
+        </div>
+        <div style="margin-top:6px;font-size:13px;color:#718096">
+          מועדון השחמט ראשון לציון${p.birthYear ? ' · שנת לידה: ' + p.birthYear : ''}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap">
+          ${p.fide ? `<a href="https://ratings.fide.com/profile/${p.fide}" target="_blank" style="font-size:13px;color:#2b6cb0;text-decoration:none">🔗 FIDE</a>` : ''}
+          <a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="font-size:13px;color:#2b6cb0;text-decoration:none">🔗 chess.org.il</a>
+        </div>
+      </div>
+      <button onclick="refreshClubPlayer()" title="רענן נתונים" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px">🔄</button>
+    </div>`;
+}
+
+function renderClubPlayerMetricCards(p, totalGames, totalTournaments, cumulativeChange) {
+  const cards = [
+    { label: 'שינוי מצטבר', value: cumulativeChange == null ? '—' : (cumulativeChange > 0 ? `+${cumulativeChange}` : `${cumulativeChange}`),
+      color: cumulativeChange > 0 ? '#276749' : cumulativeChange < 0 ? '#c53030' : '#4a5568', icon: '↕️' },
+    { label: 'משחקים', value: totalGames || '—', color: '#2b6cb0', icon: '⚔️' },
+    { label: 'טורנירים', value: totalTournaments || '—', color: '#2b6cb0', icon: '📅' },
+    { label: 'דירוג ארצי', value: p.rank ? `#${p.rank}` : '—', color: '#553c9a', icon: '🏅' },
+    { label: 'דירוג נוכחי', value: p.rating || '—', color: '#276749', icon: '📈' },
+  ];
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px">
+      ${cards.map(c => `
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:16px;margin-bottom:4px">${c.icon}</div>
+          <div style="font-size:22px;font-weight:800;color:${c.color}">${c.value}</div>
+          <div style="font-size:11px;color:#a0aec0;font-weight:600;margin-top:2px">${c.label}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderClubPlayerWldDonut(wins, draws, losses) {
+  const total = wins + draws + losses;
+  if (!total) {
+    return `<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;text-align:center;color:#a0aec0;font-size:13px;height:100%;display:flex;align-items:center;justify-content:center">אין נתוני משחקים</div>`;
+  }
+  const R = 50, CX = 60, CY = 60, SW = 16;
+  const circumference = 2 * Math.PI * R;
+  const segs = [
+    { key: 'wins', n: wins, color: '#38a169' },
+    { key: 'draws', n: draws, color: '#a0aec0' },
+    { key: 'losses', n: losses, color: '#e53e3e' },
+  ];
+  let offset = 0;
+  const circles = segs.filter(s => s.n > 0).map(s => {
+    const len = (s.n / total) * circumference;
+    const dash = `${len} ${circumference - len}`;
+    const circle = `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${s.color}" stroke-width="${SW}" stroke-dasharray="${dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${CX} ${CY})"/>`;
+    offset += len;
+    return circle;
+  }).join('');
+  const pct = n => Math.round((n / total) * 100);
+  return `
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;height:100%;box-sizing:border-box">
+      <div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:10px">ניצחונות / תיקו / הפסדים</div>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center">
+        <svg viewBox="0 0 120 120" width="130" height="130">
+          <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#f0f4f8" stroke-width="${SW}"/>
+          ${circles}
+          <text x="${CX}" y="${CY + 6}" text-anchor="middle" font-size="22" font-weight="800" fill="#2d3748">${total}</text>
+        </svg>
+        <div style="font-size:13px;display:flex;flex-direction:column;gap:6px">
+          <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#38a169;margin-left:6px"></span>ניצחונות ${wins} (${pct(wins)}%)</div>
+          <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a0aec0;margin-left:6px"></span>תיקו ${draws} (${pct(draws)}%)</div>
+          <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e53e3e;margin-left:6px"></span>הפסדים ${losses} (${pct(losses)}%)</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderClubPlayerHistoryChart(p) {
+  const toggle = `
+    <div style="display:flex;gap:4px">
+      <button onclick="setClubPlayerChartMode('line')" title="גרף קו" style="background:${_clubPlayerChartMode === 'line' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'line' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📈</button>
+      <button onclick="setClubPlayerChartMode('bar')" title="גרף עמודות" style="background:${_clubPlayerChartMode === 'bar' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'bar' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📊</button>
+    </div>`;
+  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(p.ratingHistory || []) : clubPlayerMonthlyBarSvg(p.tournaments || []);
+  return `
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;height:100%;box-sizing:border-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:700;color:#2d3748">היסטוריית דירוג</div>
+        ${toggle}
+      </div>
+      ${body}
+    </div>`;
+}
+
+function clubPlayerRatingLineSvg(ratingHistory) {
+  const history = ratingHistory.filter(r => r && r.date && typeof r.rating === 'number');
+  if (!history.length) return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני היסטוריית דירוג</div>`;
+  const chrono = [...history].sort((a, b) => a.date.localeCompare(b.date));
+  const monthShort = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
+  const ratings = chrono.map(r => r.rating);
+  const pad = 25;
+  const minR = Math.min(...ratings) - pad, maxR = Math.max(...ratings) + pad;
+  const W = 480, H = 200, PL = 50, PR = 10, PT = 14, PB = 42;
+  const cW = W - PL - PR, cH = H - PT - PB;
+  const n = chrono.length;
+  const xPos = i => PL + (n < 2 ? cW / 2 : (i / (n - 1)) * cW);
+  const yPos = r => PT + (1 - (r - minR) / (maxR - minR)) * cH;
+  const pts = chrono.map((r, i) => [xPos(i), yPos(r.rating)]);
+  let linePath = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+    const cx = (x1 - x0) * 0.4;
+    linePath += ` C${(x0 + cx).toFixed(1)},${y0.toFixed(1)} ${(x1 - cx).toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
+  }
+  const areaPath = linePath + ` L${pts[n - 1][0].toFixed(1)},${(PT + cH).toFixed(1)} L${PL},${(PT + cH).toFixed(1)} Z`;
+  const rRange = maxR - minR;
+  const gStep = rRange > 150 ? 50 : rRange > 60 ? 25 : 20;
+  const firstG = Math.ceil(minR / gStep) * gStep;
+  let grids = `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT + cH}" stroke="#e9d8fd" stroke-width="1"/>`;
+  for (let g = firstG; g <= maxR; g += gStep) {
+    const gy = yPos(g);
+    if (gy < PT - 2 || gy > PT + cH + 2) continue;
+    grids += `<line x1="${PL}" y1="${gy.toFixed(1)}" x2="${W - PR}" y2="${gy.toFixed(1)}" stroke="#ede9ff" stroke-width="0.8"/>`;
+    grids += `<text x="${PL - 8}" y="${(gy + 4).toFixed(1)}" font-size="10" fill="#9f7aea" text-anchor="end" font-weight="700">${g}</text>`;
+  }
+  const labelEvery = Math.max(1, Math.ceil(n / 10));
+  let xLabels = '';
+  chrono.forEach((r, i) => {
+    if (i % labelEvery !== 0 && i !== n - 1) return;
+    const [yr, mo] = r.date.split('-');
+    const label = `${monthShort[+mo - 1]} ${yr.slice(2)}`;
+    const x = xPos(i).toFixed(1), y = (PT + cH + 8).toFixed(1);
+    xLabels += `<text x="${x}" y="${y}" font-size="9.5" fill="#9f7aea" text-anchor="end" font-weight="600" transform="rotate(-40,${x},${y})">${label}</text>`;
+  });
+  let dots = '';
+  pts.forEach(([x, y], i) => {
+    const r = chrono[i];
+    const isLatest = i === n - 1;
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLatest ? 5.5 : 3.8}" fill="${isLatest ? '#553c9a' : '#805ad5'}" stroke="white" stroke-width="1.6"><title>${r.date}: ${r.rating}</title></circle>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+    <defs><linearGradient id="cp-rg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#805ad5" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#805ad5" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    ${grids}
+    <path d="${areaPath}" fill="url(#cp-rg)" stroke="none"/>
+    <path d="${linePath}" fill="none" stroke="#6b46c1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}${xLabels}
+  </svg>`;
+}
+
+function clubPlayerMonthlyBarSvg(tournaments) {
+  const byMonth = {};
+  tournaments.forEach(t => {
+    const iso = cpDdmmyyyyToIso(t.updateDate) || cpDdmmyyyyToIso(t.date);
+    if (!iso) return;
+    const key = iso.slice(0, 7);
+    if (!byMonth[key]) byMonth[key] = { wins: 0, draws: 0, losses: 0 };
+    byMonth[key].wins += t.wins || 0;
+    byMonth[key].draws += t.draws || 0;
+    byMonth[key].losses += t.losses || 0;
+  });
+  const months = Object.keys(byMonth).sort();
+  if (!months.length) return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתונים חודשיים</div>`;
+  const monthShort = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
+  const totals = months.map(m => byMonth[m].wins + byMonth[m].draws + byMonth[m].losses);
+  const maxTotal = Math.max(...totals, 1);
+  const W = 480, H = 200, PL = 30, PR = 10, PT = 14, PB = 42;
+  const cW = W - PL - PR, cH = H - PT - PB;
+  const n = months.length;
+  const gap = 6;
+  const barW = Math.max(6, cW / n - gap);
+  let bars = '', labels = '';
+  months.forEach((m, i) => {
+    const x = PL + i * (cW / n) + ((cW / n) - barW) / 2;
+    const { wins, draws, losses } = byMonth[m];
+    let y = PT + cH;
+    [{ n: losses, color: '#e53e3e' }, { n: draws, color: '#a0aec0' }, { n: wins, color: '#38a169' }].forEach(seg => {
+      if (!seg.n) return;
+      const h = (seg.n / maxTotal) * cH;
+      y -= h;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${seg.color}"><title>${m}: ${seg.n}</title></rect>`;
+    });
+    const [yr, mo] = m.split('-');
+    labels += `<text x="${(x + barW / 2).toFixed(1)}" y="${PT + cH + 14}" font-size="9" fill="#9f7aea" text-anchor="middle" font-weight="600">${monthShort[+mo - 1]} ${yr.slice(2)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+    <line x1="${PL}" y1="${PT + cH}" x2="${W - PR}" y2="${PT + cH}" stroke="#e2e8f0" stroke-width="1"/>
+    ${bars}${labels}
+  </svg>`;
+}
+
+function renderClubPlayerTournamentTable(tournaments) {
+  if (!tournaments.length) {
+    return `<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:24px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני תחרויות</div>`;
+  }
+  const sorted = tournaments.slice().sort((a, b) => (cpDdmmyyyyToIso(b.date) || '').localeCompare(cpDdmmyyyyToIso(a.date) || ''));
+  const rows = sorted.map((t, i) => {
+    const changeNum = t.ratingChange;
+    const changeColor = changeNum > 0 ? '#276749' : changeNum < 0 ? '#c53030' : '#718096';
+    const changeStr = t.ratingChangeRaw || (changeNum != null ? String(changeNum) : '—');
+    const badges = [
+      t.wins ? `<span style="background:#f0fff4;color:#276749;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${t.wins}נ</span>` : '',
+      t.draws ? `<span style="background:#f7fafc;color:#4a5568;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${t.draws}ת</span>` : '',
+      t.losses ? `<span style="background:#fff5f5;color:#c53030;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${t.losses}ה</span>` : '',
+    ].filter(Boolean).join(' ');
+    const pendingBadge = t.isPending ? `<span style="background:#fefcbf;color:#744210;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-inline-start:6px">בעדכון הבא</span>` : '';
+    const newBadge = i === 0 ? `<span style="background:#ebf8ff;color:#2b6cb0;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-inline-start:6px">חדש</span>` : '';
+    return `
+      <tr style="border-bottom:1px solid #f0f4f8">
+        <td style="padding:9px 12px;font-size:12px;color:#718096;white-space:nowrap">${t.date}</td>
+        <td style="padding:9px 12px;font-size:13px">${t.name || '—'}${newBadge}${pendingBadge}</td>
+        <td style="padding:9px 12px;text-align:center;font-size:13px">${t.games || '—'}</td>
+        <td style="padding:9px 12px;text-align:center;white-space:nowrap">${badges || '—'}</td>
+        <td style="padding:9px 12px;text-align:center;font-weight:700;color:${changeColor};font-size:13px">${changeStr}</td>
+      </tr>`;
+  }).join('');
+  return `
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
+      <div style="padding:12px 16px;font-size:14px;font-weight:700;color:#2d3748;border-bottom:1px solid #e2e8f0">תוצאות טורנירים</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f7fafc">
+            <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#a0aec0">תאריך</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#a0aec0">טורניר</th>
+            <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#a0aec0">משחקים</th>
+            <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#a0aec0">נ/ת/ה</th>
+            <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#a0aec0">שינוי</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}

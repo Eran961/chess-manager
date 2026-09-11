@@ -302,6 +302,7 @@ const PERMISSION_TABS = [
   { key: 'saturday',         label: '🏅 מפגשי ליגה',        instructorDefault: false },
   { key: 'prospects',        label: '🌟 מצטייני גנים',      instructorDefault: false },
   { key: 'youth-players',    label: '👦 שחקני נוער',        instructorDefault: false },
+  { key: 'club-players',     label: '🎖️ שחקני המועדון',    instructorDefault: false },
   { key: 'audit',            label: '📊 פעילות מדריכים',    instructorDefault: false },
   { key: 'schedule-editor',  label: '📅 לוח חוגים',         instructorDefault: false },
   { key: 'site-content',     label: '📝 עמוד הבית',         instructorDefault: false },

@@ -1703,6 +1703,15 @@ if (currentUser?.role === 'admin') {
   youthPanel.className = 'tab-panel'; youthPanel.id = 'panel-youth-players';
   youthPanel.innerHTML = buildYouthPlayersHTML();
   content.appendChild(youthPanel);
+
+  const clubPlayersBtn = document.createElement('button');
+  clubPlayersBtn.className = 'tab-btn'; clubPlayersBtn.dataset.tab = 'club-players'; clubPlayersBtn.textContent = '🎖️ שחקני המועדון';
+  clubPlayersBtn.onclick = () => { switchTab('club-players'); initClubPlayersTab(); };
+  tabsBar.appendChild(clubPlayersBtn);
+  const clubPlayersPanel = document.createElement('div');
+  clubPlayersPanel.className = 'tab-panel'; clubPlayersPanel.id = 'panel-club-players';
+  clubPlayersPanel.innerHTML = renderClubPlayersPanel();
+  content.appendChild(clubPlayersPanel);
 }
 
 if (currentUser?.role === 'admin') {
@@ -1962,6 +1971,7 @@ function buildTopNav() {
   // Players hub
   const playerCards = [];
   if (isAdmin || hasTabPerm('youth-players')) playerCards.push({ icon: '👦', label: 'שחקני נוער', tab: 'youth-players' });
+  if (isAdmin || hasTabPerm('club-players')) playerCards.push({ icon: '🎖️', label: 'שחקני המועדון', tab: 'club-players' });
   if (isAdmin || hasTabPerm('prospects')) playerCards.push({ icon: '🌟', label: 'מצטייני גנים', tab: 'prospects' });
   if (playerCards.length > 0) {
     mapCat(playerCards.map(c => c.tab), 'cat-players');
@@ -2129,7 +2139,7 @@ function injectPermissionTabs() {
   const hasLeague = ['league-adults','league-women','league-youth','league-stars','saturday'].some(k => grantedExtras.includes(k));
   const hasTourn  = ['friday','club-tournaments'].some(k => grantedExtras.includes(k));
   const hasGanim  = grantedExtras.includes('prospects');
-  const hasShach  = grantedExtras.includes('youth-players');
+  const hasShach  = grantedExtras.includes('youth-players') || grantedExtras.includes('club-players');
   const hasKlim   = grantedExtras.includes('hours');
   const hasCamps  = grantedExtras.includes('camps');
   const hasMaarechet = ['audit','schedule-editor','site-content','site-tournaments','site-contact','site-whatsapp','news-posts','club-people','tourn-cal','monthly-cal'].some(k => grantedExtras.includes(k));
@@ -2174,7 +2184,12 @@ function injectPermissionTabs() {
 
   if (hasShach) {
     addLabel('שחקנים');
-    addTab('youth-players','👦 שחקני נוער', () => { switchTab('youth-players'); loadYouthPlayers(); }, buildYouthPlayersHTML());
+    if (grantedExtras.includes('youth-players')) {
+      addTab('youth-players','👦 שחקני נוער', () => { switchTab('youth-players'); loadYouthPlayers(); }, buildYouthPlayersHTML());
+    }
+    if (grantedExtras.includes('club-players')) {
+      addTab('club-players','🎖️ שחקני המועדון', () => { switchTab('club-players'); initClubPlayersTab(); }, renderClubPlayersPanel());
+    }
   }
 
   if (hasKlim || hasCamps) {
