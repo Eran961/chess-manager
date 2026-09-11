@@ -1697,11 +1697,11 @@ if (currentUser?.role === 'admin') {
 
   const youthBtn = document.createElement('button');
   youthBtn.className = 'tab-btn'; youthBtn.dataset.tab = 'youth-players'; youthBtn.textContent = '👦 שחקני נוער';
-  youthBtn.onclick = () => { switchTab('youth-players'); loadYouthPlayers(); };
+  youthBtn.onclick = () => { switchTab('youth-players'); initYouthTrackingTab(); };
   tabsBar.appendChild(youthBtn);
   const youthPanel = document.createElement('div');
   youthPanel.className = 'tab-panel'; youthPanel.id = 'panel-youth-players';
-  youthPanel.innerHTML = buildYouthPlayersHTML();
+  youthPanel.innerHTML = renderYouthTrackingPanel();
   content.appendChild(youthPanel);
 
   const clubPlayersBtn = document.createElement('button');
@@ -2185,7 +2185,7 @@ function injectPermissionTabs() {
   if (hasShach) {
     addLabel('שחקנים');
     if (grantedExtras.includes('youth-players')) {
-      addTab('youth-players','👦 שחקני נוער', () => { switchTab('youth-players'); loadYouthPlayers(); }, buildYouthPlayersHTML());
+      addTab('youth-players','👦 שחקני נוער', () => { switchTab('youth-players'); initYouthTrackingTab(); }, renderYouthTrackingPanel());
     }
     if (grantedExtras.includes('club-players')) {
       addTab('club-players','🎖️ שחקני המועדון', () => { switchTab('club-players'); initClubPlayersTab(); }, renderClubPlayersPanel());
