@@ -22,8 +22,12 @@ function renderClubPlayersPanel() {
   // rounded corners), which was silently clipping the search-results dropdown
   // below, right where the card's own edge ends. Same visual look (green
   // header + white body, matching corner radii), built without the clipping.
+  // .att-card also hardcodes color:#1a202c (dark text) regardless of theme —
+  // without it here, text falls back to the surrounding dark-theme default
+  // (--text-primary, near-white), turning it invisible on this white card;
+  // restored explicitly below rather than re-adding the class.
   return `
-    <div style="max-width:920px">
+    <div style="max-width:920px;color:#1a202c">
       <div class="att-card-header" style="border-radius:12px 12px 0 0">🎖️ שחקני המועדון</div>
       <div style="background:white;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-radius:0 0 12px 12px;padding:20px">
         <div style="font-size:13px;color:#718096;margin-bottom:14px">
@@ -159,6 +163,17 @@ function cpTwoYearCutoff() {
   };
 }
 
+// Every number/list in this dashboard (metric cards, donut, both charts, the
+// tournament table) is scoped to the last two years — one shared filter so
+// none of them can quietly disagree with each other about the time range.
+function cpFilteredTournaments(tournaments) {
+  const cutoff = cpTwoYearCutoff();
+  return (tournaments || []).filter(t => {
+    const iso = cpDdmmyyyyToIso(t.updateDate) || cpDdmmyyyyToIso(t.date);
+    return iso && iso >= cutoff.iso;
+  });
+}
+
 function setClubPlayerChartMode(mode) {
   _clubPlayerChartMode = mode;
   const holder = document.getElementById('cp-history-chart');
@@ -168,12 +183,12 @@ window.setClubPlayerChartMode = setClubPlayerChartMode;
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 function renderClubPlayerDashboard(p) {
-  const tournaments = p.tournaments || [];
+  const cutoff = cpTwoYearCutoff();
+  const tournaments = cpFilteredTournaments(p.tournaments);
   const totalGames = tournaments.reduce((s, t) => s + (parseInt(t.games) || 0), 0);
   const totalWins = tournaments.reduce((s, t) => s + (t.wins || 0), 0);
   const totalLosses = tournaments.reduce((s, t) => s + (t.losses || 0), 0);
   const totalDraws = tournaments.reduce((s, t) => s + (t.draws || 0), 0);
-  const cutoff = cpTwoYearCutoff();
   const history = (p.ratingHistory || []).filter(r => r && r.date >= cutoff.iso).sort((a, b) => a.date.localeCompare(b.date));
   const cumulativeChange = history.length >= 2 ? history[history.length - 1].rating - history[0].rating : null;
 
@@ -279,11 +294,7 @@ function renderClubPlayerHistoryChart(p) {
   // view (this is what was actually breaking the bar view specifically:
   // every single month got its own label with nothing to skip overlap).
   const ratingHistoryRecent = (p.ratingHistory || []).filter(r => r && r.date >= cutoff.iso);
-  const tournamentsRecent = (p.tournaments || []).filter(t => {
-    const iso = cpDdmmyyyyToIso(t.updateDate) || cpDdmmyyyyToIso(t.date);
-    return iso && iso >= cutoff.iso;
-  });
-  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(ratingHistoryRecent) : clubPlayerMonthlyBarSvg(tournamentsRecent);
+  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(ratingHistoryRecent) : clubPlayerMonthlyBarSvg(cpFilteredTournaments(p.tournaments));
   return `
     <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;height:100%;box-sizing:border-box">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -408,13 +419,13 @@ const CP_TOURN_PAGE_SIZE = 10;
 function setClubPlayerTournPage(page) {
   _clubPlayerTournPage = page;
   const holder = document.getElementById('cp-tourn-table');
-  if (holder && _clubPlayerSelected) holder.innerHTML = renderClubPlayerTournamentTable(_clubPlayerSelected.tournaments || []);
+  if (holder && _clubPlayerSelected) holder.innerHTML = renderClubPlayerTournamentTable(cpFilteredTournaments(_clubPlayerSelected.tournaments));
 }
 window.setClubPlayerTournPage = setClubPlayerTournPage;
 
 function renderClubPlayerTournamentTable(tournaments) {
   if (!tournaments.length) {
-    return `<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:24px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני תחרויות</div>`;
+    return `<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:24px;text-align:center;color:#a0aec0;font-size:13px">אין תחרויות בשנתיים האחרונות</div>`;
   }
   const sorted = tournaments.slice().sort((a, b) => (cpDdmmyyyyToIso(b.date) || '').localeCompare(cpDdmmyyyyToIso(a.date) || ''));
   const totalPages = Math.max(1, Math.ceil(sorted.length / CP_TOURN_PAGE_SIZE));
@@ -456,7 +467,7 @@ function renderClubPlayerTournamentTable(tournaments) {
 
   return `
     <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
-      <div style="padding:12px 16px;font-size:14px;font-weight:700;color:#2d3748;border-bottom:1px solid #e2e8f0">תוצאות טורנירים (${sorted.length})</div>
+      <div style="padding:12px 16px;font-size:14px;font-weight:700;color:#2d3748;border-bottom:1px solid #e2e8f0">תוצאות טורנירים — שנתיים אחרונות (${sorted.length})</div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:#f7fafc">
