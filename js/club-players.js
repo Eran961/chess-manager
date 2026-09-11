@@ -17,10 +17,15 @@ let _clubPlayerChartMode = 'line';  // 'line' (rating over time) | 'bar' (monthl
 let _clubPlayersOutsideClickBound = false;
 
 function renderClubPlayersPanel() {
+  // Deliberately NOT wrapped in .att-card (used everywhere else in the app) —
+  // that class sets overflow:hidden (needed elsewhere to clip its header's
+  // rounded corners), which was silently clipping the search-results dropdown
+  // below, right where the card's own edge ends. Same visual look (green
+  // header + white body, matching corner radii), built without the clipping.
   return `
-    <div class="att-card" style="max-width:920px">
-      <div class="att-card-header">🎖️ שחקני המועדון</div>
-      <div style="padding:20px">
+    <div style="max-width:920px">
+      <div class="att-card-header" style="border-radius:12px 12px 0 0">🎖️ שחקני המועדון</div>
+      <div style="background:white;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-radius:0 0 12px 12px;padding:20px">
         <div style="font-size:13px;color:#718096;margin-bottom:14px">
           חיפוש בזמן אמת מתוך שחקני מועדון השחמט ראשון לציון הרשומים באיגוד — הצגה בלבד, שום דבר לא נשמר.
         </div>
