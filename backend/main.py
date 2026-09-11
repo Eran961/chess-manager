@@ -79,38 +79,67 @@ def proxy(url: str = Query(...)):
 
 
 # ── Club players ───────────────────────────────────────────────────────────────
+# 24h cache — the roster changes rarely, and this table can run to 1000+ rows;
+# no reason to re-scrape it on every search-tab open the same day.
+_club_players_cache: dict = {}
+CLUB_PLAYERS_CACHE_TTL = 24 * 3600
+
 
 @app.get("/api/club-players")
 def club_players(clubId: int = Query(...)):
+    cached = _club_players_cache.get(clubId)
+    if cached and time.time() - cached["ts"] < CLUB_PLAYERS_CACHE_TTL:
+        return JSONResponse(content=cached["data"])
+
     url = f"https://www.chess.org.il/Clubs/Club.aspx?Id={clubId}&View=Players"
     try:
         html = fetch_url(url)
     except Exception as e:
+        if cached:
+            return JSONResponse(content=cached["data"])
         raise HTTPException(status_code=502, detail=str(e))
 
     soup = BeautifulSoup(html, "html.parser")
+    # Real column layout (verified against the live page): # | מספר שחקן |
+    # שם (link) | מד כושר | גיל | קבוצת ליגה | כרטיס שחמטאי.
+    #
+    # Two things NOT in this table must not leak in: (1) the page's separate
+    # "מורשה חתימה"/"מנהל ליגות"/"אחראי קבוצה" manager list — a totally
+    # different <li> repeater elsewhere on the page — used to get swept in
+    # by a page-wide <a href="Player.aspx?..."> search, showing the same
+    # person 2-3 extra times with no rating/age at all; scoping to this table
+    # specifically excludes it. (2) fixed-position cells instead of "scan
+    # every cell for a number that looks right" — the old approach could
+    # mistake a genuine ~1900-2099 rating for a birth year (there is no birth
+    # year column here at all, only age).
+    table = soup.find("table", id=re.compile(r"PlayersGrid", re.I))
+    if not table:
+        raise HTTPException(status_code=404, detail="Players table not found")
+
     players = []
-    for a in soup.find_all("a", href=re.compile(r"Player\.aspx\?Id=\d+", re.I)):
+    for tr in table.find_all("tr")[1:]:  # skip header row
+        cells = tr.find_all("td", recursive=False)
+        if len(cells) < 5:
+            continue
+        a = cells[2].find("a", href=re.compile(r"Player\.aspx\?Id=\d+", re.I))
+        if not a:
+            continue
         fed_id_m = re.search(r"Id=(\d+)", a["href"])
         if not fed_id_m:
             continue
-        fed_id = int(fed_id_m.group(1))
         name = clean_text(a)
         if not name or len(name) < 2:
             continue
-        row = a.find_parent("tr")
-        cells = [clean_text(td) for td in row.find_all("td")] if row else []
-        rating = next((int(c) for c in cells if re.fullmatch(r"\d{3,4}", c)), None)
-        birth = next((int(c) for c in cells if re.fullmatch(r"(19|20)\d{2}", c)), None)
-        gender_raw = next((c for c in cells if c in ("זכר", "נקבה", "M", "F")), None)
+        rating_txt = clean_text(cells[3])
+        age_txt = clean_text(cells[4])
         players.append({
-            "fedId": fed_id,
+            "fedId": int(fed_id_m.group(1)),
             "name": name,
-            "rating": rating,
-            "birthYear": birth,
-            "gender": gender_raw,
+            "rating": int(rating_txt) if rating_txt.isdigit() else None,
+            "age": int(age_txt) if age_txt.isdigit() else None,
         })
 
+    _club_players_cache[clubId] = {"data": players, "ts": time.time()}
     return JSONResponse(content=players)
 
 
@@ -697,6 +726,17 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
         if m:
             profile["fide"] = int(m.group(1))
 
+        # The FIDE *rating* above ("מד כושר FIDE") is a different number from
+        # the FIDE *player id* ("מספר שחקן פיד"ה") needed to link to a real
+        # profile at ratings.fide.com/profile/<id> — that id only exists as
+        # the href of its own link, not as parseable text, so it has to be
+        # found on the live element (first_td), not the flattened text blob.
+        fide_link = first_td.find("a", href=re.compile(r"ratings\.fide\.com/profile/(\d+)", re.I)) if first_td else None
+        if fide_link:
+            fide_id_m = re.search(r"profile/(\d+)", fide_link["href"])
+            if fide_id_m:
+                profile["fideId"] = int(fide_id_m.group(1))
+
         m = re.search(r"דרגה\s+(\S+)", text)
         if m:
             profile["grade"] = m.group(1)
@@ -707,13 +747,36 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
 
         # Gender is not explicit; infer from player number pattern or leave absent
 
-    # ── Tournament history from TournamentsGridView (all pages) ─────────────────
-    # Columns: תאריך התחלה | תאריך עדכון מד כושר | תחרות | משחקים | נקודות | רמת ביצוע | תוצאה | שינוי מד כושר
+    # ── Tournaments / leagues / rating history — three independent postback
+    # branches, each starting fresh from the SAME initial page load's form
+    # state (none of them read each other's result), so they don't need to
+    # run one after another — they were, purely because the code was written
+    # top to bottom. Running them on the existing thread pool cuts a full
+    # player-profile fetch from "one HTTP round trip per branch, in series"
+    # to "as slow as the single slowest branch."
     GRID_RE = re.compile(r"TournamentsGridView", re.I)
-    # UniqueID uses $ separators (table id uses _)
     tourn_table = soup.find("table", id=GRID_RE)
-    tournaments, max_page = _parse_tourn_rows(tourn_table)
 
+    futures = {
+        "tournaments": executor.submit(_fetch_tournaments_branch, soup, tourn_table, url),
+        "leagues": executor.submit(_fetch_leagues_branch, soup, url),
+        "ratingHistory": executor.submit(_fetch_rating_history_branch, soup, url),
+    }
+    for key, fut in futures.items():
+        try:
+            profile[key] = fut.result()
+        except Exception as exc:
+            print(f"[player-profile] {key} branch failed: {exc}")
+            profile[key] = []
+
+    return profile
+
+
+def _fetch_tournaments_branch(soup, tourn_table, url) -> list:
+    """Tournament history from TournamentsGridView, including pagination.
+    Columns: תאריך התחלה | תאריך עדכון מד כושר | תחרות | משחקים | נקודות | רמת ביצוע | תוצאה | שינוי מד כושר"""
+    GRID_RE = re.compile(r"TournamentsGridView", re.I)
+    tournaments, max_page = _parse_tourn_rows(tourn_table)
     if max_page > 1 and url:
         grid_unique_id = (tourn_table["id"].replace("_", "$")
                          if tourn_table and tourn_table.get("id") else
@@ -731,62 +794,60 @@ def parse_player_profile(html: str, fed_id: int, url: str = None) -> dict:
                 tournaments.extend(page_rows)
                 form_state = get_form_state(page_soup)
             except Exception as exc:
-                print(f"[player-profile] pagination page {page_num} failed: {exc}")
+                print(f"[player-profile] tournaments pagination page {page_num} failed: {exc}")
                 break
+    return tournaments
 
-    profile["tournaments"] = tournaments
 
-    # ── League history via ShowLeaguePanelButton postback ──────────────────────
-    if url:
-        try:
-            form_state = get_form_state(soup)
-            league_html = fetch_post(url, {
-                **form_state,
-                "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowLeaguePanelButton",
-                "__EVENTARGUMENT": "",
-            })
-            league_soup = BeautifulSoup(league_html, "html.parser")
-            profile["leagues"] = _parse_league_rows(league_soup)
-        except Exception as exc:
-            print(f"[player-profile] leagues fetch failed: {exc}")
-            profile["leagues"] = []
-    else:
-        profile["leagues"] = []
+def _fetch_leagues_branch(soup, url) -> list:
+    """League history via the ShowLeaguePanelButton postback."""
+    if not url:
+        return []
+    try:
+        form_state = get_form_state(soup)
+        league_html = fetch_post(url, {
+            **form_state,
+            "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowLeaguePanelButton",
+            "__EVENTARGUMENT": "",
+        })
+        league_soup = BeautifulSoup(league_html, "html.parser")
+        return _parse_league_rows(league_soup)
+    except Exception as exc:
+        print(f"[player-profile] leagues fetch failed: {exc}")
+        return []
 
-    # ── Rating history via ShowRatingButton postback ────────────────────────────
-    if url:
-        try:
-            form_state = get_form_state(soup)
-            rating_html = fetch_post(url, {
-                **form_state,
-                "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowRatingButton",
-                "__EVENTARGUMENT": "",
-            })
-            rating_soup = BeautifulSoup(rating_html, "html.parser")
-            rating_entries, max_r_page, rating_table_uid = _parse_rating_rows(rating_soup)
-            # Paginate if needed (older entries on page 2+)
-            if max_r_page > 1 and rating_table_uid:
-                r_form_state = get_form_state(rating_soup)
-                for rp in range(2, max_r_page + 1):
-                    try:
-                        rp_html = fetch_post(url, {**r_form_state,
-                                                   "__EVENTTARGET": rating_table_uid,
-                                                   "__EVENTARGUMENT": f"Page${rp}"})
-                        rp_soup = BeautifulSoup(rp_html, "html.parser")
-                        rp_entries, _, _ = _parse_rating_rows(rp_soup)
-                        rating_entries.extend(rp_entries)
-                        r_form_state = get_form_state(rp_soup)
-                    except Exception as exc:
-                        print(f"[player-profile] rating page {rp} failed: {exc}")
-                        break
-            profile["ratingHistory"] = rating_entries
-        except Exception as exc:
-            print(f"[player-profile] rating history fetch failed: {exc}")
-            profile["ratingHistory"] = []
-    else:
-        profile["ratingHistory"] = []
 
-    return profile
+def _fetch_rating_history_branch(soup, url) -> list:
+    """Rating history via the ShowRatingButton postback, including its own pagination."""
+    if not url:
+        return []
+    try:
+        form_state = get_form_state(soup)
+        rating_html = fetch_post(url, {
+            **form_state,
+            "__EVENTTARGET": "ctl00$ContentPlaceHolder1$PlayerFormView$ShowRatingButton",
+            "__EVENTARGUMENT": "",
+        })
+        rating_soup = BeautifulSoup(rating_html, "html.parser")
+        rating_entries, max_r_page, rating_table_uid = _parse_rating_rows(rating_soup)
+        if max_r_page > 1 and rating_table_uid:
+            r_form_state = get_form_state(rating_soup)
+            for rp in range(2, max_r_page + 1):
+                try:
+                    rp_html = fetch_post(url, {**r_form_state,
+                                               "__EVENTTARGET": rating_table_uid,
+                                               "__EVENTARGUMENT": f"Page${rp}"})
+                    rp_soup = BeautifulSoup(rp_html, "html.parser")
+                    rp_entries, _, _ = _parse_rating_rows(rp_soup)
+                    rating_entries.extend(rp_entries)
+                    r_form_state = get_form_state(rp_soup)
+                except Exception as exc:
+                    print(f"[player-profile] rating history page {rp} failed: {exc}")
+                    break
+        return rating_entries
+    except Exception as exc:
+        print(f"[player-profile] rating history fetch failed: {exc}")
+        return []
 
 
 def _parse_rating_rows(soup) -> tuple:
@@ -937,15 +998,30 @@ def _parse_tourn_rows(tourn_table) -> tuple:
     return tournaments, max_page
 
 
+# 24h cache, same reasoning as club_players — a player's full profile (base
+# info + every tournament page + league + rating history postback) is the
+# most expensive scrape in this file; without this, looking the same player
+# up twice in one day re-does all of it from scratch.
+_player_profile_cache: dict = {}
+PLAYER_PROFILE_CACHE_TTL = 24 * 3600
+
+
 @app.get("/api/player-profile")
 def player_profile(fedId: int = Query(...)):
     """Fetch and parse a player profile from chess.org.il (all tournament pages)."""
+    cached = _player_profile_cache.get(fedId)
+    if cached and time.time() - cached["ts"] < PLAYER_PROFILE_CACHE_TTL:
+        return JSONResponse(content=cached["data"])
+
     url = f"https://www.chess.org.il/Players/Player.aspx?Id={fedId}"
     try:
         html = fetch_url(url)
     except Exception as e:
+        if cached:
+            return JSONResponse(content=cached["data"])
         raise HTTPException(status_code=502, detail=str(e))
     data = parse_player_profile(html, fedId, url=url)
+    _player_profile_cache[fedId] = {"data": data, "ts": time.time()}
     return JSONResponse(content=data)
 
 
