@@ -13,7 +13,6 @@ const CLUB_PLAYERS_CLUB_ID = 31;
 let _clubPlayersRoster = null;      // cached [{fedId, name, rating, age}, ...]
 let _clubPlayersRosterLoading = false;
 let _clubPlayerSelected = null;     // full profile of the currently displayed player
-let _clubPlayerChartMode = 'line';  // 'line' (rating over time) | 'bar' (monthly W/D/L)
 let _clubPlayersOutsideClickBound = false;
 
 function renderClubPlayersPanel() {
@@ -124,19 +123,12 @@ async function selectClubPlayer(fedId) {
     const data = await res.json();
     if (!data.name) throw new Error('שחקן לא נמצא');
     _clubPlayerSelected = data;
-    _clubPlayerChartMode = 'line';
-    _clubPlayerTournPage = 1;
-    dash.innerHTML = renderClubPlayerDashboard(data);
+    dash.innerHTML = renderClubPlayerDashboard(data, 'cp', () => selectClubPlayer(fedId));
   } catch (e) {
     dash.innerHTML = `<div style="text-align:center;padding:50px;color:#c53030">❌ שגיאה בשליפת נתוני השחקן: ${e.message}</div>`;
   }
 }
 window.selectClubPlayer = selectClubPlayer;
-
-function refreshClubPlayer() {
-  if (_clubPlayerSelected?.fedId != null) selectClubPlayer(_clubPlayerSelected.fedId);
-}
-window.refreshClubPlayer = refreshClubPlayer;
 
 // ── Small date helper: backend tournament dates are DD/MM/YYYY ──────────────
 function cpDdmmyyyyToIso(raw) {
@@ -229,15 +221,36 @@ function cpMonthLabelShort(iso) {
   return `${CP_MONTH_NAMES_SHORT[+m - 1]} '${y.slice(2)}`;
 }
 
-function setClubPlayerChartMode(mode) {
-  _clubPlayerChartMode = mode;
-  const holder = document.getElementById('cp-history-chart');
-  if (holder && _clubPlayerSelected) holder.innerHTML = renderClubPlayerHistoryChart(_clubPlayerSelected);
+function setClubPlayerChartMode(mode, instanceId) {
+  instanceId = instanceId || 'cp';
+  _cpGetState(instanceId).chartMode = mode;
+  const holder = document.getElementById(`${instanceId}-history-chart`);
+  const profile = _cpGetState(instanceId).profile;
+  if (holder && profile) holder.innerHTML = renderClubPlayerHistoryChart(profile, instanceId);
 }
 window.setClubPlayerChartMode = setClubPlayerChartMode;
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
-function renderClubPlayerDashboard(p) {
+// This whole dashboard (header/metrics/donut/chart/table) has one caller
+// today (selectClubPlayer, below) but is written to support more than one —
+// the שחקני המועדון search view AND the future per-tracked-player page can
+// both have one of these live on screen at once (tab panels aren't removed
+// from the DOM when hidden, just display:none'd), so nothing here may use a
+// bare id="..." that a second instance would collide with. instanceId scopes
+// every element id and every piece of interactive state (chart mode, hover
+// data, table page); reloadFn is what the header's refresh button calls —
+// the caller supplies it since only it knows how to re-fetch this player.
+let _cpChartState = {};
+function _cpGetState(instanceId) {
+  if (!_cpChartState[instanceId]) _cpChartState[instanceId] = { chartMode: 'line', tournPage: 1, lineChartData: null, profile: null, reloadFn: null };
+  return _cpChartState[instanceId];
+}
+
+function renderClubPlayerDashboard(p, instanceId, reloadFn) {
+  instanceId = instanceId || 'cp';
+  const st = _cpGetState(instanceId);
+  st.profile = p;
+  if (reloadFn) st.reloadFn = reloadFn;
   const cutoff = cpTwoYearCutoff();
   const tournaments = cpFilteredTournaments(p.tournaments);
   const totalGames = tournaments.reduce((s, t) => s + (parseInt(t.games) || 0), 0);
@@ -248,16 +261,16 @@ function renderClubPlayerDashboard(p) {
   const cumulativeChange = history.length >= 2 ? history[history.length - 1].rating - history[0].rating : null;
 
   return `
-    ${renderClubPlayerHeader(p)}
+    ${renderClubPlayerHeader(p, instanceId)}
     ${renderClubPlayerMetricCards(p, totalGames, tournaments.length, cumulativeChange)}
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
       <div style="flex:1;min-width:240px">${renderClubPlayerWldDonut(totalWins, totalDraws, totalLosses)}</div>
-      <div style="flex:2;min-width:320px" id="cp-history-chart">${renderClubPlayerHistoryChart(p)}</div>
+      <div style="flex:2;min-width:320px" id="${instanceId}-history-chart">${renderClubPlayerHistoryChart(p, instanceId)}</div>
     </div>
-    <div id="cp-tourn-table">${renderClubPlayerTournamentTable(tournaments)}</div>`;
+    <div id="${instanceId}-tourn-table">${renderClubPlayerTournamentTable(tournaments, instanceId)}</div>`;
 }
 
-function renderClubPlayerHeader(p) {
+function renderClubPlayerHeader(p, instanceId) {
   return `
     <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
       <div>
@@ -274,9 +287,15 @@ function renderClubPlayerHeader(p) {
           <a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="font-size:13px;color:#2b6cb0;text-decoration:none">🔗 chess.org.il</a>
         </div>
       </div>
-      <button onclick="refreshClubPlayer()" title="רענן נתונים" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px">🔄</button>
+      <button onclick="refreshClubPlayerInstance('${instanceId}')" title="רענן נתונים" style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px">🔄</button>
     </div>`;
 }
+
+function refreshClubPlayerInstance(instanceId) {
+  const fn = _cpGetState(instanceId).reloadFn;
+  if (fn) fn();
+}
+window.refreshClubPlayerInstance = refreshClubPlayerInstance;
 
 function renderClubPlayerMetricCards(p, totalGames, totalTournaments, cumulativeChange) {
   const sinceLabel = `מאז ${cpTwoYearCutoff().label}`;
@@ -340,19 +359,20 @@ function renderClubPlayerWldDonut(wins, draws, losses) {
     </div>`;
 }
 
-function renderClubPlayerHistoryChart(p) {
+function renderClubPlayerHistoryChart(p, instanceId) {
   const cutoff = cpTwoYearCutoff();
+  const mode = _cpGetState(instanceId).chartMode;
   const toggle = `
     <div style="display:flex;gap:4px">
-      <button onclick="setClubPlayerChartMode('line')" title="גרף קו" style="background:${_clubPlayerChartMode === 'line' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'line' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📈</button>
-      <button onclick="setClubPlayerChartMode('bar')" title="גרף עמודות" style="background:${_clubPlayerChartMode === 'bar' ? '#553c9a' : '#f7fafc'};color:${_clubPlayerChartMode === 'bar' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📊</button>
+      <button onclick="setClubPlayerChartMode('line','${instanceId}')" title="גרף קו" style="background:${mode === 'line' ? '#553c9a' : '#f7fafc'};color:${mode === 'line' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📈</button>
+      <button onclick="setClubPlayerChartMode('bar','${instanceId}')" title="גרף עמודות" style="background:${mode === 'bar' ? '#553c9a' : '#f7fafc'};color:${mode === 'bar' ? 'white' : '#4a5568'};border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px">📊</button>
     </div>`;
   // Both views are built on the same fixed month grid (cpMonthGrid) so they
   // always start at the same cutoff month regardless of where each one's
   // real data happens to begin — passing the full (unfiltered) history/
   // tournaments in lets each one do its own grid-based windowing, the line
   // chart's needing to look further back to seed carry-forward correctly.
-  const body = _clubPlayerChartMode === 'line' ? clubPlayerRatingLineSvg(p.ratingHistory || []) : clubPlayerMonthlyBarSvg(p.tournaments || []);
+  const body = mode === 'line' ? clubPlayerRatingLineSvg(p.ratingHistory || [], instanceId) : clubPlayerMonthlyBarSvg(p.tournaments || []);
   return `
     <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;height:100%;box-sizing:border-box">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -364,15 +384,10 @@ function renderClubPlayerHistoryChart(p) {
     </div>`;
 }
 
-// One shared, module-level record of the currently-rendered line chart's
-// point positions/values, in the SVG's own coordinate space — read by
-// cpChartHover() below on every pointer move so it doesn't have to
-// recompute chart geometry on each event, just look up the nearest point.
-let _cpLineChartData = null;
-
-function clubPlayerRatingLineSvg(ratingHistoryAll) {
+function clubPlayerRatingLineSvg(ratingHistoryAll, instanceId) {
+  const st = _cpGetState(instanceId);
   const chrono = cpMonthlyRatingSeries(ratingHistoryAll);
-  if (!chrono.length) { _cpLineChartData = null; return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני היסטוריית דירוג</div>`; }
+  if (!chrono.length) { st.lineChartData = null; return `<div style="padding:30px;text-align:center;color:#a0aec0;font-size:13px">אין נתוני היסטוריית דירוג</div>`; }
   const ratings = chrono.map(r => r.rating);
   const pad = 25;
   const minR = Math.min(...ratings) - pad, maxR = Math.max(...ratings) + pad;
@@ -421,31 +436,31 @@ function clubPlayerRatingLineSvg(ratingHistoryAll) {
     dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius}" fill="${color}" stroke="white" stroke-width="1.6"/>`;
   });
 
-  _cpLineChartData = {
+  st.lineChartData = {
     W, H, plotTop: PT, plotBottom: PT + cH,
     points: chrono.map((r, i) => ({ x: pts[i][0], y: pts[i][1], date: r.date, rating: r.rating, isReal: r.isReal })),
   };
 
-  return `<svg id="cp-line-svg" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet"
+  return `<svg id="${instanceId}-line-svg" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet"
       style="display:block;overflow:visible;max-width:100%;height:auto;touch-action:none">
-    <defs><linearGradient id="cp-rg" x1="0" y1="0" x2="0" y2="1">
+    <defs><linearGradient id="${instanceId}-rg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#805ad5" stop-opacity="0.30"/>
       <stop offset="100%" stop-color="#805ad5" stop-opacity="0.02"/>
     </linearGradient></defs>
     ${grids}
-    <path d="${areaPath}" fill="url(#cp-rg)" stroke="none"/>
+    <path d="${areaPath}" fill="url(#${instanceId}-rg)" stroke="none"/>
     <path d="${linePath}" fill="none" stroke="#6b46c1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
     ${dots}${xLabels}
-    <line id="cp-line-crosshair" x1="0" y1="${PT}" x2="0" y2="${PT + cH}" stroke="#805ad5" stroke-width="1" stroke-dasharray="3,3" opacity="0" pointer-events="none"/>
-    <circle id="cp-line-active-dot" r="5.5" fill="#553c9a" stroke="white" stroke-width="2" opacity="0" pointer-events="none"/>
-    <g id="cp-line-tooltip" opacity="0" pointer-events="none">
-      <rect id="cp-line-tooltip-bg" width="76" height="38" rx="7" fill="#2d3748"/>
-      <text id="cp-line-tooltip-rating" text-anchor="middle" font-size="13" font-weight="800" fill="white"></text>
-      <text id="cp-line-tooltip-month" text-anchor="middle" font-size="9.5" fill="#cbd5e0"></text>
+    <line id="${instanceId}-line-crosshair" x1="0" y1="${PT}" x2="0" y2="${PT + cH}" stroke="#805ad5" stroke-width="1" stroke-dasharray="3,3" opacity="0" pointer-events="none"/>
+    <circle id="${instanceId}-line-active-dot" r="5.5" fill="#553c9a" stroke="white" stroke-width="2" opacity="0" pointer-events="none"/>
+    <g id="${instanceId}-line-tooltip" opacity="0" pointer-events="none">
+      <rect id="${instanceId}-line-tooltip-bg" width="76" height="38" rx="7" fill="#2d3748"/>
+      <text id="${instanceId}-line-tooltip-rating" text-anchor="middle" font-size="13" font-weight="800" fill="white"></text>
+      <text id="${instanceId}-line-tooltip-month" text-anchor="middle" font-size="9.5" fill="#cbd5e0"></text>
     </g>
     <rect x="0" y="0" width="${W}" height="${H}" fill="transparent" style="cursor:crosshair"
-      onmousemove="cpChartHover(event)" onmouseleave="cpChartHoverEnd()"
-      ontouchstart="cpChartHover(event)" ontouchmove="cpChartHover(event)" ontouchend="cpChartHoverEnd()"/>
+      onmousemove="cpChartHover(event,'${instanceId}')" onmouseleave="cpChartHoverEnd('${instanceId}')"
+      ontouchstart="cpChartHover(event,'${instanceId}')" ontouchmove="cpChartHover(event,'${instanceId}')" ontouchend="cpChartHoverEnd('${instanceId}')"/>
   </svg>`;
 }
 
@@ -456,9 +471,10 @@ function clubPlayerRatingLineSvg(ratingHistoryAll) {
 // line + highlighted dot + floating tooltip box there. getScreenCTM() does
 // the CSS-pixel-to-SVG-viewBox-unit conversion so this stays correct at any
 // rendered size.
-function cpChartHover(event) {
-  if (!_cpLineChartData) return;
-  const svg = document.getElementById('cp-line-svg');
+function cpChartHover(event, instanceId) {
+  const st = _cpGetState(instanceId);
+  if (!st.lineChartData) return;
+  const svg = document.getElementById(`${instanceId}-line-svg`);
   if (!svg) return;
   const touch = event.touches && event.touches[0];
   if (touch && event.cancelable) event.preventDefault(); // block page scroll while dragging across the chart
@@ -472,19 +488,19 @@ function cpChartHover(event) {
   if (!ctm) return;
   const svgP = pt.matrixTransform(ctm.inverse());
 
-  const { points, W, plotTop, plotBottom } = _cpLineChartData;
+  const { points, W, plotTop, plotBottom } = st.lineChartData;
   let nearest = points[0], minDist = Infinity;
   for (const p of points) {
     const d = Math.abs(p.x - svgP.x);
     if (d < minDist) { minDist = d; nearest = p; }
   }
 
-  const crosshair = document.getElementById('cp-line-crosshair');
-  const dot = document.getElementById('cp-line-active-dot');
-  const tooltipG = document.getElementById('cp-line-tooltip');
-  const tooltipBg = document.getElementById('cp-line-tooltip-bg');
-  const tooltipRating = document.getElementById('cp-line-tooltip-rating');
-  const tooltipMonth = document.getElementById('cp-line-tooltip-month');
+  const crosshair = document.getElementById(`${instanceId}-line-crosshair`);
+  const dot = document.getElementById(`${instanceId}-line-active-dot`);
+  const tooltipG = document.getElementById(`${instanceId}-line-tooltip`);
+  const tooltipBg = document.getElementById(`${instanceId}-line-tooltip-bg`);
+  const tooltipRating = document.getElementById(`${instanceId}-line-tooltip-rating`);
+  const tooltipMonth = document.getElementById(`${instanceId}-line-tooltip-month`);
   if (!crosshair || !dot || !tooltipG || !tooltipBg || !tooltipRating || !tooltipMonth) return;
 
   crosshair.setAttribute('x1', nearest.x); crosshair.setAttribute('x2', nearest.x); crosshair.setAttribute('opacity', '1');
@@ -505,10 +521,10 @@ function cpChartHover(event) {
 }
 window.cpChartHover = cpChartHover;
 
-function cpChartHoverEnd() {
-  const crosshair = document.getElementById('cp-line-crosshair');
-  const dot = document.getElementById('cp-line-active-dot');
-  const tooltipG = document.getElementById('cp-line-tooltip');
+function cpChartHoverEnd(instanceId) {
+  const crosshair = document.getElementById(`${instanceId}-line-crosshair`);
+  const dot = document.getElementById(`${instanceId}-line-active-dot`);
+  const tooltipG = document.getElementById(`${instanceId}-line-tooltip`);
   if (crosshair) crosshair.setAttribute('opacity', '0');
   if (dot) dot.setAttribute('opacity', '0');
   if (tooltipG) tooltipG.setAttribute('opacity', '0');
@@ -568,25 +584,26 @@ function clubPlayerMonthlyBarSvg(tournamentsAll) {
   </svg>`;
 }
 
-let _clubPlayerTournPage = 1;
 const CP_TOURN_PAGE_SIZE = 10;
 
-function setClubPlayerTournPage(page) {
-  _clubPlayerTournPage = page;
-  const holder = document.getElementById('cp-tourn-table');
-  if (holder && _clubPlayerSelected) holder.innerHTML = renderClubPlayerTournamentTable(cpFilteredTournaments(_clubPlayerSelected.tournaments));
+function setClubPlayerTournPage(page, instanceId) {
+  const st = _cpGetState(instanceId);
+  st.tournPage = page;
+  const holder = document.getElementById(`${instanceId}-tourn-table`);
+  if (holder && st.profile) holder.innerHTML = renderClubPlayerTournamentTable(cpFilteredTournaments(st.profile.tournaments), instanceId);
 }
 window.setClubPlayerTournPage = setClubPlayerTournPage;
 
-function renderClubPlayerTournamentTable(tournaments) {
+function renderClubPlayerTournamentTable(tournaments, instanceId) {
+  const st = _cpGetState(instanceId);
   if (!tournaments.length) {
     return `<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:24px;text-align:center;color:#a0aec0;font-size:13px">אין תחרויות בשנתיים האחרונות</div>`;
   }
   const sorted = tournaments.slice().sort((a, b) => (cpDdmmyyyyToIso(b.date) || '').localeCompare(cpDdmmyyyyToIso(a.date) || ''));
   const totalPages = Math.max(1, Math.ceil(sorted.length / CP_TOURN_PAGE_SIZE));
-  if (_clubPlayerTournPage > totalPages) _clubPlayerTournPage = totalPages;
-  if (_clubPlayerTournPage < 1) _clubPlayerTournPage = 1;
-  const startIdx = (_clubPlayerTournPage - 1) * CP_TOURN_PAGE_SIZE;
+  if (st.tournPage > totalPages) st.tournPage = totalPages;
+  if (st.tournPage < 1) st.tournPage = 1;
+  const startIdx = (st.tournPage - 1) * CP_TOURN_PAGE_SIZE;
   const pageItems = sorted.slice(startIdx, startIdx + CP_TOURN_PAGE_SIZE);
 
   const rows = pageItems.map((t, i) => {
@@ -619,11 +636,11 @@ function renderClubPlayerTournamentTable(tournaments) {
 
   const pagerHtml = totalPages > 1 ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:10px;border-top:1px solid #f0f4f8">
-      <button onclick="setClubPlayerTournPage(${_clubPlayerTournPage - 1})" ${_clubPlayerTournPage === 1 ? 'disabled' : ''}
-        style="background:${_clubPlayerTournPage === 1 ? '#f7fafc' : '#553c9a'};color:${_clubPlayerTournPage === 1 ? '#cbd5e0' : 'white'};border:none;border-radius:6px;padding:5px 14px;cursor:${_clubPlayerTournPage === 1 ? 'default' : 'pointer'};font-size:13px;font-weight:600">הקודם</button>
-      <span style="font-size:13px;color:#718096">עמוד ${_clubPlayerTournPage} מתוך ${totalPages}</span>
-      <button onclick="setClubPlayerTournPage(${_clubPlayerTournPage + 1})" ${_clubPlayerTournPage === totalPages ? 'disabled' : ''}
-        style="background:${_clubPlayerTournPage === totalPages ? '#f7fafc' : '#553c9a'};color:${_clubPlayerTournPage === totalPages ? '#cbd5e0' : 'white'};border:none;border-radius:6px;padding:5px 14px;cursor:${_clubPlayerTournPage === totalPages ? 'default' : 'pointer'};font-size:13px;font-weight:600">הבא</button>
+      <button onclick="setClubPlayerTournPage(${st.tournPage - 1},'${instanceId}')" ${st.tournPage === 1 ? 'disabled' : ''}
+        style="background:${st.tournPage === 1 ? '#f7fafc' : '#553c9a'};color:${st.tournPage === 1 ? '#cbd5e0' : 'white'};border:none;border-radius:6px;padding:5px 14px;cursor:${st.tournPage === 1 ? 'default' : 'pointer'};font-size:13px;font-weight:600">הקודם</button>
+      <span style="font-size:13px;color:#718096">עמוד ${st.tournPage} מתוך ${totalPages}</span>
+      <button onclick="setClubPlayerTournPage(${st.tournPage + 1},'${instanceId}')" ${st.tournPage === totalPages ? 'disabled' : ''}
+        style="background:${st.tournPage === totalPages ? '#f7fafc' : '#553c9a'};color:${st.tournPage === totalPages ? '#cbd5e0' : 'white'};border:none;border-radius:6px;padding:5px 14px;cursor:${st.tournPage === totalPages ? 'default' : 'pointer'};font-size:13px;font-weight:600">הבא</button>
     </div>` : '';
 
   return `
