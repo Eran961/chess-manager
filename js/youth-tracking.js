@@ -136,6 +136,7 @@ function openYtAddPlayer() {
   // a filter set on a previous visit would keep silently filtering results
   // while its own input shows "הכל" again, invisible and confusing.
   _cpFilterState['yt-add'] = { ageMin: null, ageMax: null, ratingMin: null, ratingMax: null, gender: null };
+  _cpFilterBarOpen['yt-add'] = false;
   root.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <button onclick="renderYouthTracking()" style="background:none;border:none;color:#276749;font-size:13px;font-weight:700;cursor:pointer">→ ביטול</button>
@@ -171,23 +172,11 @@ function openYtAddPlayer() {
 }
 window.openYtAddPlayer = openYtAddPlayer;
 
-function onYtAddSearchInput(val) {
-  const resultsEl = document.getElementById('yt-add-search-results');
-  if (!resultsEl) return;
-  const q = (val || '').trim();
-  if (!q && !cpFilterActive('yt-add')) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
-  if (!_clubPlayersRoster) {
-    resultsEl.style.display = 'block';
-    resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">עדיין טוען את רשימת השחקנים...</div>';
-    return;
-  }
-  const matches = clubPlayerSearchAndFilter(q, 'yt-add') || [];
-  resultsEl.style.display = 'block';
-  if (!matches.length) {
-    resultsEl.innerHTML = `<div style="padding:10px 14px;color:#a0aec0;font-size:13px">לא נמצאו שחקנים תואמים${cpFilterActive('yt-add') ? ' לפי הסינון שנבחר' : ' במועדון'}</div>`;
-    return;
-  }
-  resultsEl.innerHTML = matches.map(p => {
+// Shared row markup for שחקני נוער's add-player list — used both by the live
+// name-only dropdown and by the explicit "חפש" results list (see
+// cpRenderFilterResultsBlock in club-players.js, which calls this by name).
+function ytRenderAddRows(matches) {
+  return matches.map(p => {
     const already = _ytTracked && _ytTracked[p.fedId];
     return `
     <div ${already ? '' : `onclick="addYtPlayer(${p.fedId},'${(p.name || '').replace(/'/g, "\\'")}')"`}
@@ -197,6 +186,26 @@ function onYtAddSearchInput(val) {
       <span style="font-size:12px;color:#718096;white-space:nowrap">${already ? 'כבר במעקב' : (p.rating ? 'מד כושר ' + p.rating : '')}${!already && p.age != null ? ' · גיל ' + p.age : ''}</span>
     </div>`;
   }).join('');
+}
+
+function onYtAddSearchInput(val) {
+  const resultsEl = document.getElementById('yt-add-search-results');
+  if (!resultsEl) return;
+  if (_cpFilterBarOpen['yt-add']) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; } // explicit חפש button owns results while filters are open
+  const q = (val || '').trim();
+  if (!q) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  if (!_clubPlayersRoster) {
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">עדיין טוען את רשימת השחקנים...</div>';
+    return;
+  }
+  const matches = _clubPlayersRoster.filter(p => p.name && clubPlayerNameMatches(p.name, q)).slice(0, 10);
+  resultsEl.style.display = 'block';
+  if (!matches.length) {
+    resultsEl.innerHTML = '<div style="padding:10px 14px;color:#a0aec0;font-size:13px">לא נמצאו שחקנים תואמים במועדון</div>';
+    return;
+  }
+  resultsEl.innerHTML = ytRenderAddRows(matches);
 }
 window.onYtAddSearchInput = onYtAddSearchInput;
 
