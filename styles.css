@@ -1404,6 +1404,19 @@
     .season-launch-flyers img { display:block; width:420px; max-width:100%; border-radius:14px; box-shadow:0 8px 28px rgba(0,0,0,0.35); cursor:zoom-in; transition:transform 0.2s; }
     .season-launch-flyers img:hover { transform:translateY(-4px); }
 
+    /* Full-site image viewer for the flyer photos (no download/new-tab —
+       stays inside the site, cycles between the two images). */
+    .season-lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:10000; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; }
+    .season-lightbox.open { display:flex; }
+    .season-lightbox img { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
+    .season-lightbox-close { position:absolute; top:18px; left:18px; background:rgba(255,255,255,0.15); border:none; color:white; font-size:20px; width:40px; height:40px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s; }
+    .season-lightbox-close:hover { background:rgba(255,255,255,0.28); }
+    .season-lightbox-arrow { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.15); border:none; color:white; font-size:20px; width:48px; height:48px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s; }
+    .season-lightbox-arrow:hover { background:rgba(255,255,255,0.28); }
+    .season-lightbox-arrow.prev { right:20px; }
+    .season-lightbox-arrow.next { left:20px; }
+    @media (max-width:600px) { .season-lightbox-arrow { width:38px; height:38px; font-size:16px; } .season-lightbox-arrow.prev { right:8px; } .season-lightbox-arrow.next { left:8px; } }
+
     /* Loading skeletons — shown briefly while the real content loads, instead of
        flashing stale/placeholder content that then gets swapped for the real thing. */
     .upcoming-card.skeleton { border-right-color:rgba(255,255,255,.15); cursor:default; }

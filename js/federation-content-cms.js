@@ -977,15 +977,45 @@ function renderSeasonLaunchContent(data) {
   const subEl = document.getElementById('season-launch-subtitle');
   if (subEl && data.subtitle) subEl.textContent = data.subtitle;
   const ctaEl = document.getElementById('season-launch-cta');
-  if (ctaEl && data.ctaText) ctaEl.textContent = data.ctaText;
+  if (ctaEl) {
+    if (data.ctaText) ctaEl.textContent = data.ctaText;
+    // Same club WhatsApp number the site's other wa.me links use (see
+    // applyWaMessage in auth-dashboard.js) — only the message text differs,
+    // and is specific to this button rather than the per-page floating one.
+    const waMsg = data.waMessage || SEASON_LAUNCH_DEFAULTS.waMessage;
+    ctaEl.href = 'https://wa.me/972559573758?text=' + encodeURIComponent(waMsg);
+  }
   [1, 2].forEach(function(n) {
     const key = 'image' + n;
     if (!data[key]) return;
     const img = document.getElementById('season-launch-img' + n);
-    if (!img) return;
-    img.src = data[key];
-    if (img.parentElement && img.parentElement.tagName === 'A') img.parentElement.href = data[key];
+    if (img) img.src = data[key];
   });
+}
+
+// ── Full-site lightbox for the two flyer images (see index.html for the
+// overlay markup) — reads whatever is currently in the #season-launch-imgN
+// <img> tags, so it automatically reflects an admin-uploaded replacement
+// image too, with nothing to keep in sync separately. ──
+let _slLightboxIdx = 0;
+window.openSeasonLightbox = function(n) {
+  _slLightboxIdx = n - 1;
+  _updateSeasonLightboxImg();
+  const box = document.getElementById('season-lightbox');
+  if (box) box.classList.add('open');
+};
+window.seasonLightboxNav = function(dir) {
+  _slLightboxIdx = (_slLightboxIdx + dir + 2) % 2;
+  _updateSeasonLightboxImg();
+};
+window.closeSeasonLightbox = function() {
+  const box = document.getElementById('season-lightbox');
+  if (box) box.classList.remove('open');
+};
+function _updateSeasonLightboxImg() {
+  const src = document.getElementById('season-launch-img' + (_slLightboxIdx + 1))?.src;
+  const img = document.getElementById('season-lightbox-img');
+  if (img && src) img.src = src;
 }
 
 function renderTournamentsContent(data) {
@@ -1543,6 +1573,7 @@ const SEASON_LAUNCH_DEFAULTS = {
   title: 'עונת החוגים 2026–2027 יוצאת לדרך!',
   subtitle: 'מיד לאחר חופשת הסוכות — בואו להיות חלק מהמשחק',
   ctaText: '📞 לפרטים נוספים ורישום',
+  waMessage: 'שלום, אני מעוניין/ת לשמוע עוד על עונת החוגים החדשה ולהירשם',
 };
 // Holds whatever image is currently staged for slot 1/2 (from Firebase on
 // open, or freshly picked via the file input) — kept out of the DOM entirely
@@ -1558,6 +1589,7 @@ function renderSeasonLaunchAdmin(data) {
   const title = data.title || SEASON_LAUNCH_DEFAULTS.title;
   const subtitle = data.subtitle || SEASON_LAUNCH_DEFAULTS.subtitle;
   const ctaText = data.ctaText || SEASON_LAUNCH_DEFAULTS.ctaText;
+  const waMessage = data.waMessage || SEASON_LAUNCH_DEFAULTS.waMessage;
   const inputStyle = 'width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box';
   return '<h4 style="margin:0 0 4px">🎉 עונת החוגים — קטע בעמוד הבית</h4>' +
     '<p style="font-size:12px;opacity:.6;margin:0 0 16px">מופיע מיד אחרי "הפעילויות הקרובות". בלי שמירה כאן, הקטע מוצג עם התוכן וברירת המחדל של הפלייר.</p>' +
@@ -1568,8 +1600,10 @@ function renderSeasonLaunchAdmin(data) {
     '<input id="sl-title" value="' + title.replace(/"/g, '&quot;') + '" style="' + inputStyle + '"></div>' +
     '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">שורת משנה</label>' +
     '<input id="sl-subtitle" value="' + subtitle.replace(/"/g, '&quot;') + '" style="' + inputStyle + '"></div>' +
-    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">טקסט כפתור (מוביל לעמוד "צרו קשר")</label>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">טקסט כפתור</label>' +
     '<input id="sl-cta" value="' + ctaText.replace(/"/g, '&quot;') + '" style="' + inputStyle + '"></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">💬 הודעת WhatsApp שתיפתח בלחיצה על הכפתור</label>' +
+    '<textarea id="sl-wa-message" rows="2" style="' + inputStyle + ';resize:vertical">' + waMessage.replace(/</g, '&lt;') + '</textarea></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">' +
     _slImageSlotHTML(1, _slImg1) +
@@ -1603,6 +1637,7 @@ window.saveSeasonLaunchContent = async function() {
     title: document.getElementById('sl-title').value.trim(),
     subtitle: document.getElementById('sl-subtitle').value.trim(),
     ctaText: document.getElementById('sl-cta').value.trim(),
+    waMessage: document.getElementById('sl-wa-message').value.trim(),
     image1: _slImg1 || null,
     image2: _slImg2 || null,
   };
