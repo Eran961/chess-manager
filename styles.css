@@ -1404,18 +1404,39 @@
     .season-launch-flyers img { display:block; width:420px; max-width:100%; border-radius:14px; box-shadow:0 8px 28px rgba(0,0,0,0.35); cursor:zoom-in; transition:transform 0.2s; }
     .season-launch-flyers img:hover { transform:translateY(-4px); }
 
-    /* Full-site image viewer for the flyer photos (no download/new-tab —
-       stays inside the site, cycles between the two images). */
-    .season-lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:10000; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; }
-    .season-lightbox.open { display:flex; }
-    .season-lightbox img { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
-    .season-lightbox-close { position:absolute; top:18px; left:18px; background:rgba(255,255,255,0.15); border:none; color:white; font-size:20px; width:40px; height:40px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s; }
-    .season-lightbox-close:hover { background:rgba(255,255,255,0.28); }
-    .season-lightbox-arrow { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.15); border:none; color:white; font-size:20px; width:48px; height:48px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s; }
-    .season-lightbox-arrow:hover { background:rgba(255,255,255,0.28); }
-    .season-lightbox-arrow.prev { right:20px; }
-    .season-lightbox-arrow.next { left:20px; }
-    @media (max-width:600px) { .season-lightbox-arrow { width:38px; height:38px; font-size:16px; } .season-lightbox-arrow.prev { right:8px; } .season-lightbox-arrow.next { left:8px; } }
+    /* Full-site image viewer — shared by the season-launch flyer AND activity
+       recap photos (two separate elements/ids, same look): no download, no
+       new tab, stays inside the site, cycles between an image set. */
+    .site-lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:10000; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; }
+    .site-lightbox.open { display:flex; }
+    .site-lightbox img { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
+    .site-lightbox-close { position:absolute; top:18px; left:18px; background:rgba(255,255,255,0.15); border:none; color:white; font-size:20px; width:40px; height:40px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s; }
+    .site-lightbox-close:hover { background:rgba(255,255,255,0.28); }
+    .site-lightbox-arrow { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.15); border:none; color:white; font-size:20px; width:48px; height:48px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s; }
+    .site-lightbox-arrow:hover { background:rgba(255,255,255,0.28); }
+    .site-lightbox-arrow.prev { right:20px; }
+    .site-lightbox-arrow.next { left:20px; }
+    @media (max-width:600px) { .site-lightbox-arrow { width:38px; height:38px; font-size:16px; } .site-lightbox-arrow.prev { right:8px; } .site-lightbox-arrow.next { left:8px; } }
+
+    /* ===== ACTIVITY RECAPS (עדכוני המועדון) ===== */
+    .activities-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:18px; padding:0 20px 32px; direction:rtl; }
+    .activity-card { background:var(--bg-card,rgba(255,255,255,.05)); border:1px solid rgba(255,255,255,0.08); border-radius:14px; overflow:hidden; cursor:pointer; transition:transform 0.2s; display:flex; flex-direction:column; }
+    .activity-card:hover { transform:translateY(-4px); }
+    .activity-card-img { width:100%; height:150px; object-fit:cover; display:block; background:rgba(255,255,255,.06); }
+    .activity-card-noimg { width:100%; height:150px; display:flex; align-items:center; justify-content:center; font-size:36px; background:rgba(255,255,255,.06); }
+    .activity-card-body { padding:14px 16px; flex:1; display:flex; flex-direction:column; }
+    .activity-card-date { font-size:12px; font-weight:700; color:#f97316; margin-bottom:6px; }
+    .activity-card-title { font-size:16px; font-weight:800; color:var(--text-primary,white); margin-bottom:6px; line-height:1.4; }
+    .activity-card-text { font-size:13px; color:var(--text-muted,rgba(255,255,255,.6)); line-height:1.6; flex:1; }
+    .activity-card-badge { margin-top:10px; font-size:12px; font-weight:700; }
+    .activity-detail { padding:0 20px 40px; direction:rtl; max-width:820px; margin:0 auto; }
+    .activity-detail-cover { width:100%; max-height:420px; object-fit:cover; border-radius:14px; cursor:zoom-in; margin-bottom:20px; }
+    .activity-detail-title { font-size:26px; font-weight:900; color:var(--text-primary,white); margin:0 0 6px; }
+    .activity-detail-date { font-size:14px; font-weight:700; color:#f97316; margin-bottom:18px; }
+    .activity-detail-body { font-size:16px; line-height:1.9; color:var(--text-primary,white); white-space:pre-wrap; margin-bottom:24px; }
+    .activity-detail-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+    .activity-detail-photos img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:10px; cursor:zoom-in; }
+    @media (max-width:600px) { .activities-grid { grid-template-columns:1fr 1fr; padding:0 12px 24px; gap:10px; } .activity-card-img,.activity-card-noimg { height:110px; } }
 
     /* Loading skeletons — shown briefly while the real content loads, instead of
        flashing stale/placeholder content that then gets swapped for the real thing. */
@@ -2037,6 +2058,11 @@
     body.light-mode .upcoming-card { background: white !important; border-color: #e2e8f0 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important; }
     body.light-mode .upcoming-title { color: #1a202c !important; }
     body.light-mode .season-launch-section { background: #f4f7fb !important; }
+    body.light-mode .activity-card { background: white !important; border-color: #e2e8f0 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important; }
+    body.light-mode .activity-card-title { color: #1a202c !important; }
+    body.light-mode .activity-card-text { color: #718096 !important; }
+    body.light-mode .activity-detail-title { color: #1a202c !important; }
+    body.light-mode .activity-detail-body { color: #2d3748 !important; }
     body.light-mode .testimonials-section { background: #f4f7fb !important; }
     body.light-mode .testimonial-card { background: white !important; border-color: #e2e8f0 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important; color: #1a202c !important; }
     body.light-mode .testi-dot { background:rgba(0,0,0,.18); }

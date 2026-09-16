@@ -447,6 +447,13 @@ async function loadNewsCarousel() {
 }
 window.loadNewsCarousel = loadNewsCarousel;
 
+// A post with a full body and/or extra photos is a full recap — its card
+// opens the recap on the site instead of (or in addition to) any external
+// link. A plain post (base fields only) behaves exactly like before.
+function newsPostHasFullContent(p) {
+  return !!((p.fullBody && p.fullBody.trim()) || (p.photos && p.photos.length));
+}
+
 function renderNewsCarousel() {
   const inner = document.getElementById('news-inner');
   const dotsEl = document.getElementById('news-dots');
@@ -458,10 +465,15 @@ function renderNewsCarousel() {
     const date  = p.date  ? `<div class="news-card-date">${p.date}</div>` : '';
     const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
     const body  = p.body  ? `<div class="news-card-text">${(p.body).replace(/\n/g,'<br>')}</div>` : '';
-    const linkAttr = p.link ? ('data-link="' + p.link + '" style="cursor:pointer"') : '';
-    const fbBadge  = p.link ? `<div style="margin-top:12px;font-size:13px;color:#4267B2;font-weight:600">&#x1F4D8; קרא עוד בפייסבוק &#x2197;</div>` : '';
-    const clickAttr = p.link ? 'onclick="newsCardClick(this)"' : '';
-    return `<div class="news-slide"><div class="news-card" ${linkAttr} ${clickAttr}>${img}<div class="news-card-body">${date}${title}${body}${fbBadge}</div></div></div>`;
+    const hasFull = newsPostHasFullContent(p);
+    const clickable = hasFull || p.link;
+    const clickAttr = hasFull ? `onclick="showSitePage('activities');openActivityDetail('${p.id}')"`
+                     : (p.link ? `data-link="${p.link}" onclick="newsCardClick(this)"` : '');
+    const styleAttr = clickable ? 'style="cursor:pointer"' : '';
+    const badge = hasFull
+      ? `<div style="margin-top:12px;font-size:13px;color:#f97316;font-weight:600">📖 קרא את הסקירה המלאה ←</div>`
+      : (p.link ? `<div style="margin-top:12px;font-size:13px;color:#4267B2;font-weight:600">&#x1F4D8; קרא עוד בפייסבוק &#x2197;</div>` : '');
+    return `<div class="news-slide"><div class="news-card" ${styleAttr} ${clickAttr}>${img}<div class="news-card-body">${date}${title}${body}${badge}</div></div></div>`;
   }).join('');
   if (dotsEl) dotsEl.innerHTML = _newsPosts.map((_,i) =>
     `<button class="news-dot${i===0?' active':''}" onclick="newsGoTo(${i})"></button>`).join('');
@@ -481,6 +493,144 @@ window.newsNav  = dir => { newsGoTo(_newsIdx + dir); restartNewsTimer(); };
 function startNewsTimer()   { clearInterval(_newsTimer); if (_newsPosts.length > 1) _newsTimer = setInterval(() => newsGoTo(_newsIdx + 1), 5000); }
 function restartNewsTimer() { startNewsTimer(); }
 window.newsCardClick = function(el) { const lnk = el.getAttribute('data-link'); if (lnk) window.open(lnk, '_blank'); };
+
+// ===== ACTIVITIES ARCHIVE (עדכוני המועדון) — public list + full-recap detail =====
+// Same newsPosts data as the homepage carousel, but unfiltered by `active`
+// (that flag only controls the homepage carousel — an update that rolled off
+// it should still be reachable here, not vanish) and sorted by date instead
+// of the carousel's manual `order`.
+let _activitiesData = null; // [{id, ...}, ...] once loaded
+let _activitiesView = 'list'; // 'list' | 'detail'
+let _activitiesDetailId = null;
+
+async function loadActivitiesPage() {
+  const root = document.getElementById('activities-root');
+  if (!root) return;
+  if (!_activitiesData) {
+    root.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5">טוען עדכונים...</div>';
+    try {
+      const snap = await db.ref('newsPosts').get();
+      _activitiesData = [];
+      if (snap.exists()) snap.forEach(c => _activitiesData.push({ id: c.key, ...c.val() }));
+      _activitiesData.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    } catch (e) {
+      root.innerHTML = `<div style="text-align:center;padding:40px;color:#fc8181">❌ שגיאה בטעינה: ${e.message}</div>`;
+      return;
+    }
+  }
+  if (_activitiesView === 'detail' && _activitiesDetailId) renderActivityDetailView();
+  else renderActivitiesListView();
+}
+window.loadActivitiesPage = loadActivitiesPage;
+
+function renderActivitiesListView() {
+  const root = document.getElementById('activities-root');
+  if (!root) return;
+  _activitiesView = 'list';
+  if (!_activitiesData.length) {
+    root.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5">אין עדכונים עדיין</div>';
+    return;
+  }
+  root.innerHTML = '<div class="activities-grid">' + _activitiesData.map(p => {
+    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="">` : `<div class="activity-card-noimg">📰</div>`;
+    const hasFull = newsPostHasFullContent(p);
+    const badge = hasFull
+      ? `<div class="activity-card-badge" style="color:#f97316">📖 סקירה מלאה ←</div>`
+      : (p.link ? `<div class="activity-card-badge" style="color:#4267B2">📘 קרא עוד בפייסבוק ↗</div>` : '');
+    const onclick = hasFull ? `openActivityDetail('${p.id}')` : (p.link ? `window.open('${p.link}','_blank')` : '');
+    return `<div class="activity-card" ${onclick ? `onclick="${onclick}"` : ''}>${img}
+      <div class="activity-card-body">
+        ${p.date ? `<div class="activity-card-date">${p.date}</div>` : ''}
+        <div class="activity-card-title">${p.title || ''}</div>
+        ${p.body ? `<div class="activity-card-text">${p.body}</div>` : ''}
+        ${badge}
+      </div></div>`;
+  }).join('') + '</div>';
+}
+
+// Opens (or switches to) the full-recap detail view for one post, updating
+// the URL to a shareable ?activity=<id> link without a page reload — so
+// visiting the same link later (e.g. pasted into Facebook/Instagram) lands
+// straight here (see the initAuth bootstrap in auth-dashboard.js).
+window.openActivityDetail = async function(id) {
+  if (!_activitiesData) {
+    try {
+      const snap = await db.ref('newsPosts').get();
+      _activitiesData = [];
+      if (snap.exists()) snap.forEach(c => _activitiesData.push({ id: c.key, ...c.val() }));
+      _activitiesData.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    } catch (e) { _activitiesData = []; }
+  }
+  _activitiesDetailId = id;
+  _activitiesView = 'detail';
+  renderActivityDetailView();
+  try {
+    const url = new URL(location.href);
+    url.searchParams.set('activity', id);
+    history.replaceState(null, '', url);
+  } catch (e) {}
+};
+
+function renderActivityDetailView() {
+  const root = document.getElementById('activities-root');
+  if (!root) return;
+  const post = (_activitiesData || []).find(p => p.id === _activitiesDetailId);
+  if (!post) {
+    root.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5">העדכון לא נמצא — ייתכן שהוסר</div>' +
+      '<div style="text-align:center"><button onclick="backToActivitiesList()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;cursor:pointer;font-weight:700">→ חזרה לרשימה</button></div>';
+    return;
+  }
+  const photos = post.photos || [];
+  const allImages = [post.imageData, ...photos.map(p => p.imageData)].filter(Boolean);
+  root.innerHTML = `
+    <div class="activity-detail">
+      <button onclick="backToActivitiesList()" style="background:none;border:none;color:#f97316;font-size:14px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px">→ חזרה לכל העדכונים</button>
+      ${post.imageData ? `<img class="activity-detail-cover" src="${post.imageData}" alt="" onclick="openActivityLightbox(0)">` : ''}
+      <div class="activity-detail-title">${post.title || ''}</div>
+      ${post.date ? `<div class="activity-detail-date">${post.date}</div>` : ''}
+      ${post.fullBody ? `<div class="activity-detail-body">${post.fullBody}</div>` : (post.body ? `<div class="activity-detail-body">${post.body}</div>` : '')}
+      ${photos.length ? `<div class="activity-detail-photos">${photos.map((ph, i) =>
+        `<img src="${ph.imageData}" alt="${ph.caption || ''}" onclick="openActivityLightbox(${i + (post.imageData ? 1 : 0)})" title="${ph.caption || ''}">`
+      ).join('')}</div>` : ''}
+      ${post.link ? `<a href="${post.link}" target="_blank" style="display:inline-block;color:#4267B2;font-weight:700;font-size:14px;text-decoration:none">&#x1F4D8; לפוסט המקורי בפייסבוק/אינסטגרם ↗</a>` : ''}
+    </div>`;
+  window._activityLightboxImages = allImages;
+}
+
+window.backToActivitiesList = function() {
+  _activitiesView = 'list';
+  _activitiesDetailId = null;
+  try {
+    const url = new URL(location.href);
+    url.searchParams.delete('activity');
+    history.replaceState(null, '', url);
+  } catch (e) {}
+  renderActivitiesListView();
+};
+
+// ── Lightbox for recap photos — dynamic image set (cover + extra photos),
+// unlike the fixed 2-slot season-launch one, but the same on-site overlay. ──
+let _activityLightboxIdx = 0;
+window.openActivityLightbox = function(idx) {
+  const images = window._activityLightboxImages || [];
+  if (!images.length) return;
+  _activityLightboxIdx = idx;
+  const img = document.getElementById('activity-lightbox-img');
+  if (img) img.src = images[_activityLightboxIdx];
+  const box = document.getElementById('activity-lightbox');
+  if (box) box.classList.add('open');
+};
+window.activityLightboxNav = function(dir) {
+  const images = window._activityLightboxImages || [];
+  if (!images.length) return;
+  _activityLightboxIdx = (_activityLightboxIdx + dir + images.length) % images.length;
+  const img = document.getElementById('activity-lightbox-img');
+  if (img) img.src = images[_activityLightboxIdx];
+};
+window.closeActivityLightbox = function() {
+  const box = document.getElementById('activity-lightbox');
+  if (box) box.classList.remove('open');
+};
 
 function compressImage(file, maxW=900, q=0.82) {
   return new Promise(resolve => {
@@ -515,11 +665,11 @@ async function loadNewsAdmin() {
   }
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <h3 style="margin:0;font-size:18px">📰 ניהול כתבות</h3>
-      <button onclick="openNewsModal(null)" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-weight:700;font-size:14px">+ כתבה חדשה</button>
+      <h3 style="margin:0;font-size:18px">📢 ניהול עדכונים</h3>
+      <button onclick="openNewsModal(null)" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-weight:700;font-size:14px">+ עדכון חדש</button>
     </div>
     ${posts.length === 0
-      ? '<div style="text-align:center;padding:40px;opacity:.5">אין כתבות עדיין. צור כתבה ראשונה!</div>'
+      ? '<div style="text-align:center;padding:40px;opacity:.5">אין עדכונים עדיין. צור עדכון ראשון!</div>'
       : posts.map(p => `
       <div style="display:flex;gap:14px;align-items:center;padding:14px;background:var(--bg-card);border-radius:12px;margin-bottom:10px">
         ${p.imageData
@@ -527,7 +677,7 @@ async function loadNewsAdmin() {
           : `<div style="width:80px;height:54px;background:rgba(255,255,255,.08);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px">📰</div>`}
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.title||'(ללא כותרת)'}</div>
-          <div style="font-size:12px;opacity:.55">${p.date||''} · ${p.active===false ? '<span style="color:#fc8181">מוסתר</span>' : '<span style="color:#68d391">פעיל</span>'}</div>
+          <div style="font-size:12px;opacity:.55">${p.date||''} · ${p.active===false ? '<span style="color:#fc8181">מוסתר בדף הבית</span>' : '<span style="color:#68d391">פעיל בדף הבית</span>'}${newsPostHasFullContent(p) ? ' · <span style="color:#f97316">📖 סקירה מלאה</span>' : ''}</div>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0">
           <button onclick="openNewsModal('${p.id}')" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:7px 12px;cursor:pointer;color:inherit;font-size:13px">✏️</button>
@@ -537,17 +687,25 @@ async function loadNewsAdmin() {
 }
 window.loadNewsAdmin = loadNewsAdmin;
 
+// Photos staged for whichever עדכון modal is currently open — kept out of
+// the DOM (not round-tripped through a hidden input's value) since a set of
+// compressed photos as inline HTML would be a very large attribute. Same
+// reasoning as _slImg1/_slImg2 for the season-launch section.
+let _nmPhotos = [];
+
 window.openNewsModal = async function(postId) {
   let post = {};
   if (postId) { const s = await db.ref('newsPosts/'+postId).get(); if (s.exists()) post = s.val(); }
   const existImg = post.imageData || '';
+  const hasFull = newsPostHasFullContent(post);
+  _nmPhotos = post.photos ? post.photos.slice() : [];
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open'; modal.style.cssText = 'z-index:9999;padding:20px';
   modal.onclick = e => { if (e.target===modal) modal.remove(); };
   modal.innerHTML = `
     <div style="background:var(--bg-card);border-radius:16px;max-width:580px;width:100%;padding:28px;direction:rtl;max-height:90vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px">
-        <h3 style="margin:0">${postId ? 'עריכת כתבה' : 'כתבה חדשה'}</h3>
+        <h3 style="margin:0">${postId ? 'עריכת עדכון' : 'עדכון חדש'}</h3>
         <button onclick="this.closest('.modal-overlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:inherit">✕</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:16px">
@@ -555,9 +713,9 @@ window.openNewsModal = async function(postId) {
           <input id="nm-title" value="${(post.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>
         <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">תאריך</label>
           <input id="nm-date" type="date" value="${post.date||''}" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>
-        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">תוכן הכתבה</label>
-          <textarea id="nm-body" rows="7" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">${post.body||''}</textarea></div>
-        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px">תמונה</label>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">טקסט קצר (מוצג בדף הבית)</label>
+          <textarea id="nm-body" rows="4" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">${post.body||''}</textarea></div>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px">תמונת שער</label>
           <div id="nm-img-wrap" style="margin-bottom:10px">
             ${existImg ? `<img src="${existImg}" style="width:100%;height:180px;object-fit:cover;border-radius:10px">` : `<div style="height:100px;background:rgba(255,255,255,.06);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:36px">📷</div>`}
           </div>
@@ -566,11 +724,25 @@ window.openNewsModal = async function(postId) {
           <input type="hidden" id="nm-img-keep" value="${existImg ? '1' : ''}"></div>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="checkbox" id="nm-active" ${post.active===false?'':'checked'} style="width:16px;height:16px">
-          <label for="nm-active" style="font-size:14px;cursor:pointer">כתבה פעילה (מוצגת בדף הבית)</label></div>
-        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">סדר הצגה (0 = ראשון)</label>
+          <label for="nm-active" style="font-size:14px;cursor:pointer">מוצג בקרוסלת עדכוני דף הבית</label></div>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">סדר הצגה בקרוסלה (0 = ראשון)</label>
           <input id="nm-order" type="number" value="${post.order||0}" min="0" style="width:80px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px"></div>
-        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפייסבוק (אופציונלי)</label>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפוסט בפייסבוק/אינסטגרם (אופציונלי)</label>
           <input id="nm-link" value="${(post.link||'').replace(/"/g,'&quot;')}" placeholder="https://www.facebook.com/..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>
+
+        <div style="border-top:1px dashed rgba(255,255,255,.2);padding-top:16px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:700;margin-bottom:14px">
+            <input type="checkbox" id="nm-expand-toggle" ${hasFull ? 'checked' : ''} onchange="document.getElementById('nm-expanded-fields').style.display=this.checked?'flex':'none'" style="width:16px;height:16px">
+            📖 הוסף פרטים מלאים ותמונות — הופך לסקירה מלאה באתר
+          </label>
+          <div id="nm-expanded-fields" style="display:${hasFull ? 'flex' : 'none'};flex-direction:column;gap:14px">
+            <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">טקסט מלא</label>
+              <textarea id="nm-fullbody" rows="8" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">${post.fullBody||''}</textarea></div>
+            <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">תמונות נוספות</label>
+              <div id="nm-photos-list"></div>
+            </div>
+          </div>
+        </div>
       </div>
       <div style="display:flex;gap:12px;margin-top:26px;justify-content:flex-end">
         <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:10px 20px;cursor:pointer;color:inherit;font-size:14px">ביטול</button>
@@ -578,6 +750,7 @@ window.openNewsModal = async function(postId) {
       </div>
     </div>`;
   document.body.appendChild(modal);
+  renderNmPhotosList();
 };
 
 window.previewNewsImg = async function(input) {
@@ -589,6 +762,25 @@ window.previewNewsImg = async function(input) {
   if (wrap) wrap.innerHTML = `<img src="${dataUrl}" style="width:100%;height:180px;object-fit:cover;border-radius:10px">`;
 };
 
+function renderNmPhotosList() {
+  const wrap = document.getElementById('nm-photos-list');
+  if (!wrap) return;
+  wrap.innerHTML = _nmPhotos.map((p, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <img src="${p.imageData}" style="width:56px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0">
+      <input value="${(p.caption||'').replace(/"/g,'&quot;')}" oninput="_nmPhotos[${i}].caption=this.value" placeholder="כיתוב (אופציונלי)" style="flex:1;padding:7px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:12px;box-sizing:border-box">
+      <button onclick="removeNmPhoto(${i})" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+    </div>`).join('') +
+    '<input type="file" accept="image/*" onchange="addNmPhoto(this)" style="font-size:12px;color:inherit">';
+}
+window.addNmPhoto = async function(input) {
+  if (!input.files[0]) return;
+  const data = await compressImage(input.files[0], 1100, 0.85);
+  _nmPhotos.push({ imageData: data, caption: '' });
+  renderNmPhotosList();
+};
+window.removeNmPhoto = function(i) { _nmPhotos.splice(i, 1); renderNmPhotosList(); };
+
 window.saveNewsPost = async function(postId) {
   const title  = (document.getElementById('nm-title').value||'').trim();
   const date   = document.getElementById('nm-date').value;
@@ -598,25 +790,33 @@ window.saveNewsPost = async function(postId) {
   const active = document.getElementById('nm-active').checked;
   const order  = parseInt(document.getElementById('nm-order').value)||0;
   const link   = (document.getElementById('nm-link')?.value||'').trim();
+  const expanded = document.getElementById('nm-expand-toggle').checked;
   const data   = { title, date, body, active, order, updatedAt: Date.now() };
   if (link) data.link = link; else data.link = null;
+  // Unchecking "add full details" demotes an existing recap back to a plain
+  // short post, regardless of whatever text/photos are still sitting in the
+  // (now hidden) expanded fields — the checkbox is the single source of truth.
+  data.fullBody = expanded ? ((document.getElementById('nm-fullbody').value||'').trim() || null) : null;
+  data.photos = expanded && _nmPhotos.length ? _nmPhotos.slice() : null;
   if (imgNew)       data.imageData = imgNew;
   else if (imgKeep && postId) { const s = await db.ref('newsPosts/'+postId+'/imageData').get(); if (s.exists()) data.imageData = s.val(); }
   try {
     if (postId) await db.ref('newsPosts/'+postId).update(data);
     else { data.createdAt = Date.now(); await db.ref('newsPosts').push(data); }
     document.querySelector('.modal-overlay.open')?.remove();
+    _activitiesData = null; // stale — force a refetch next time the archive page opens
     loadNewsAdmin(); loadNewsCarousel();
-    showToast('✅ הכתבה נשמרה!');
+    showToast('✅ העדכון נשמר!');
   } catch(e) { showToast('❌ שגיאה: ' + e.message); }
 };
 
 window.deleteNewsPost = async function(postId) {
-  if (!confirm('למחוק את הכתבה לצמיתות?')) return;
+  if (!confirm('למחוק את העדכון לצמיתות?')) return;
   try {
     await db.ref('newsPosts/'+postId).remove();
+    _activitiesData = null;
     loadNewsAdmin(); loadNewsCarousel();
-    showToast('🗑️ הכתבה נמחקה');
+    showToast('🗑️ העדכון נמחק');
   } catch(e) { showToast('❌ שגיאה: ' + e.message); }
 };
 // ===== CLUB PEOPLE =====

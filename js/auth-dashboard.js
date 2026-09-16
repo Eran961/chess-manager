@@ -1096,6 +1096,7 @@ function showSitePage(page) {
   }
   if (page === 'clubs') { if (window.loadPublicSchedule) loadPublicSchedule(); }
   if (page === 'home') { if (window.loadNewsCarousel) loadNewsCarousel(); }
+  if (page === 'activities') { if (window.loadActivitiesPage) loadActivitiesPage(); }
   if (page === 'people') { if (window.loadPeopleSection) loadPeopleSection(); }
   if (page === 'home') { if (window.loadSiteContent) loadSiteContent(); }
   if (page === 'home') { if (window.loadUpcomingActivities) loadUpcomingActivities(); }
@@ -1290,9 +1291,19 @@ function initAuth() {
       document.getElementById('app-layout').style.display = 'none';
       currentUser = null;
       try {
-        const savedPage = localStorage.getItem('ccm_lastSitePage');
-        if (savedPage && savedPage !== 'home' && document.getElementById('page-' + savedPage)) {
-          showSitePage(savedPage);
+        // A shared ?activity=<id> link (posted to Facebook/Instagram) takes
+        // priority over "last page you were on" — someone arriving fresh
+        // from a social post should land straight on that recap, not
+        // wherever they happened to leave the site last time.
+        const activityId = new URLSearchParams(location.search).get('activity');
+        if (activityId) {
+          showSitePage('activities');
+          if (window.openActivityDetail) openActivityDetail(activityId);
+        } else {
+          const savedPage = localStorage.getItem('ccm_lastSitePage');
+          if (savedPage && savedPage !== 'home' && document.getElementById('page-' + savedPage)) {
+            showSitePage(savedPage);
+          }
         }
       } catch(e) {}
       return;
@@ -1802,7 +1813,7 @@ if (currentUser?.role === 'admin') {
   content.appendChild(siteWhatsappPanel);
   const newsAdminBtn = document.createElement('button');
   newsAdminBtn.className = 'tab-btn'; newsAdminBtn.dataset.tab = 'news-posts';
-  newsAdminBtn.textContent = '📰 כתבות';
+  newsAdminBtn.textContent = '📢 עדכונים';
   newsAdminBtn.onclick = () => { switchTab('news-posts'); loadNewsAdmin(); };
   tabsBar.appendChild(newsAdminBtn);
   const newsAdminPanel = document.createElement('div');
@@ -1990,7 +2001,7 @@ function buildTopNav() {
   if (isAdmin || hasTabPerm('site-contact')) systemCards.push({ icon: '☎️', label: 'צרו קשר', tab: 'site-contact' });
   if (isAdmin || hasTabPerm('site-whatsapp')) systemCards.push({ icon: '💬', label: 'הודעות WhatsApp', tab: 'site-whatsapp' });
   if (isAdmin || hasTabPerm('schedule-editor')) systemCards.push({ icon: '📅', label: 'לוח חוגים', tab: 'schedule-editor' });
-  if (isAdmin || hasTabPerm('news-posts')) systemCards.push({ icon: '📰', label: 'כתבות', tab: 'news-posts' });
+  if (isAdmin || hasTabPerm('news-posts')) systemCards.push({ icon: '📢', label: 'עדכונים', tab: 'news-posts' });
   if (isAdmin || hasTabPerm('club-people')) systemCards.push({ icon: '👥', label: 'אנשי המועדון', tab: 'club-people' });
   if (isAdmin || hasTabPerm('tourn-cal')) systemCards.push({ icon: '📅', label: 'גאנט תחרויות', tab: 'tourn-cal' });
   if (isAdmin || hasTabPerm('monthly-cal')) systemCards.push({ icon: '📅', label: 'לוח חודשי', tab: 'monthly-cal' });
@@ -2233,7 +2244,7 @@ function injectPermissionTabs() {
         '<div id="site-whatsapp-admin-container" style="padding:20px;direction:rtl;max-width:900px"></div>');
     }
     if (grantedExtras.includes('news-posts')) {
-      addTab('news-posts','📰 כתבות', () => { switchTab('news-posts'); loadNewsAdmin(); },
+      addTab('news-posts','📢 עדכונים', () => { switchTab('news-posts'); loadNewsAdmin(); },
         '<div id="news-admin-container" style="padding:20px;direction:rtl;max-width:800px"></div>');
     }
     if (grantedExtras.includes('club-people')) {
