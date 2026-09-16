@@ -359,10 +359,13 @@ window.loadPublicSchedule = async function() {
 
     let activeCatId = cats.length ? cats[0].id : null;
 
+    // לוח שבועי is the primary/default view for visitors — פירוט is the
+    // secondary one, reachable via the toggle. Order swapped to match (weekly
+    // first) alongside the default below.
     const viewToggle =
       '<div style="display:flex;background:var(--bg-subtle);border-radius:8px;padding:3px;gap:2px;flex-shrink:0">' +
-      '<button id="pub-view-detail" onclick="window._setPubView(\'detail\')" style="background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📋 פירוט</button>' +
-      '<button id="pub-view-weekly" onclick="window._setPubView(\'weekly\')" style="background:none;color:var(--text-muted);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📅 לוח שבועי</button>' +
+      '<button id="pub-view-weekly" onclick="window._setPubView(\'weekly\')" style="background:var(--bg-card);color:var(--text-primary);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📅 לוח שבועי</button>' +
+      '<button id="pub-view-detail" onclick="window._setPubView(\'detail\')" style="background:none;color:var(--text-muted);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📋 פירוט</button>' +
       '</div>';
 
     function renderTable(catId) {
@@ -421,7 +424,9 @@ window.loadPublicSchedule = async function() {
       if (view==='weekly') renderWeeklyView(); else renderCatTabs();
     };
 
-    if ((window._pubScheduleView||'detail')==='weekly') renderWeeklyView(); else renderCatTabs();
+    // Weekly grid is now the default visitors land on; פירוט only shows once
+    // they explicitly switch to it via the toggle above.
+    if ((window._pubScheduleView||'weekly')==='detail') renderCatTabs(); else renderWeeklyView();
   } catch(e) {
     container.innerHTML = '<div style="text-align:center;padding:40px;color:#fc8181">שגיאה בטעינת לוח החוגים: ' + e.message + '</div>';
   }
