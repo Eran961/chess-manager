@@ -516,7 +516,13 @@ async function ensureActivitiesData() {
     _activitiesFetchPromise = (async () => {
       const arr = [];
       const snap = await db.ref('newsPosts').get();
-      if (snap.exists()) snap.forEach(c => arr.push({ id: c.key, ...c.val() }));
+      // Block body, not a bare expression — DataSnapshot.forEach stops iterating
+      // the moment its callback returns a truthy value (a documented Firebase
+      // early-exit mechanism), and Array.prototype.push's return value (the
+      // new length) is 1 — truthy — after the very first item. A single-
+      // expression arrow `c => arr.push(...)` implicitly returns that length,
+      // so this silently processed only the first child and stopped.
+      if (snap.exists()) snap.forEach(c => { arr.push({ id: c.key, ...c.val() }); });
       arr.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       _activitiesData = arr;
       return arr;
