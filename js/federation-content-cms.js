@@ -502,21 +502,38 @@ window.newsCardClick = function(el) { const lnk = el.getAttribute('data-link'); 
 let _activitiesData = null; // [{id, ...}, ...] once loaded
 let _activitiesView = 'list'; // 'list' | 'detail'
 let _activitiesDetailId = null;
+let _activitiesFetchPromise = null; // in-flight fetch, shared so two near-simultaneous
+// callers (see below) await the SAME read instead of each firing their own —
+// the real trigger for this is showSitePage('activities') and openActivityDetail(id)
+// being called back-to-back from one onclick with neither awaiting the other; both
+// used to independently check "is _activitiesData missing?" and, seeing it missing
+// at the same instant, each started its own db.ref('newsPosts').get(). Whichever
+// call's fetch resolved second could still overwrite a good render with an
+// inconsistent one — sharing one promise makes that structurally impossible.
+async function ensureActivitiesData() {
+  if (_activitiesData) return _activitiesData;
+  if (!_activitiesFetchPromise) {
+    _activitiesFetchPromise = (async () => {
+      const arr = [];
+      const snap = await db.ref('newsPosts').get();
+      if (snap.exists()) snap.forEach(c => arr.push({ id: c.key, ...c.val() }));
+      arr.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      _activitiesData = arr;
+      return arr;
+    })().finally(() => { _activitiesFetchPromise = null; });
+  }
+  return _activitiesFetchPromise;
+}
 
 async function loadActivitiesPage() {
   const root = document.getElementById('activities-root');
   if (!root) return;
-  if (!_activitiesData) {
-    root.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5">טוען עדכונים...</div>';
-    try {
-      const snap = await db.ref('newsPosts').get();
-      _activitiesData = [];
-      if (snap.exists()) snap.forEach(c => _activitiesData.push({ id: c.key, ...c.val() }));
-      _activitiesData.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    } catch (e) {
-      root.innerHTML = `<div style="text-align:center;padding:40px;color:#fc8181">❌ שגיאה בטעינה: ${e.message}</div>`;
-      return;
-    }
+  if (!_activitiesData) root.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5">טוען עדכונים...</div>';
+  try {
+    await ensureActivitiesData();
+  } catch (e) {
+    root.innerHTML = `<div style="text-align:center;padding:40px;color:#fc8181">❌ שגיאה בטעינה: ${e.message}</div>`;
+    return;
   }
   if (_activitiesView === 'detail' && _activitiesDetailId) renderActivityDetailView();
   else renderActivitiesListView();
@@ -553,14 +570,7 @@ function renderActivitiesListView() {
 // visiting the same link later (e.g. pasted into Facebook/Instagram) lands
 // straight here (see the initAuth bootstrap in auth-dashboard.js).
 window.openActivityDetail = async function(id) {
-  if (!_activitiesData) {
-    try {
-      const snap = await db.ref('newsPosts').get();
-      _activitiesData = [];
-      if (snap.exists()) snap.forEach(c => _activitiesData.push({ id: c.key, ...c.val() }));
-      _activitiesData.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    } catch (e) { _activitiesData = []; }
-  }
+  try { await ensureActivitiesData(); } catch (e) { _activitiesData = _activitiesData || []; }
   _activitiesDetailId = id;
   _activitiesView = 'detail';
   renderActivityDetailView();
