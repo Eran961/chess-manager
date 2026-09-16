@@ -1128,9 +1128,6 @@
       .landing-topbar-left img { height: 38px; }
       .btn-login-top { padding: 8px 16px; font-size: 14px; }
       .btn-instructors { padding: 8px 12px; font-size: 13px; }
-      /* Move login button to 2nd position in nav (right after עמוד הבית) */
-      .site-nav > button:first-child { order: -2; }
-      .nav-tab-login { order: -1; margin-right: 0; border-right: 1px solid rgba(255,255,255,0.1); }
       .btn-theme-toggle { display: none; }
       /* Stack schedule + sidebar vertically */
       .landing-main { flex-direction: column; overflow: visible; }
@@ -1871,7 +1868,11 @@
     /* Use Heebo font for the public landing page */
     #landing-page, #landing-page * { font-family: 'Heebo', sans-serif !important; }
 
-    /* --- Sticky single-row navbar --- */
+    /* --- Sticky two-row navbar: row 1 is branding + non-navigation actions
+       (social links, staff login, theme toggle); row 2 is the page tabs
+       alone, given the full header width instead of squeezing them next to
+       the logo — the previous single-row layout could hide/require
+       scrolling to reach tabs once there were enough of them. --- */
     .site-header {
       position: sticky !important;
       top: 0;
@@ -1881,12 +1882,22 @@
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid rgba(255,255,255,0.07) !important;
       display: flex !important;
-      flex-direction: row !important;
-      align-items: center !important;
-      height: 64px !important;
-      padding: 0 28px !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      height: auto !important;
+      padding: 0 !important;
       gap: 0 !important;
       color: white;
+    }
+    .site-topbar {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      height: 64px !important;
+      padding: 0 28px !important;
+      gap: 12px !important;
+      flex-shrink: 0 !important;
     }
     .site-title-row {
       padding: 0 !important;
@@ -1904,15 +1915,25 @@
       letter-spacing: -0.2px !important;
     }
     .site-logo-img { height: 40px !important; border-radius: 50% !important; }
+    .site-header-actions {
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      flex-shrink: 0 !important;
+      height: 100% !important;
+    }
     .site-nav {
-      flex: 1 !important;
+      width: 100% !important;
+      flex-shrink: 0 !important;
       display: flex !important;
       align-items: stretch !important;
-      height: 100% !important;
+      height: 52px !important;
       background: transparent !important;
-      border-top: none !important;
+      border-top: 1px solid rgba(255,255,255,0.06) !important;
       overflow-x: visible !important;
-      margin-right: 16px !important;
+      margin-right: 0 !important;
+      padding: 0 28px !important;
+      box-sizing: border-box !important;
       min-width: 0 !important;
     }
     /* Only the informational tabs scroll — the login button and theme toggle stay
@@ -1948,7 +1969,7 @@
       background: rgba(255,255,255,0.05) !important;
     }
     .nav-tab-login {
-      margin-right: auto !important;
+      margin-right: 0 !important;
       background: #f97316 !important;
       color: white !important;
       border-radius: 8px !important;
@@ -2143,7 +2164,8 @@
        ============================================================ */
 
     @media (max-width: 860px) {
-      .site-header { padding: 0 16px !important; height: 58px !important; }
+      .site-topbar { padding: 0 16px !important; height: 58px !important; }
+      .site-nav { padding: 0 16px !important; height: 46px !important; }
       .site-title-text h1 { font-size: 14px !important; }
       .site-logo-img { height: 36px !important; }
       .nav-tab { padding: 0 11px !important; font-size: 13px !important; }
@@ -2151,7 +2173,8 @@
     }
 
     @media (max-width: 600px) {
-      .site-header { height: 52px !important; padding: 0 12px !important; }
+      .site-topbar { height: 52px !important; padding: 0 12px !important; }
+      .site-nav { padding: 0 12px !important; height: 42px !important; }
       .site-title-text h1 { display: none !important; }
       .site-logo-img { height: 32px !important; }
       .nav-tab { padding: 0 9px !important; font-size: 12px !important; }
