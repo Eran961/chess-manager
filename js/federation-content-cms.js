@@ -502,6 +502,50 @@ window.newsCardClick = function(el) { const lnk = el.getAttribute('data-link'); 
 let _activitiesData = null; // [{id, ...}, ...] once loaded
 let _activitiesView = 'list'; // 'list' | 'detail'
 let _activitiesDetailId = null;
+let _activitiesCatFilter = 'all'; // 'all' | a category id
+let _activitiesArchiveMode = false; // false = current updates, true = archive
+
+// A post's category — every post has one, even old ones saved before
+// categories existed, via this same fallback everywhere (display, the admin
+// dropdown's default, and what an uncategorized post's own field is treated
+// as) — no migration of existing newsPosts needed.
+const DEFAULT_NEWS_CATEGORY = { id: 'recent-news', name: 'חדשות אחרונות', order: 0 };
+const DEFAULT_NEWS_SUBTITLE = 'כל מה שקורה אצלנו — כתבות קצרות וסקירות מלאות עם תמונות';
+function newsEffectiveCategoryId(p) { return (p && p.categoryId) || DEFAULT_NEWS_CATEGORY.id; }
+
+let _newsCategories = null; // [{id, name, order}, ...] — always includes the default once loaded
+let _newsSettings = null;   // { subtitle }
+let _newsCategoriesFetchPromise = null;
+async function ensureNewsCategoriesAndSettings() {
+  if (_newsCategories && _newsSettings) return;
+  if (!_newsCategoriesFetchPromise) {
+    _newsCategoriesFetchPromise = (async () => {
+      try {
+        const [catSnap, setSnap] = await Promise.all([
+          db.ref('siteContent/newsCategories').get(),
+          db.ref('siteContent/newsSettings').get(),
+        ]);
+        if (catSnap.exists()) {
+          const cats = [];
+          catSnap.forEach(c => { cats.push({ id: c.key, ...c.val() }); }); // block body — see the forEach note above
+          cats.sort((a, b) => (a.order || 0) - (b.order || 0));
+          _newsCategories = cats.length ? cats : [{ ...DEFAULT_NEWS_CATEGORY }];
+        } else {
+          _newsCategories = [{ ...DEFAULT_NEWS_CATEGORY }];
+        }
+        _newsSettings = setSnap.exists() ? setSnap.val() : {};
+      } catch (e) {
+        _newsCategories = _newsCategories || [{ ...DEFAULT_NEWS_CATEGORY }];
+        _newsSettings = _newsSettings || {};
+      }
+    })().finally(() => { _newsCategoriesFetchPromise = null; });
+  }
+  return _newsCategoriesFetchPromise;
+}
+function newsCategoryName(catId) {
+  const cat = (_newsCategories || []).find(c => c.id === catId);
+  return cat ? cat.name : DEFAULT_NEWS_CATEGORY.name;
+}
 let _activitiesFetchPromise = null; // in-flight fetch, shared so two near-simultaneous
 // callers (see below) await the SAME read instead of each firing their own —
 // the real trigger for this is showSitePage('activities') and openActivityDetail(id)
@@ -536,25 +580,47 @@ async function loadActivitiesPage() {
   if (!root) return;
   if (!_activitiesData) root.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5">טוען עדכונים...</div>';
   try {
-    await ensureActivitiesData();
+    await Promise.all([ensureActivitiesData(), ensureNewsCategoriesAndSettings()]);
   } catch (e) {
     root.innerHTML = `<div style="text-align:center;padding:40px;color:#fc8181">❌ שגיאה בטעינה: ${e.message}</div>`;
     return;
   }
+  const subEl = document.getElementById('activities-subtitle');
+  if (subEl) subEl.textContent = (_newsSettings && _newsSettings.subtitle) || DEFAULT_NEWS_SUBTITLE;
   if (_activitiesView === 'detail' && _activitiesDetailId) renderActivityDetailView();
   else renderActivitiesListView();
 }
 window.loadActivitiesPage = loadActivitiesPage;
 
+window.setActivitiesCatFilter = function(catId) { _activitiesCatFilter = catId; renderActivitiesListView(); };
+window.toggleActivitiesArchive = function() {
+  _activitiesArchiveMode = !_activitiesArchiveMode;
+  _activitiesCatFilter = 'all'; // switching views — a category selected in one doesn't necessarily exist/mean much in the other
+  renderActivitiesListView();
+};
+
 function renderActivitiesListView() {
   const root = document.getElementById('activities-root');
   if (!root) return;
   _activitiesView = 'list';
-  if (!_activitiesData.length) {
-    root.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5">אין עדכונים עדיין</div>';
+  const cats = _newsCategories || [{ ...DEFAULT_NEWS_CATEGORY }];
+
+  const tabsHtml = '<div class="activities-cat-tabs">' +
+    `<button class="activities-cat-tab${_activitiesCatFilter === 'all' ? ' active' : ''}" onclick="setActivitiesCatFilter('all')">הכל</button>` +
+    cats.map(c => `<button class="activities-cat-tab${_activitiesCatFilter === c.id ? ' active' : ''}" onclick="setActivitiesCatFilter('${c.id}')">${c.name}</button>`).join('') +
+    '</div>';
+  const archiveToggleHtml = `<button class="activities-archive-toggle" onclick="toggleActivitiesArchive()">${_activitiesArchiveMode ? '← חזרה לעדכונים נוכחיים' : '📦 ארכיון כתבות'}</button>`;
+  const toolbarHtml = `<div class="activities-toolbar">${tabsHtml}${archiveToggleHtml}</div>`;
+
+  const pool = (_activitiesData || []).filter(p => !!p.archived === _activitiesArchiveMode);
+  const filtered = _activitiesCatFilter === 'all' ? pool : pool.filter(p => newsEffectiveCategoryId(p) === _activitiesCatFilter);
+
+  if (!filtered.length) {
+    const emptyMsg = _activitiesArchiveMode ? 'אין כתבות בארכיון בקטגוריה זו' : 'אין עדכונים בקטגוריה זו';
+    root.innerHTML = toolbarHtml + `<div style="text-align:center;padding:40px;opacity:0.5">${emptyMsg}</div>`;
     return;
   }
-  root.innerHTML = '<div class="activities-grid">' + _activitiesData.map(p => {
+  const gridHtml = '<div class="activities-grid">' + filtered.map(p => {
     const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="">` : `<div class="activity-card-noimg">📰</div>`;
     const hasFull = newsPostHasFullContent(p);
     const badge = hasFull
@@ -569,6 +635,7 @@ function renderActivitiesListView() {
         ${badge}
       </div></div>`;
   }).join('') + '</div>';
+  root.innerHTML = toolbarHtml + gridHtml;
 }
 
 // Opens (or switches to) the full-recap detail view for one post, updating
@@ -576,7 +643,7 @@ function renderActivitiesListView() {
 // visiting the same link later (e.g. pasted into Facebook/Instagram) lands
 // straight here (see the initAuth bootstrap in auth-dashboard.js).
 window.openActivityDetail = async function(id) {
-  try { await ensureActivitiesData(); } catch (e) { _activitiesData = _activitiesData || []; }
+  try { await Promise.all([ensureActivitiesData(), ensureNewsCategoriesAndSettings()]); } catch (e) { _activitiesData = _activitiesData || []; }
   _activitiesDetailId = id;
   _activitiesView = 'detail';
   renderActivityDetailView();
@@ -675,33 +742,111 @@ async function loadNewsAdmin() {
     const snap = await db.ref('newsPosts').get();
     if (snap.exists()) snap.forEach(c => { posts.push({id: c.key, ...c.val()}); });
     posts.sort((a,b) => (a.order||99) - (b.order||99));
+    await ensureNewsCategoriesAndSettings();
   } catch(e) {
     el.innerHTML = `<div style="text-align:center;padding:30px;color:#fc8181">❌ שגיאה: ${e.message}</div>`;
     return;
   }
-  el.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <h3 style="margin:0;font-size:18px">📢 ניהול עדכונים</h3>
+  _nsCatDraft = (_newsCategories || [{ ...DEFAULT_NEWS_CATEGORY }]).map(c => ({ ...c }));
+  el.innerHTML = renderNewsSettingsAdmin() +
+    `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <h3 style="margin:0;font-size:18px">📢 כל העדכונים</h3>
       <button onclick="openNewsModal(null)" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-weight:700;font-size:14px">+ עדכון חדש</button>
     </div>
     ${posts.length === 0
       ? '<div style="text-align:center;padding:40px;opacity:.5">אין עדכונים עדיין. צור עדכון ראשון!</div>'
       : posts.map(p => `
-      <div style="display:flex;gap:14px;align-items:center;padding:14px;background:var(--bg-card);border-radius:12px;margin-bottom:10px">
+      <div style="display:flex;gap:14px;align-items:center;padding:14px;background:var(--bg-card);border-radius:12px;margin-bottom:10px;${p.archived ? 'opacity:.6' : ''}">
         ${p.imageData
           ? `<img src="${p.imageData}" style="width:80px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0">`
           : `<div style="width:80px;height:54px;background:rgba(255,255,255,.08);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px">📰</div>`}
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.title||'(ללא כותרת)'}</div>
-          <div style="font-size:12px;opacity:.55">${p.date||''} · ${p.active===false ? '<span style="color:#fc8181">מוסתר בדף הבית</span>' : '<span style="color:#68d391">פעיל בדף הבית</span>'}${newsPostHasFullContent(p) ? ' · <span style="color:#f97316">📖 סקירה מלאה</span>' : ''}</div>
+          <div style="font-size:12px;opacity:.55">${p.date||''} · ${p.active===false ? '<span style="color:#fc8181">מוסתר בדף הבית</span>' : '<span style="color:#68d391">פעיל בדף הבית</span>'}${newsPostHasFullContent(p) ? ' · <span style="color:#f97316">📖 סקירה מלאה</span>' : ''} · <span style="opacity:.8">🏷️ ${newsCategoryName(newsEffectiveCategoryId(p))}</span>${p.archived ? ' · <span style="color:#a0aec0">📦 בארכיון</span>' : ''}</div>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0">
+          <button onclick="toggleNewsArchived('${p.id}', ${!p.archived})" title="${p.archived ? 'החזר מהארכיון' : 'העבר לארכיון'}" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:7px 12px;cursor:pointer;color:inherit;font-size:13px">${p.archived ? '↩️' : '📦'}</button>
           <button onclick="openNewsModal('${p.id}')" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:7px 12px;cursor:pointer;color:inherit;font-size:13px">✏️</button>
           <button onclick="deleteNewsPost('${p.id}')" style="background:rgba(252,129,129,.15);border:none;border-radius:8px;padding:7px 12px;cursor:pointer;color:#fc8181;font-size:13px">🗑️</button>
         </div>
       </div>`).join('')}`;
+  renderNewsCategoriesList();
 }
 window.loadNewsAdmin = loadNewsAdmin;
+
+// ── עמוד העדכונים settings: subtitle text + category list ───────────────────
+let _nsCatDraft = []; // staged categories for this editor — saved as one batch
+
+function renderNewsSettingsAdmin() {
+  const subtitle = (_newsSettings && _newsSettings.subtitle) || DEFAULT_NEWS_SUBTITLE;
+  return `
+    <div style="border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:16px;margin-bottom:20px">
+      <h4 style="margin:0 0 14px">⚙️ הגדרות עמוד "עדכוני המועדון"</h4>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">כותרת משנה</label>
+      <input id="news-subtitle-input" value="${subtitle.replace(/"/g,'&quot;')}" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box;margin-bottom:16px">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px">קטגוריות (נושאים)</label>
+      <div id="news-categories-list"></div>
+      <button onclick="addNewsCategory()" style="margin-top:6px;background:none;border:1px dashed rgba(255,255,255,.3);color:inherit;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit">+ הוסף קטגוריה</button>
+      <div style="margin-top:14px"><button onclick="saveNewsSettings()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">💾 שמור הגדרות</button></div>
+    </div>`;
+}
+
+function renderNewsCategoriesList() {
+  const wrap = document.getElementById('news-categories-list');
+  if (!wrap) return;
+  wrap.innerHTML = _nsCatDraft.map((c, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <input value="${(c.name||'').replace(/"/g,'&quot;')}" oninput="_nsCatDraft[${i}].name=this.value" style="flex:1;padding:7px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:13px;box-sizing:border-box">
+      ${c.id === DEFAULT_NEWS_CATEGORY.id
+        ? '<span style="font-size:11px;opacity:.5;padding:0 6px;white-space:nowrap">ברירת מחדל</span>'
+        : `<button onclick="removeNewsCategory(${i})" title="מחיקה" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px">✕</button>`}
+    </div>`).join('');
+}
+window.addNewsCategory = function() {
+  _nsCatDraft.push({ id: 'cat' + Date.now(), name: '', order: _nsCatDraft.length });
+  renderNewsCategoriesList();
+};
+window.removeNewsCategory = function(i) {
+  if (!confirm('למחוק את הקטגוריה? עדכונים תחתיה יעברו ל"' + DEFAULT_NEWS_CATEGORY.name + '"')) return;
+  _nsCatDraft.splice(i, 1);
+  renderNewsCategoriesList();
+};
+
+window.saveNewsSettings = async function() {
+  const subtitle = (document.getElementById('news-subtitle-input').value || '').trim();
+  const catsObj = {};
+  _nsCatDraft.forEach((c, i) => {
+    const name = (c.name || '').trim() || (c.id === DEFAULT_NEWS_CATEGORY.id ? DEFAULT_NEWS_CATEGORY.name : '');
+    if (name) catsObj[c.id] = { name, order: i };
+  });
+  if (!catsObj[DEFAULT_NEWS_CATEGORY.id]) catsObj[DEFAULT_NEWS_CATEGORY.id] = { name: DEFAULT_NEWS_CATEGORY.name, order: 0 }; // never fully removable — posts fall back to it
+  try {
+    await db.ref('siteContent/newsSettings').set(subtitle ? { subtitle } : null);
+    await db.ref('siteContent/newsCategories').set(catsObj);
+    // Any post whose category no longer exists (deleted just now) falls back
+    // to the default category rather than becoming invisible/uncategorized.
+    const validIds = new Set(Object.keys(catsObj));
+    const postsSnap = await db.ref('newsPosts').get();
+    const updates = {};
+    if (postsSnap.exists()) postsSnap.forEach(c => { // block body — see the forEach note on ensureActivitiesData
+      const cid = newsEffectiveCategoryId(c.val());
+      if (!validIds.has(cid)) updates[c.key + '/categoryId'] = DEFAULT_NEWS_CATEGORY.id;
+    });
+    if (Object.keys(updates).length) await db.ref('newsPosts').update(updates);
+    _newsCategories = null; _newsSettings = null; _activitiesData = null;
+    showToast('✅ ההגדרות נשמרו!');
+    loadNewsAdmin();
+  } catch (e) { showToast('❌ שגיאה: ' + e.message); }
+};
+
+window.toggleNewsArchived = async function(postId, archived) {
+  try {
+    await db.ref('newsPosts/'+postId+'/archived').set(archived);
+    _activitiesData = null;
+    loadNewsAdmin();
+    showToast(archived ? '📦 הועבר לארכיון' : '↩️ הוחזר מהארכיון');
+  } catch (e) { showToast('❌ שגיאה: ' + e.message); }
+};
 
 // Photos staged for whichever עדכון modal is currently open — kept out of
 // the DOM (not round-tripped through a hidden input's value) since a set of
@@ -710,10 +855,14 @@ window.loadNewsAdmin = loadNewsAdmin;
 let _nmPhotos = [];
 
 window.openNewsModal = async function(postId) {
+  await ensureNewsCategoriesAndSettings();
   let post = {};
   if (postId) { const s = await db.ref('newsPosts/'+postId).get(); if (s.exists()) post = s.val(); }
   const existImg = post.imageData || '';
   const hasFull = newsPostHasFullContent(post);
+  const currentCat = newsEffectiveCategoryId(post);
+  const catOptionsHtml = (_newsCategories || [{ ...DEFAULT_NEWS_CATEGORY }])
+    .map(c => `<option value="${c.id}"${c.id === currentCat ? ' selected' : ''}>${c.name}</option>`).join('');
   _nmPhotos = post.photos ? post.photos.slice() : [];
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open'; modal.style.cssText = 'z-index:9999;padding:20px';
@@ -738,9 +887,14 @@ window.openNewsModal = async function(postId) {
           <input type="file" accept="image/*" onchange="previewNewsImg(this)" style="font-size:13px;color:inherit">
           <input type="hidden" id="nm-img-new" value="">
           <input type="hidden" id="nm-img-keep" value="${existImg ? '1' : ''}"></div>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">🏷️ קטגוריה</label>
+          <select id="nm-category" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box">${catOptionsHtml}</select></div>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="checkbox" id="nm-active" ${post.active===false?'':'checked'} style="width:16px;height:16px">
           <label for="nm-active" style="font-size:14px;cursor:pointer">מוצג בקרוסלת עדכוני דף הבית</label></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="nm-archived" ${post.archived?'checked':''} style="width:16px;height:16px">
+          <label for="nm-archived" style="font-size:14px;cursor:pointer">📦 בארכיון (לא מוצג ברשימת העדכונים השוטפת)</label></div>
         <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">סדר הצגה בקרוסלה (0 = ראשון)</label>
           <input id="nm-order" type="number" value="${post.order||0}" min="0" style="width:80px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px"></div>
         <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפוסט בפייסבוק/אינסטגרם (אופציונלי)</label>
@@ -804,10 +958,12 @@ window.saveNewsPost = async function(postId) {
   const imgNew = document.getElementById('nm-img-new').value;
   const imgKeep= document.getElementById('nm-img-keep').value;
   const active = document.getElementById('nm-active').checked;
+  const archived = document.getElementById('nm-archived').checked;
+  const categoryId = document.getElementById('nm-category').value || DEFAULT_NEWS_CATEGORY.id;
   const order  = parseInt(document.getElementById('nm-order').value)||0;
   const link   = (document.getElementById('nm-link')?.value||'').trim();
   const expanded = document.getElementById('nm-expand-toggle').checked;
-  const data   = { title, date, body, active, order, updatedAt: Date.now() };
+  const data   = { title, date, body, active, archived, categoryId, order, updatedAt: Date.now() };
   if (link) data.link = link; else data.link = null;
   // Unchecking "add full details" demotes an existing recap back to a plain
   // short post, regardless of whatever text/photos are still sitting in the
