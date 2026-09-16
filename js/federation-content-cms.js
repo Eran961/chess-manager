@@ -849,6 +849,7 @@ async function loadSiteContent() {
     if (d.gallery) renderGalleryContent(d.gallery);
     if (d.tournaments) renderTournamentsContent(d.tournaments);
     if (d.contact) renderContactContent(d.contact);
+    if (d.seasonLaunch) renderSeasonLaunchContent(d.seasonLaunch);
   } catch(e) { console.warn('loadSiteContent:', e); }
 }
 window.loadSiteContent = loadSiteContent;
@@ -961,6 +962,32 @@ function renderGalleryContent(data) {
   }).join('');
 }
 
+// "עונת החוגים" homepage banner. The section's raw HTML already ships with
+// real default title/subtitle/images (the two flyer JPEGs converted from the
+// club's PDF) — this only overrides them once actual siteContent/seasonLaunch
+// data exists, and toggles the whole section on/off, exactly like every other
+// homepage section here.
+function renderSeasonLaunchContent(data) {
+  const sec = document.getElementById('season-launch-section');
+  if (!sec) return;
+  if (data.active === false) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const titleEl = document.getElementById('season-launch-title');
+  if (titleEl && data.title) titleEl.textContent = data.title;
+  const subEl = document.getElementById('season-launch-subtitle');
+  if (subEl && data.subtitle) subEl.textContent = data.subtitle;
+  const ctaEl = document.getElementById('season-launch-cta');
+  if (ctaEl && data.ctaText) ctaEl.textContent = data.ctaText;
+  [1, 2].forEach(function(n) {
+    const key = 'image' + n;
+    if (!data[key]) return;
+    const img = document.getElementById('season-launch-img' + n);
+    if (!img) return;
+    img.src = data[key];
+    if (img.parentElement && img.parentElement.tagName === 'A') img.parentElement.href = data[key];
+  });
+}
+
 function renderTournamentsContent(data) {
   const grid = document.getElementById('tourn-cards-grid');
   if (grid && data.cards) {
@@ -1024,9 +1051,9 @@ window.loadSiteContentAdmin = async function() {
 
   el.innerHTML = '<h3 style="margin:0 0 20px;font-size:18px">📝 ניהול עמוד הבית</h3>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">' +
-    ['about','achievements','testimonials','gallery'].map(function(sec) {
-      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה'};
-      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸'};
+    ['about','achievements','testimonials','gallery','seasonLaunch'].map(function(sec) {
+      const labels = {about:'על המועדון',achievements:'הישגים',testimonials:'המלצות',gallery:'גלריה',seasonLaunch:'עונת החוגים'};
+      const icons  = {about:'📖',achievements:'🏆',testimonials:'💬',gallery:'📸',seasonLaunch:'🎉'};
       return '<button onclick="showSiteSec(\'' + sec + '\')" id="sec-btn-' + sec + '" style="padding:9px 18px;border-radius:8px;border:2px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">' +
         icons[sec] + ' ' + labels[sec] + '</button>';
     }).join('') +
@@ -1034,7 +1061,8 @@ window.loadSiteContentAdmin = async function() {
     '<div id="sec-about" class="site-sec-panel" style="display:none">' + renderAboutAdmin(d.about) + '</div>' +
     '<div id="sec-achievements" class="site-sec-panel" style="display:none">' + renderAchievementsAdmin(d.achievements) + '</div>' +
     '<div id="sec-testimonials" class="site-sec-panel" style="display:none">' + renderTestimonialsAdmin(d.testimonials) + '</div>' +
-    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>';
+    '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>' +
+    '<div id="sec-seasonLaunch" class="site-sec-panel" style="display:none">' + renderSeasonLaunchAdmin(d.seasonLaunch) + '</div>';
 
   showSiteSec('about');
 };
@@ -1507,6 +1535,82 @@ window.deleteGalleryItem = async function(id) {
 window.toggleGallerySpan = async function(id, val) {
   try { await db.ref('siteContent/gallery/'+id+'/span2').set(val); loadSiteContentAdmin(); loadSiteContent(); }
   catch(e) { showToast('❌ '+e.message); }
+};
+
+// ---- Season launch admin (single settings object, not a list — closer to
+// "about" than to "gallery") ----
+const SEASON_LAUNCH_DEFAULTS = {
+  title: 'עונת החוגים 2026–2027 יוצאת לדרך!',
+  subtitle: 'מיד לאחר חופשת הסוכות — בואו להיות חלק מהמשחק',
+  ctaText: '📞 לפרטים נוספים ורישום',
+};
+// Holds whatever image is currently staged for slot 1/2 (from Firebase on
+// open, or freshly picked via the file input) — kept out of the DOM entirely
+// rather than round-tripped through a hidden input's value attribute, since a
+// compressed flyer photo as inline HTML would be a very large attribute.
+let _slImg1 = null, _slImg2 = null;
+
+function renderSeasonLaunchAdmin(data) {
+  data = data || {};
+  _slImg1 = data.image1 || null;
+  _slImg2 = data.image2 || null;
+  const active = data.active !== false;
+  const title = data.title || SEASON_LAUNCH_DEFAULTS.title;
+  const subtitle = data.subtitle || SEASON_LAUNCH_DEFAULTS.subtitle;
+  const ctaText = data.ctaText || SEASON_LAUNCH_DEFAULTS.ctaText;
+  const inputStyle = 'width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box';
+  return '<h4 style="margin:0 0 4px">🎉 עונת החוגים — קטע בעמוד הבית</h4>' +
+    '<p style="font-size:12px;opacity:.6;margin:0 0 16px">מופיע מיד אחרי "הפעילויות הקרובות". בלי שמירה כאן, הקטע מוצג עם התוכן וברירת המחדל של הפלייר.</p>' +
+    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;margin-bottom:18px;font-weight:600">' +
+    '<input type="checkbox" id="sl-active"' + (active ? ' checked' : '') + ' style="width:16px;height:16px"> הצג את הקטע בעמוד הבית</label>' +
+    '<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px">' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">כותרת</label>' +
+    '<input id="sl-title" value="' + title.replace(/"/g, '&quot;') + '" style="' + inputStyle + '"></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">שורת משנה</label>' +
+    '<input id="sl-subtitle" value="' + subtitle.replace(/"/g, '&quot;') + '" style="' + inputStyle + '"></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">טקסט כפתור (מוביל לעמוד "צרו קשר")</label>' +
+    '<input id="sl-cta" value="' + ctaText.replace(/"/g, '&quot;') + '" style="' + inputStyle + '"></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">' +
+    _slImageSlotHTML(1, _slImg1) +
+    _slImageSlotHTML(2, _slImg2) +
+    '</div>' +
+    '<button onclick="saveSeasonLaunchContent()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:11px 26px;cursor:pointer;font-weight:700;font-size:14px">💾 שמור</button>';
+}
+
+function _slImageSlotHTML(n, imgData) {
+  const previewSrc = imgData || ('images/flyer-hogim-' + n + '.jpg');
+  return '<div>' +
+    '<label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px">תמונה ' + n + (imgData ? '' : ' (ברירת מחדל)') + '</label>' +
+    '<div style="aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:#000;margin-bottom:8px">' +
+    '<img id="sl-preview-' + n + '" src="' + previewSrc + '" style="width:100%;height:100%;object-fit:cover">' +
+    '</div>' +
+    '<input type="file" accept="image/*" onchange="previewSeasonLaunchImg(this,' + n + ')" style="font-size:12px;color:inherit">' +
+    '</div>';
+}
+
+window.previewSeasonLaunchImg = async function(input, n) {
+  if (!input.files[0]) return;
+  const data = await compressImage(input.files[0], 1400, 0.85); // flyers carry small schedule text — matches the default images' resolution
+  if (n === 1) _slImg1 = data; else _slImg2 = data;
+  const prev = document.getElementById('sl-preview-' + n);
+  if (prev) prev.src = data;
+};
+
+window.saveSeasonLaunchContent = async function() {
+  const data = {
+    active: document.getElementById('sl-active').checked,
+    title: document.getElementById('sl-title').value.trim(),
+    subtitle: document.getElementById('sl-subtitle').value.trim(),
+    ctaText: document.getElementById('sl-cta').value.trim(),
+    image1: _slImg1 || null,
+    image2: _slImg2 || null,
+  };
+  try {
+    await db.ref('siteContent/seasonLaunch').set(data);
+    renderSeasonLaunchContent(data);
+    showToast('✅ נשמר!');
+  } catch (e) { showToast('❌ ' + e.message); }
 };
 
 // ---- Shared icon picker (used in achievements + tournaments card modals) ----

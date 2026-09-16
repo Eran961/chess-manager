@@ -1397,6 +1397,13 @@
     .upcoming-date { font-size:13px; font-weight:800; color:#f97316; margin-bottom:8px; letter-spacing:.3px; }
     .upcoming-title { font-size:15px; font-weight:700; color:white; line-height:1.4; }
 
+    /* ===== SEASON LAUNCH (עונת החוגים) ===== */
+    .season-launch-section { background:#0a1a2e; padding:48px 24px; direction:rtl; border-top:1px solid rgba(255,255,255,0.08); text-align:center; }
+    .season-launch-flyers { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; max-width:920px; margin:8px auto 24px; }
+    .season-launch-flyers a { display:block; }
+    .season-launch-flyers img { display:block; width:420px; max-width:100%; border-radius:14px; box-shadow:0 8px 28px rgba(0,0,0,0.35); cursor:zoom-in; transition:transform 0.2s; }
+    .season-launch-flyers img:hover { transform:translateY(-4px); }
+
     /* Loading skeletons — shown briefly while the real content loads, instead of
        flashing stale/placeholder content that then gets swapped for the real thing. */
     .upcoming-card.skeleton { border-right-color:rgba(255,255,255,.15); cursor:default; }
@@ -2016,6 +2023,7 @@
     body.light-mode .upcoming-section { background: #f4f7fb !important; }
     body.light-mode .upcoming-card { background: white !important; border-color: #e2e8f0 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important; }
     body.light-mode .upcoming-title { color: #1a202c !important; }
+    body.light-mode .season-launch-section { background: #f4f7fb !important; }
     body.light-mode .testimonials-section { background: #f4f7fb !important; }
     body.light-mode .testimonial-card { background: white !important; border-color: #e2e8f0 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important; color: #1a202c !important; }
     body.light-mode .testi-dot { background:rgba(0,0,0,.18); }
