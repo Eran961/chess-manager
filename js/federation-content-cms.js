@@ -2191,10 +2191,23 @@ window.saveTournCard = async function(id) {
     loadSiteTournamentsAdmin(); loadSiteContent(); showToast('✅ נשמר!');
   } catch(e) { showToast('❌ '+e.message); }
 };
+// A URL typed/pasted without "http(s)://" (e.g. someone drops the "https://"
+// off a WhatsApp/Facebook link) isn't a broken link on this site's end — but
+// as an <a href>, the browser treats it as a path RELATIVE to the current
+// page instead of an absolute address, silently pointing at a nonexistent
+// local file/page instead of the real external site. Normalizing on save
+// means this can't happen regardless of what gets pasted.
+function normalizeExternalUrl(url) {
+  url = (url || '').trim();
+  if (!url) return '';
+  return /^https?:\/\//i.test(url) ? url : 'https://' + url;
+}
+
 window.saveTournFedLink = async function() {
   const fedLinkText  = document.getElementById('tourn-fedlink-text').value.trim();
   const fedLinkLabel = document.getElementById('tourn-fedlink-label').value.trim();
-  const fedLinkUrl   = document.getElementById('tourn-fedlink-url').value.trim();
+  const fedLinkUrl   = normalizeExternalUrl(document.getElementById('tourn-fedlink-url').value);
+  document.getElementById('tourn-fedlink-url').value = fedLinkUrl;
   try {
     await db.ref('siteContent/tournaments').update({ fedLinkText, fedLinkLabel, fedLinkUrl });
     loadSiteContent();
@@ -2204,7 +2217,8 @@ window.saveTournFedLink = async function() {
 window.saveTournWaLink = async function() {
   const waLinkText  = document.getElementById('tourn-walink-text').value.trim();
   const waLinkLabel = document.getElementById('tourn-walink-label').value.trim();
-  const waLinkUrl   = document.getElementById('tourn-walink-url').value.trim();
+  const waLinkUrl   = normalizeExternalUrl(document.getElementById('tourn-walink-url').value);
+  document.getElementById('tourn-walink-url').value = waLinkUrl; // shows exactly what got saved, in case it was auto-corrected
   try {
     await db.ref('siteContent/tournaments').update({ waLinkText, waLinkLabel, waLinkUrl: waLinkUrl || null });
     loadSiteContent();
