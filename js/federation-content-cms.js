@@ -466,13 +466,19 @@ function renderNewsCarousel() {
     const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
     const body  = p.body  ? `<div class="news-card-text">${(p.body).replace(/\n/g,'<br>')}</div>` : '';
     const hasFull = newsPostHasFullContent(p);
-    const clickable = hasFull || p.link;
+    // A plain (non-recap) post can have a Facebook link, an Instagram link,
+    // both, or neither — the card itself can only click through to one
+    // place, so Facebook wins if both are set (matches which field existed
+    // here first); the detail view (see renderActivityDetailView) shows both.
+    const extLink = p.link || p.linkIg;
+    const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
+    const clickable = hasFull || extLink;
     const clickAttr = hasFull ? `onclick="showSitePage('activities');openActivityDetail('${p.id}')"`
-                     : (p.link ? `data-link="${p.link}" onclick="newsCardClick(this)"` : '');
+                     : (extLink ? `data-link="${extLink}" onclick="newsCardClick(this)"` : '');
     const styleAttr = clickable ? 'style="cursor:pointer"' : '';
     const badge = hasFull
       ? `<div style="margin-top:12px;font-size:13px;color:#f97316;font-weight:600">📖 קרא את הסקירה המלאה ←</div>`
-      : (p.link ? `<div style="margin-top:12px;font-size:13px;color:#4267B2;font-weight:600">&#x1F4D8; קרא עוד בפייסבוק &#x2197;</div>` : '');
+      : (extLink ? `<div style="margin-top:12px;font-size:13px;color:#4267B2;font-weight:600">&#x1F4D8; ${extLabel} &#x2197;</div>` : '');
     return `<div class="news-slide"><div class="news-card" ${styleAttr} ${clickAttr}>${img}<div class="news-card-body">${date}${title}${body}${badge}</div></div></div>`;
   }).join('');
   if (dotsEl) dotsEl.innerHTML = _newsPosts.map((_,i) =>
@@ -623,10 +629,12 @@ function renderActivitiesListView() {
   const gridHtml = '<div class="activities-grid">' + filtered.map(p => {
     const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="">` : `<div class="activity-card-noimg">📰</div>`;
     const hasFull = newsPostHasFullContent(p);
+    const extLink = p.link || p.linkIg; // Facebook wins if both are set — see the identical note in renderNewsCarousel
+    const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
     const badge = hasFull
       ? `<div class="activity-card-badge" style="color:#f97316">📖 סקירה מלאה ←</div>`
-      : (p.link ? `<div class="activity-card-badge" style="color:#4267B2">📘 קרא עוד בפייסבוק ↗</div>` : '');
-    const onclick = hasFull ? `openActivityDetail('${p.id}')` : (p.link ? `window.open('${p.link}','_blank')` : '');
+      : (extLink ? `<div class="activity-card-badge" style="color:#4267B2">📘 ${extLabel} ↗</div>` : '');
+    const onclick = hasFull ? `openActivityDetail('${p.id}')` : (extLink ? `window.open('${extLink}','_blank')` : '');
     return `<div class="activity-card" ${onclick ? `onclick="${onclick}"` : ''}>${img}
       <div class="activity-card-body">
         ${p.date ? `<div class="activity-card-date">${p.date}</div>` : ''}
@@ -675,7 +683,10 @@ function renderActivityDetailView() {
       ${photos.length ? `<div class="activity-detail-photos">${photos.map((ph, i) =>
         `<img src="${ph.imageData}" alt="${ph.caption || ''}" onclick="openActivityLightbox(${i + (post.imageData ? 1 : 0)})" title="${ph.caption || ''}">`
       ).join('')}</div>` : ''}
-      ${post.link ? `<a href="${post.link}" target="_blank" style="display:inline-block;color:#4267B2;font-weight:700;font-size:14px;text-decoration:none">&#x1F4D8; לפוסט המקורי בפייסבוק/אינסטגרם ↗</a>` : ''}
+      ${(post.link || post.linkIg) ? `<div style="display:flex;gap:20px;flex-wrap:wrap">
+        ${post.link ? `<a href="${post.link}" target="_blank" style="display:inline-block;color:#4267B2;font-weight:700;font-size:14px;text-decoration:none">&#x1F4D8; לפוסט המקורי בפייסבוק ↗</a>` : ''}
+        ${post.linkIg ? `<a href="${post.linkIg}" target="_blank" style="display:inline-block;color:#c13584;font-weight:700;font-size:14px;text-decoration:none">&#x1F4F7; לפוסט המקורי באינסטגרם ↗</a>` : ''}
+      </div>` : ''}
     </div>`;
   window._activityLightboxImages = allImages;
 }
@@ -897,8 +908,10 @@ window.openNewsModal = async function(postId) {
           <label for="nm-archived" style="font-size:14px;cursor:pointer">📦 בארכיון (לא מוצג ברשימת העדכונים השוטפת)</label></div>
         <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">סדר הצגה בקרוסלה (0 = ראשון)</label>
           <input id="nm-order" type="number" value="${post.order||0}" min="0" style="width:80px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px"></div>
-        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפוסט בפייסבוק/אינסטגרם (אופציונלי)</label>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפוסט בפייסבוק (אופציונלי)</label>
           <input id="nm-link" value="${(post.link||'').replace(/"/g,'&quot;')}" placeholder="https://www.facebook.com/..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפוסט באינסטגרם (אופציונלי)</label>
+          <input id="nm-link-ig" value="${(post.linkIg||'').replace(/"/g,'&quot;')}" placeholder="https://www.instagram.com/..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>
 
         <div style="border-top:1px dashed rgba(255,255,255,.2);padding-top:16px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:700;margin-bottom:14px">
@@ -962,9 +975,11 @@ window.saveNewsPost = async function(postId) {
   const categoryId = document.getElementById('nm-category').value || DEFAULT_NEWS_CATEGORY.id;
   const order  = parseInt(document.getElementById('nm-order').value)||0;
   const link   = (document.getElementById('nm-link')?.value||'').trim();
+  const linkIg = (document.getElementById('nm-link-ig')?.value||'').trim();
   const expanded = document.getElementById('nm-expand-toggle').checked;
   const data   = { title, date, body, active, archived, categoryId, order, updatedAt: Date.now() };
-  if (link) data.link = link; else data.link = null;
+  data.link = link || null;
+  data.linkIg = linkIg || null;
   // Unchecking "add full details" demotes an existing recap back to a plain
   // short post, regardless of whatever text/photos are still sitting in the
   // (now hidden) expanded fields — the checkbox is the single source of truth.
