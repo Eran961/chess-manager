@@ -1425,6 +1425,24 @@ function renderTournamentsContent(data) {
   const linkBtn = document.getElementById('tourn-fed-link-btn');
   if (linkBtn && data.fedLinkLabel) linkBtn.textContent = '🔗 ' + data.fedLinkLabel;
   if (linkBtn && data.fedLinkUrl) linkBtn.href = data.fedLinkUrl;
+
+  // Hidden until a real WhatsApp invite link is set from the portal — no
+  // placeholder link, so nothing broken/fake ever shows on the public site.
+  const waSection = document.getElementById('tourn-wa-link-section');
+  if (waSection) {
+    if (data.waLinkUrl) {
+      waSection.style.display = '';
+      const waText = document.getElementById('tourn-wa-link-text');
+      if (waText && data.waLinkText) waText.textContent = data.waLinkText;
+      const waBtn = document.getElementById('tourn-wa-link-btn');
+      if (waBtn) {
+        waBtn.href = data.waLinkUrl;
+        if (data.waLinkLabel) waBtn.textContent = '💬 ' + data.waLinkLabel;
+      }
+    } else {
+      waSection.style.display = 'none';
+    }
+  }
 }
 
 function renderContactContent(data) {
@@ -2064,6 +2082,12 @@ function renderTournamentsAdmin(data) {
   const fedLinkText  = (data && data.fedLinkText)  || 'לתוצאות חיות, לוחות ומידע על תחרויות רשמיות — היכנסו לאתר איגוד השחמט הישראלי';
   const fedLinkLabel = (data && data.fedLinkLabel) || 'תחרויות המועדון באיגוד';
   const fedLinkUrl   = (data && data.fedLinkUrl)   || 'https://www.chess.org.il/Clubs/Club.aspx?Id=31&View=TournamentsNow';
+  // No fallback URL here on purpose — unlike the federation link above, there's
+  // no real default to show until the admin actually pastes a group invite
+  // link; the public box stays hidden (see renderTournamentsContent) until then.
+  const waLinkText  = (data && data.waLinkText)  || 'מוזמנים להצטרף לקהילת התחרויות שלנו בוואטסאפ ולקבל עדכונים שוטפים';
+  const waLinkLabel = (data && data.waLinkLabel) || 'הצטרפו לקהילת הווטסאפ';
+  const waLinkUrl   = (data && data.waLinkUrl)   || '';
 
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
     '<h4 style="margin:0">🏆 כרטיסי תחרויות</h4>' +
@@ -2094,6 +2118,17 @@ function renderTournamentsAdmin(data) {
     '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">כתובת הקישור (URL)</label>' +
     '<input id="tourn-fedlink-url" value="' + fedLinkUrl.replace(/"/g,'&quot;') + '" dir="ltr" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>' +
     '<button onclick="saveTournFedLink()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-weight:700;font-size:14px;align-self:flex-start">💾 שמור</button>' +
+    '</div>' +
+    '<h4 style="margin:24px 0 4px">💬 קופסת קישור לקהילת הווטסאפ</h4>' +
+    '<p style="font-size:12px;opacity:.6;margin:0 0 12px">כל עוד לא תמלא כתובת קישור, הקופסה הזו לא תוצג באתר.</p>' +
+    '<div style="display:flex;flex-direction:column;gap:12px;max-width:500px">' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">טקסט</label>' +
+    '<textarea id="tourn-walink-text" rows="2" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;resize:vertical;box-sizing:border-box">' + waLinkText + '</textarea></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">כיתוב הכפתור</label>' +
+    '<input id="tourn-walink-label" value="' + waLinkLabel.replace(/"/g,'&quot;') + '" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>' +
+    '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">קישור ההצטרפות לקבוצה (chat.whatsapp.com/...)</label>' +
+    '<input id="tourn-walink-url" value="' + waLinkUrl.replace(/"/g,'&quot;') + '" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>' +
+    '<button onclick="saveTournWaLink()" style="background:#25d366;color:white;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-weight:700;font-size:14px;align-self:flex-start">💾 שמור</button>' +
     '</div>';
 }
 
@@ -2164,6 +2199,16 @@ window.saveTournFedLink = async function() {
     await db.ref('siteContent/tournaments').update({ fedLinkText, fedLinkLabel, fedLinkUrl });
     loadSiteContent();
     showToast('✅ נשמר!');
+  } catch(e) { showToast('❌ '+e.message); }
+};
+window.saveTournWaLink = async function() {
+  const waLinkText  = document.getElementById('tourn-walink-text').value.trim();
+  const waLinkLabel = document.getElementById('tourn-walink-label').value.trim();
+  const waLinkUrl   = document.getElementById('tourn-walink-url').value.trim();
+  try {
+    await db.ref('siteContent/tournaments').update({ waLinkText, waLinkLabel, waLinkUrl: waLinkUrl || null });
+    loadSiteContent();
+    showToast(waLinkUrl ? '✅ נשמר! הקופסה תוצג באתר' : '✅ נשמר — הקופסה מוסתרת עד שתמלא קישור');
   } catch(e) { showToast('❌ '+e.message); }
 };
 
