@@ -684,8 +684,8 @@ function renderActivityDetailView() {
         `<img src="${ph.imageData}" alt="${ph.caption || ''}" onclick="openActivityLightbox(${i + (post.imageData ? 1 : 0)})" title="${ph.caption || ''}">`
       ).join('')}</div>` : ''}
       ${(post.link || post.linkIg) ? `<div style="display:flex;gap:20px;flex-wrap:wrap">
-        ${post.link ? `<a href="${post.link}" target="_blank" style="display:inline-block;color:#4267B2;font-weight:700;font-size:14px;text-decoration:none">&#x1F4D8; לפוסט המקורי בפייסבוק ↗</a>` : ''}
-        ${post.linkIg ? `<a href="${post.linkIg}" target="_blank" style="display:inline-block;color:#c13584;font-weight:700;font-size:14px;text-decoration:none">&#x1F4F7; לפוסט המקורי באינסטגרם ↗</a>` : ''}
+        ${post.link ? `<a href="${post.link}" target="_blank" style="display:inline-block;color:#4267B2;font-weight:700;font-size:14px;text-decoration:none">&#x1F4D8; קישור לפוסט בפייסבוק ↗</a>` : ''}
+        ${post.linkIg ? `<a href="${post.linkIg}" target="_blank" style="display:inline-block;color:#c13584;font-weight:700;font-size:14px;text-decoration:none">&#x1F4F7; קישור לפוסט באינסטגרם ↗</a>` : ''}
       </div>` : ''}
     </div>`;
   window._activityLightboxImages = allImages;
