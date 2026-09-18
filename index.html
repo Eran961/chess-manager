@@ -124,24 +124,6 @@ if(localStorage.getItem('ccm_loggedIn')){
         href="https://wa.me/972559573758?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%2F%D7%AA%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%95%D7%93%20%D7%A2%D7%9C%20%D7%A2%D7%95%D7%A0%D7%AA%20%D7%94%D7%97%D7%95%D7%92%D7%99%D7%9D%20%D7%94%D7%97%D7%93%D7%A9%D7%94%20%D7%95%D7%9C%D7%94%D7%99%D7%A8%D7%A9%D7%9D" target="_blank">📞 לפרטים נוספים ורישום</a>
     </section>
 
-    <!-- Full-site image viewer for the flyer photos — stays on the site (no
-         download, no new tab) and lets you switch between the two images. -->
-    <div class="site-lightbox" id="season-lightbox" onclick="if(event.target===this) closeSeasonLightbox()">
-      <button class="site-lightbox-close" onclick="closeSeasonLightbox()" title="סגור">✕</button>
-      <button class="site-lightbox-arrow prev" onclick="seasonLightboxNav(1)" title="התמונה הקודמת">&#10095;</button>
-      <img id="season-lightbox-img" src="" alt="">
-      <button class="site-lightbox-arrow next" onclick="seasonLightboxNav(-1)" title="התמונה הבאה">&#10094;</button>
-    </div>
-
-    <!-- Same viewer, reused for activity-recap photos (dynamic image set, see
-         openActivityLightbox in federation-content-cms.js). -->
-    <div class="site-lightbox" id="activity-lightbox" onclick="if(event.target===this) closeActivityLightbox()">
-      <button class="site-lightbox-close" onclick="closeActivityLightbox()" title="סגור">✕</button>
-      <button class="site-lightbox-arrow prev" onclick="activityLightboxNav(1)" title="התמונה הקודמת">&#10095;</button>
-      <img id="activity-lightbox-img" src="" alt="">
-      <button class="site-lightbox-arrow next" onclick="activityLightboxNav(-1)" title="התמונה הבאה">&#10094;</button>
-    </div>
-
     <div class="about-section">
       <div class="about-text" id="home-about-text">
         <h3>על המועדון</h3>
@@ -358,6 +340,25 @@ if(localStorage.getItem('ccm_loggedIn')){
 
 
 </div>
+
+  <!-- Full-site image viewers (flyer + activity-recap photos) — siblings of
+       every .site-page, not nested inside page-home: a .site-page that isn't
+       "active" is display:none, and that hides any descendant regardless of
+       the descendant's own display/class — nesting these inside page-home
+       (as they were before) meant they only became visible again once you
+       navigated back to the home page, wherever you'd actually opened them. -->
+  <div class="site-lightbox" id="season-lightbox" onclick="if(event.target===this) closeSeasonLightbox()">
+    <button class="site-lightbox-close" onclick="closeSeasonLightbox()" title="סגור">✕</button>
+    <button class="site-lightbox-arrow prev" onclick="seasonLightboxNav(1)" title="התמונה הקודמת">&#10095;</button>
+    <img id="season-lightbox-img" src="" alt="">
+    <button class="site-lightbox-arrow next" onclick="seasonLightboxNav(-1)" title="התמונה הבאה">&#10094;</button>
+  </div>
+  <div class="site-lightbox" id="activity-lightbox" onclick="if(event.target===this) closeActivityLightbox()">
+    <button class="site-lightbox-close" onclick="closeActivityLightbox()" title="סגור">✕</button>
+    <button class="site-lightbox-arrow prev" onclick="activityLightboxNav(1)" title="התמונה הקודמת">&#10095;</button>
+    <img id="activity-lightbox-img" src="" alt="">
+    <button class="site-lightbox-arrow next" onclick="activityLightboxNav(-1)" title="התמונה הבאה">&#10094;</button>
+  </div>
 
   <!-- ===== WHATSAPP FLOATING BUTTON ===== -->
   <a id="wa-float-btn"
