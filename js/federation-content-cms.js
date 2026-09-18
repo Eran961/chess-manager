@@ -447,12 +447,35 @@ async function loadNewsCarousel() {
 }
 window.loadNewsCarousel = loadNewsCarousel;
 
-// A post with a full body and/or extra photos is a full recap — its card
-// opens the recap on the site instead of (or in addition to) any external
-// link. A plain post (base fields only) behaves exactly like before.
+// A post with a full body, extra photos, and/or extra reference links is a
+// full recap — its card opens the recap on the site instead of (or in
+// addition to) any external link. A plain post (base fields only) behaves
+// exactly like before.
 function newsPostHasFullContent(p) {
-  return !!((p.fullBody && p.fullBody.trim()) || (p.photos && p.photos.length));
+  return !!((p.fullBody && p.fullBody.trim()) || (p.photos && p.photos.length) || (p.extraLinks && p.extraLinks.length));
 }
+
+// Looks a post up by id across whichever of the two independent caches
+// happens to hold it (the homepage carousel's _newsPosts is filtered/sorted
+// differently from the archive's _activitiesData, so either may be the one
+// actually populated depending on which page the click came from).
+function findNewsPostById(id) {
+  return (_activitiesData || []).find(p => p.id === id) || (_newsPosts || []).find(p => p.id === id);
+}
+
+// Click-to-enlarge for a card's own thumbnail (homepage carousel + archive
+// list) — separate from the card's own click-through (to the recap page or
+// an external link), so clicking the image specifically previews it instead
+// of navigating away. Shows the post's full image set (cover + gallery
+// photos) if it has any, exactly like the detail view's own lightbox.
+window.openCardLightbox = function(postId) {
+  const post = findNewsPostById(postId);
+  if (!post) return;
+  const images = [post.imageData, ...(post.photos || []).map(ph => ph.imageData)].filter(Boolean);
+  if (!images.length) return;
+  window._activityLightboxImages = images;
+  openActivityLightbox(0);
+};
 
 function renderNewsCarousel() {
   const inner = document.getElementById('news-inner');
@@ -460,7 +483,7 @@ function renderNewsCarousel() {
   if (!inner) return;
   inner.innerHTML = _newsPosts.map((p,i) => {
     const img = p.imageData
-      ? `<img class="news-card-img" src="${p.imageData}" alt="">`
+      ? `<img class="news-card-img" src="${p.imageData}" alt="" onclick="event.stopPropagation();openCardLightbox('${p.id}')" style="cursor:zoom-in">`
       : `<div class="news-card-no-img">📰</div>`;
     const date  = p.date  ? `<div class="news-card-date">${p.date}</div>` : '';
     const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
@@ -627,7 +650,7 @@ function renderActivitiesListView() {
     return;
   }
   const gridHtml = '<div class="activities-grid">' + filtered.map(p => {
-    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="">` : `<div class="activity-card-noimg">📰</div>`;
+    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="" onclick="event.stopPropagation();openCardLightbox('${p.id}')" style="cursor:zoom-in">` : `<div class="activity-card-noimg">📰</div>`;
     const hasFull = newsPostHasFullContent(p);
     const extLink = p.link || p.linkIg; // Facebook wins if both are set — see the identical note in renderNewsCarousel
     const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
@@ -673,22 +696,35 @@ function renderActivityDetailView() {
   }
   const photos = post.photos || [];
   const allImages = [post.imageData, ...photos.map(p => p.imageData)].filter(Boolean);
+  const linksHtml = renderActivityLinksRow(post);
   root.innerHTML = `
     <div class="activity-detail">
       <button onclick="backToActivitiesList()" style="background:none;border:none;color:#f97316;font-size:14px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px">→ חזרה לכל העדכונים</button>
       ${post.imageData ? `<img class="activity-detail-cover" src="${post.imageData}" alt="" onclick="openActivityLightbox(0)">` : ''}
       <div class="activity-detail-title">${post.title || ''}</div>
       ${post.date ? `<div class="activity-detail-date">${post.date}</div>` : ''}
+      ${linksHtml}
       ${post.fullBody ? `<div class="activity-detail-body">${post.fullBody}</div>` : (post.body ? `<div class="activity-detail-body">${post.body}</div>` : '')}
       ${photos.length ? `<div class="activity-detail-photos">${photos.map((ph, i) =>
         `<img src="${ph.imageData}" alt="${ph.caption || ''}" onclick="openActivityLightbox(${i + (post.imageData ? 1 : 0)})" title="${ph.caption || ''}">`
       ).join('')}</div>` : ''}
-      ${(post.link || post.linkIg) ? `<div style="display:flex;gap:20px;flex-wrap:wrap">
-        ${post.link ? `<a href="${post.link}" target="_blank" style="display:inline-block;color:#4267B2;font-weight:700;font-size:14px;text-decoration:none">&#x1F4D8; קישור לפוסט בפייסבוק ↗</a>` : ''}
-        ${post.linkIg ? `<a href="${post.linkIg}" target="_blank" style="display:inline-block;color:#c13584;font-weight:700;font-size:14px;text-decoration:none">&#x1F4F7; קישור לפוסט באינסטגרם ↗</a>` : ''}
-      </div>` : ''}
     </div>`;
   window._activityLightboxImages = allImages;
+}
+
+// Facebook/Instagram + any admin-added "extra links" (named references —
+// e.g. a link to full tournament results on an external site) — shown
+// together, near the top of the recap rather than buried at the bottom,
+// since they're often the single most useful thing in the whole post.
+function renderActivityLinksRow(post) {
+  const links = [];
+  if (post.link) links.push({ label: 'קישור לפוסט בפייסבוק', url: post.link, color: '#4267B2', icon: '&#x1F4D8;' });
+  if (post.linkIg) links.push({ label: 'קישור לפוסט באינסטגרם', url: post.linkIg, color: '#c13584', icon: '&#x1F4F7;' });
+  (post.extraLinks || []).forEach(l => { if (l && l.url) links.push({ label: l.label || l.url, url: l.url, color: '#553c9a', icon: '&#x1F517;' }); });
+  if (!links.length) return '';
+  return `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px">` +
+    links.map(l => `<a href="${l.url}" target="_blank" style="display:inline-block;color:${l.color};font-weight:700;font-size:14px;text-decoration:none">${l.icon} ${l.label} ↗</a>`).join('') +
+    `</div>`;
 }
 
 window.backToActivitiesList = function() {
@@ -864,6 +900,7 @@ window.toggleNewsArchived = async function(postId, archived) {
 // compressed photos as inline HTML would be a very large attribute. Same
 // reasoning as _slImg1/_slImg2 for the season-launch section.
 let _nmPhotos = [];
+let _nmExtraLinks = []; // [{label, url}, ...] staged for the currently-open modal
 
 window.openNewsModal = async function(postId) {
   await ensureNewsCategoriesAndSettings();
@@ -875,6 +912,7 @@ window.openNewsModal = async function(postId) {
   const catOptionsHtml = (_newsCategories || [{ ...DEFAULT_NEWS_CATEGORY }])
     .map(c => `<option value="${c.id}"${c.id === currentCat ? ' selected' : ''}>${c.name}</option>`).join('');
   _nmPhotos = post.photos ? post.photos.slice() : [];
+  _nmExtraLinks = post.extraLinks ? post.extraLinks.slice() : [];
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open'; modal.style.cssText = 'z-index:9999;padding:20px';
   modal.onclick = e => { if (e.target===modal) modal.remove(); };
@@ -924,6 +962,9 @@ window.openNewsModal = async function(postId) {
             <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">תמונות נוספות</label>
               <div id="nm-photos-list"></div>
             </div>
+            <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">🔗 קישורים נוספים (למשל: תוצאות מלאות, לוח תוצאות)</label>
+              <div id="nm-extralinks-list"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -934,6 +975,7 @@ window.openNewsModal = async function(postId) {
     </div>`;
   document.body.appendChild(modal);
   renderNmPhotosList();
+  renderNmExtraLinksList();
 };
 
 window.previewNewsImg = async function(input) {
@@ -964,6 +1006,20 @@ window.addNmPhoto = async function(input) {
 };
 window.removeNmPhoto = function(i) { _nmPhotos.splice(i, 1); renderNmPhotosList(); };
 
+function renderNmExtraLinksList() {
+  const wrap = document.getElementById('nm-extralinks-list');
+  if (!wrap) return;
+  wrap.innerHTML = _nmExtraLinks.map((l, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input value="${(l.label||'').replace(/"/g,'&quot;')}" oninput="_nmExtraLinks[${i}].label=this.value" placeholder="שם הקישור (למשל: תוצאות גיל 9)" style="flex:1;padding:7px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:12px;box-sizing:border-box">
+      <input value="${(l.url||'').replace(/"/g,'&quot;')}" oninput="_nmExtraLinks[${i}].url=this.value" placeholder="https://..." dir="ltr" style="flex:1;padding:7px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:12px;box-sizing:border-box">
+      <button onclick="removeNmExtraLink(${i})" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+    </div>`).join('') +
+    '<button type="button" onclick="addNmExtraLink()" style="background:none;border:1px dashed rgba(255,255,255,.3);color:inherit;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit">+ הוסף קישור</button>';
+}
+window.addNmExtraLink = function() { _nmExtraLinks.push({ label: '', url: '' }); renderNmExtraLinksList(); };
+window.removeNmExtraLink = function(i) { _nmExtraLinks.splice(i, 1); renderNmExtraLinksList(); };
+
 window.saveNewsPost = async function(postId) {
   const title  = (document.getElementById('nm-title').value||'').trim();
   const date   = document.getElementById('nm-date').value;
@@ -974,17 +1030,22 @@ window.saveNewsPost = async function(postId) {
   const archived = document.getElementById('nm-archived').checked;
   const categoryId = document.getElementById('nm-category').value || DEFAULT_NEWS_CATEGORY.id;
   const order  = parseInt(document.getElementById('nm-order').value)||0;
-  const link   = (document.getElementById('nm-link')?.value||'').trim();
-  const linkIg = (document.getElementById('nm-link-ig')?.value||'').trim();
+  const link   = normalizeExternalUrl(document.getElementById('nm-link')?.value);
+  const linkIg = normalizeExternalUrl(document.getElementById('nm-link-ig')?.value);
   const expanded = document.getElementById('nm-expand-toggle').checked;
   const data   = { title, date, body, active, archived, categoryId, order, updatedAt: Date.now() };
   data.link = link || null;
   data.linkIg = linkIg || null;
   // Unchecking "add full details" demotes an existing recap back to a plain
-  // short post, regardless of whatever text/photos are still sitting in the
-  // (now hidden) expanded fields — the checkbox is the single source of truth.
+  // short post, regardless of whatever text/photos/links are still sitting
+  // in the (now hidden) expanded fields — the checkbox is the single source
+  // of truth.
   data.fullBody = expanded ? ((document.getElementById('nm-fullbody').value||'').trim() || null) : null;
   data.photos = expanded && _nmPhotos.length ? _nmPhotos.slice() : null;
+  data.extraLinks = expanded
+    ? (_nmExtraLinks.map(l => ({ label: (l.label||'').trim(), url: normalizeExternalUrl(l.url) })).filter(l => l.url))
+    : [];
+  if (!data.extraLinks.length) data.extraLinks = null;
   if (imgNew)       data.imageData = imgNew;
   else if (imgKeep && postId) { const s = await db.ref('newsPosts/'+postId+'/imageData').get(); if (s.exists()) data.imageData = s.val(); }
   try {
