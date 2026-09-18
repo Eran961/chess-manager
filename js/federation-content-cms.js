@@ -455,35 +455,13 @@ function newsPostHasFullContent(p) {
   return !!((p.fullBody && p.fullBody.trim()) || (p.photos && p.photos.length) || (p.extraLinks && p.extraLinks.length));
 }
 
-// Looks a post up by id across whichever of the two independent caches
-// happens to hold it (the homepage carousel's _newsPosts is filtered/sorted
-// differently from the archive's _activitiesData, so either may be the one
-// actually populated depending on which page the click came from).
-function findNewsPostById(id) {
-  return (_activitiesData || []).find(p => p.id === id) || (_newsPosts || []).find(p => p.id === id);
-}
-
-// Click-to-enlarge for a card's own thumbnail (homepage carousel + archive
-// list) — separate from the card's own click-through (to the recap page or
-// an external link), so clicking the image specifically previews it instead
-// of navigating away. Shows the post's full image set (cover + gallery
-// photos) if it has any, exactly like the detail view's own lightbox.
-window.openCardLightbox = function(postId) {
-  const post = findNewsPostById(postId);
-  if (!post) return;
-  const images = [post.imageData, ...(post.photos || []).map(ph => ph.imageData)].filter(Boolean);
-  if (!images.length) return;
-  window._activityLightboxImages = images;
-  openActivityLightbox(0);
-};
-
 function renderNewsCarousel() {
   const inner = document.getElementById('news-inner');
   const dotsEl = document.getElementById('news-dots');
   if (!inner) return;
   inner.innerHTML = _newsPosts.map((p,i) => {
     const img = p.imageData
-      ? `<img class="news-card-img" src="${p.imageData}" alt="" onclick="event.stopPropagation();openCardLightbox('${p.id}')" style="cursor:zoom-in">`
+      ? `<img class="news-card-img" src="${p.imageData}" alt="">`
       : `<div class="news-card-no-img">📰</div>`;
     const date  = p.date  ? `<div class="news-card-date">${p.date}</div>` : '';
     const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
@@ -650,7 +628,7 @@ function renderActivitiesListView() {
     return;
   }
   const gridHtml = '<div class="activities-grid">' + filtered.map(p => {
-    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="" onclick="event.stopPropagation();openCardLightbox('${p.id}')" style="cursor:zoom-in">` : `<div class="activity-card-noimg">📰</div>`;
+    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="">` : `<div class="activity-card-noimg">📰</div>`;
     const hasFull = newsPostHasFullContent(p);
     const extLink = p.link || p.linkIg; // Facebook wins if both are set — see the identical note in renderNewsCarousel
     const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
@@ -695,21 +673,25 @@ function renderActivityDetailView() {
     return;
   }
   const photos = post.photos || [];
-  const allImages = [post.imageData, ...photos.map(p => p.imageData)].filter(Boolean);
+  // Only the small extra photos at the bottom are enlargeable — the cover
+  // image is a plain visual (matches every card elsewhere: clicking a card
+  // navigates to the recap, it never opens an image preview instead), so
+  // it's deliberately not part of the lightbox's image set here.
+  const galleryImages = photos.map(ph => ph.imageData).filter(Boolean);
   const linksHtml = renderActivityLinksRow(post);
   root.innerHTML = `
     <div class="activity-detail">
       <button onclick="backToActivitiesList()" style="background:none;border:none;color:#f97316;font-size:14px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px">→ חזרה לכל העדכונים</button>
-      ${post.imageData ? `<img class="activity-detail-cover" src="${post.imageData}" alt="" onclick="openActivityLightbox(0)">` : ''}
+      ${post.imageData ? `<img class="activity-detail-cover" src="${post.imageData}" alt="">` : ''}
       <div class="activity-detail-title">${post.title || ''}</div>
       ${post.date ? `<div class="activity-detail-date">${post.date}</div>` : ''}
       ${linksHtml}
       ${post.fullBody ? `<div class="activity-detail-body">${post.fullBody}</div>` : (post.body ? `<div class="activity-detail-body">${post.body}</div>` : '')}
       ${photos.length ? `<div class="activity-detail-photos">${photos.map((ph, i) =>
-        `<img src="${ph.imageData}" alt="${ph.caption || ''}" onclick="openActivityLightbox(${i + (post.imageData ? 1 : 0)})" title="${ph.caption || ''}">`
+        `<img src="${ph.imageData}" alt="${ph.caption || ''}" onclick="openActivityLightbox(${i})" title="${ph.caption || ''}">`
       ).join('')}</div>` : ''}
     </div>`;
-  window._activityLightboxImages = allImages;
+  window._activityLightboxImages = galleryImages;
 }
 
 // Facebook/Instagram + any admin-added "extra links" (named references —

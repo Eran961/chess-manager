@@ -1434,7 +1434,7 @@
     .activity-card-text { font-size:13px; color:var(--text-muted,rgba(255,255,255,.6)); line-height:1.6; flex:1; }
     .activity-card-badge { margin-top:10px; font-size:12px; font-weight:700; }
     .activity-detail { padding:0 20px 40px; direction:rtl; max-width:820px; margin:0 auto; }
-    .activity-detail-cover { width:100%; max-height:420px; object-fit:cover; border-radius:14px; cursor:zoom-in; margin-bottom:20px; }
+    .activity-detail-cover { width:100%; max-height:420px; object-fit:cover; border-radius:14px; margin-bottom:20px; }
     .activity-detail-title { font-size:26px; font-weight:900; color:var(--text-primary,white); margin:0 0 6px; }
     .activity-detail-date { font-size:14px; font-weight:700; color:#f97316; margin-bottom:18px; }
     .activity-detail-body { font-size:16px; line-height:1.9; color:var(--text-primary,white); white-space:pre-wrap; margin-bottom:24px; }
