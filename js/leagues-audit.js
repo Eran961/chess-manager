@@ -532,6 +532,183 @@ async function deleteTournamentEntry(id, type, eid) {
 }
 window.deleteTournamentEntry = deleteTournamentEntry;
 
+// ===== CAMP FINANCES (admin-only, lives on the camp's own page — not under תחרויות) =====
+
+let _campSubTab = {};
+const CAMP_EXPENSE_CATEGORIES = ['אוכל', 'שכר מדריך', 'אחר'];
+const CAMP_EXPENSE_ICONS = { 'אוכל': '🍔', 'שכר מדריך': '🧑‍🏫', 'אחר': '📌' };
+
+function calcCampIncome(camp) {
+  let total = 0;
+  if (camp.income) Object.values(camp.income).forEach(e => total += e.amount || 0);
+  return total;
+}
+
+function calcCampExpenses(camp) {
+  let total = 0;
+  if (camp.expenses) Object.values(camp.expenses).forEach(e => total += e.amount || 0);
+  return total;
+}
+
+function renderCampFinance(id, camp, income, expenses, balance) {
+  const manualIncome = camp.income ? Object.entries(camp.income) : [];
+  const expensesList = camp.expenses ? Object.entries(camp.expenses) : [];
+  const emptyRow = (text) => `<div style="color:#a0aec0;font-size:13px;padding:14px;text-align:center">${text}</div>`;
+
+  const manualIncomeRows = manualIncome.map(([eid, e]) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #edf2f7;font-size:13px">
+      <span style="flex-shrink:0">📌</span>
+      <input type="text" value="${(e.description||'').replace(/"/g,'&quot;')}" onchange="updateCampEntry('${id}','income','${eid}','description',this.value)"
+        style="flex:1;min-width:0;border:1px solid transparent;background:none;font-size:13px;color:#4a5568;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="color:#718096">₪</span>
+        <input type="number" value="${e.amount||0}" min="0" onchange="updateCampEntry('${id}','income','${eid}','amount',this.value)"
+          style="width:70px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-weight:700;color:#2f855a;font-family:inherit">
+        <button onclick="deleteCampEntry('${id}','income','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px" title="מחק">✕</button>
+      </div>
+    </div>`).join('');
+
+  const byCategory = {};
+  expensesList.forEach(([eid, e]) => {
+    const cat = e.category || 'אחר';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push([eid, e]);
+  });
+  const expenseGroupsHTML = Object.entries(byCategory).map(([cat, entries]) => {
+    const catTotal = entries.reduce((s, [,e]) => s + (e.amount || 0), 0);
+    const icon = CAMP_EXPENSE_ICONS[cat] || '📌';
+    const rows = entries.map(([eid, e]) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:13px;border-bottom:1px solid #f7fafc">
+        <input type="text" value="${(e.description||'').replace(/"/g,'&quot;')}" onchange="updateCampEntry('${id}','expenses','${eid}','description',this.value)"
+          style="flex:1;min-width:0;border:1px solid transparent;background:none;font-size:13px;color:#4a5568;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span style="color:#718096">₪</span>
+          <input type="number" value="${e.amount||0}" min="0" onchange="updateCampEntry('${id}','expenses','${eid}','amount',this.value)"
+            style="width:70px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-weight:700;color:#c53030;font-family:inherit">
+          <button onclick="deleteCampEntry('${id}','expenses','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px" title="מחק">✕</button>
+        </div>
+      </div>`).join('');
+    return `
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:10px;background:white">
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#fff5f5;padding:8px 14px;border-bottom:1px solid #fed7d7">
+          <span style="font-size:13px;font-weight:700;color:#2d3748">${icon} ${cat}</span>
+          <span style="font-size:13px;font-weight:800;color:#c53030">₪${catTotal.toLocaleString()}</span>
+        </div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px">
+      <div style="background:rgba(74,222,128,.1);border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:#2f855a;font-weight:700;margin-bottom:4px">הכנסות</div>
+        <div style="font-size:22px;font-weight:800;color:#2f855a">₪${income.toLocaleString()}</div>
+      </div>
+      <div style="background:rgba(248,113,113,.1);border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:#c53030;font-weight:700;margin-bottom:4px">הוצאות</div>
+        <div style="font-size:22px;font-weight:800;color:#c53030">₪${expenses.toLocaleString()}</div>
+      </div>
+      <div style="background:${balance>=0?'rgba(74,222,128,.1)':'rgba(248,113,113,.1)'};border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:${balance>=0?'#2f855a':'#c53030'};font-weight:700;margin-bottom:4px">יתרה</div>
+        <div style="font-size:22px;font-weight:800;color:${balance>=0?'#2f855a':'#c53030'}">${balance>=0?'+':''}₪${balance.toLocaleString()}</div>
+      </div>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #edf2f7;border-radius:14px;padding:16px;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:800;color:#2f855a;margin-bottom:12px">💰 הכנסות</div>
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:12px;background:white">
+        ${manualIncomeRows || emptyRow('אין הכנסות עדיין')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px">
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">תיאור</div>
+          <input type="text" id="new-camp-income-desc-${id}" placeholder="לדוגמה: דמי הרשמה" class="modal-input" style="width:100%"></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
+          <input type="number" id="new-camp-income-amount-${id}" placeholder="0" min="0" class="modal-input" style="width:100%"></div>
+      </div>
+      <button onclick="addCampEntry('${id}','income')" style="width:100%;background:#2f855a;color:white;border:none;border-radius:7px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ הוסף</button>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #edf2f7;border-radius:14px;padding:16px">
+      <div style="font-size:14px;font-weight:800;color:#c53030;margin-bottom:12px">📤 הוצאות</div>
+      ${expenseGroupsHTML || `<div style="border:1px solid #e2e8f0;border-radius:10px;background:white;margin-bottom:12px">${emptyRow('אין הוצאות רשומות עדיין')}</div>`}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:${expenseGroupsHTML?'12px':'0'};margin-bottom:10px">
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">קטגוריה</div>
+          <select id="new-camp-expense-cat-${id}" class="modal-input" style="width:100%">
+            ${CAMP_EXPENSE_CATEGORIES.map(c=>`<option value="${c}">${CAMP_EXPENSE_ICONS[c]||'📌'} ${c}</option>`).join('')}
+          </select></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">תיאור</div>
+          <input type="text" id="new-camp-expense-desc-${id}" placeholder="פירוט" class="modal-input" style="width:100%"></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
+          <input type="number" id="new-camp-expense-amount-${id}" placeholder="0" min="0" class="modal-input" style="width:100%"></div>
+      </div>
+      <button onclick="addCampEntry('${id}','expenses')" style="width:100%;background:#c53030;color:white;border:none;border-radius:7px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ הוסף</button>
+    </div>`;
+}
+window.renderCampFinance = renderCampFinance;
+
+function switchCampTab(campId, tab) {
+  _campSubTab[campId] = tab;
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  const panel = document.getElementById('panel-camp-' + campId);
+  if (panel) panel.innerHTML = renderCampOwnPage(camp);
+}
+window.switchCampTab = switchCampTab;
+
+function refreshCampFinancePanel(campId) {
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  const panel = document.getElementById('panel-camp-' + campId);
+  if (panel) panel.innerHTML = renderCampOwnPage(camp);
+}
+
+async function addCampEntry(campId, type) {
+  const isIncome = type === 'income';
+  const desc = document.getElementById(`new-camp-${isIncome?'income':'expense'}-desc-${campId}`)?.value?.trim();
+  const amount = parseFloat(document.getElementById(`new-camp-${isIncome?'income':'expense'}-amount-${campId}`)?.value) || 0;
+  if (!desc) { showToast('יש להזין תיאור', 'error'); return; }
+  if (!amount) { showToast('יש להזין סכום', 'error'); return; }
+  const entry = { description: desc, amount, date: new Date().toISOString().split('T')[0] };
+  if (!isIncome) entry.category = document.getElementById(`new-camp-expense-cat-${campId}`)?.value || 'אחר';
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  try {
+    const ref = await db.ref(`dbCamps/${campId}/${type}`).push(entry);
+    if (!camp[type]) camp[type] = {};
+    camp[type][ref.key] = entry;
+    refreshCampFinancePanel(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.addCampEntry = addCampEntry;
+
+async function updateCampEntry(campId, type, eid, field, value) {
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  if (field === 'description' && !value.trim()) {
+    showToast('יש להזין תיאור', 'error');
+    refreshCampFinancePanel(campId);
+    return;
+  }
+  const val = field === 'amount' ? (parseFloat(value) || 0) : value.trim();
+  try {
+    await db.ref(`dbCamps/${campId}/${type}/${eid}/${field}`).set(val);
+    camp[type][eid][field] = val;
+    refreshCampFinancePanel(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.updateCampEntry = updateCampEntry;
+
+async function deleteCampEntry(campId, type, eid) {
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) return;
+  try {
+    await db.ref(`dbCamps/${campId}/${type}/${eid}`).remove();
+    delete camp[type][eid];
+    refreshCampFinancePanel(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.deleteCampEntry = deleteCampEntry;
+
 async function toggleHistory(groupIdx) {
   const g = groups[groupIdx];
   const contentDiv = document.getElementById(`historyContent-${groupIdx}`);

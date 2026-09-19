@@ -415,7 +415,9 @@ async function loadDbCamps() {
       name: c.name || '',
       startDate: c.startDate || null,
       endDate: c.endDate || null,
-      levels: (c.levels || []).map(lv => ({ name: lv.name || '', instructor: lv.instructor || '', players: [] }))
+      levels: (c.levels || []).map(lv => ({ name: lv.name || '', instructor: lv.instructor || '', players: [] })),
+      income: c.income || {},
+      expenses: c.expenses || {}
     })) : [];
   } catch(e) { console.error('loadDbCamps error:', e); camps = []; }
 }
