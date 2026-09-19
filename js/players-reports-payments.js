@@ -225,7 +225,7 @@ async function savePlayerProfile() {
   if (db) {
     await Promise.all([
       db.ref(`player_overrides/${g.id}/${subGroupIdx}/${playerIdx}`)
-        .set({ firstName, lastName, birthYear: birthYear || null, fedId: fedId || null }),
+        .set({ firstName, lastName, birthYear: birthYear || null, fedId: fedId || null, gender: genderVal || null }),
       db.ref(`payment/${g.id}/${subGroupIdx}/${playerIdx}`).set(paymentStatus),
       db.ref(`player_contacts/${g.id}/${subGroupIdx}/${playerIdx}`)
         .set({ parentPhone: parentPhone || null, parentEmail: parentEmail || null }),

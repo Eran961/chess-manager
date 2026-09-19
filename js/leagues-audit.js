@@ -574,7 +574,7 @@ async function toggleHistory(groupIdx) {
           ${restoreBtn}
         </div>`;
     }).join('');
-    contentDiv.innerHTML = `<div style="background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px">${rows}</div>`;
+    contentDiv.innerHTML = `<div style="background:white;color:#1a202c;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px">${rows}</div>`;
   } catch(err) { console.error('toggleHistory:', err); contentDiv.innerHTML = ''; }
 }
 window.toggleHistory = toggleHistory;

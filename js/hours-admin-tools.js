@@ -557,6 +557,7 @@ async function loadPlayerOverrides() {
           sg.players[idx].name      = `${o.firstName} ${o.lastName}`;
           if (o.birthYear) sg.players[idx].birthYear = o.birthYear;
           if (o.fedId)     sg.players[idx].fedId     = o.fedId;
+          if (o.gender)    sg.players[idx].gender    = o.gender;
         });
       });
       const op = document.getElementById('panel-' + g.id);
