@@ -434,7 +434,8 @@ window.addEventListener('error', (e) => {
 
 
 // ===== NEWS POSTS =====
-let _newsPosts = [], _newsIdx = 0, _newsTimer = null;
+let _newsPosts = [], _newsIdx = 0, _newsPos = 0, _newsPad = 0, _newsTimer = null, _newsSnapTimer = null;
+const NEWS_VISIBLE = 3;
 
 async function loadNewsCarousel() {
   if (!db) return;
@@ -458,49 +459,111 @@ function newsPostHasFullContent(p) {
   return !!((p.fullBody && p.fullBody.trim()) || (p.photos && p.photos.length) || (p.extraLinks && p.extraLinks.length));
 }
 
+function renderNewsSlide(p) {
+  const img = p.imageData
+    ? `<img class="news-card-img" src="${p.imageData}" alt="">`
+    : `<div class="news-card-no-img">📰</div>`;
+  const date  = p.date  ? `<div class="news-card-date">${p.date}</div>` : '';
+  const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
+  const body  = p.body  ? `<div class="news-card-text">${(p.body).replace(/\n/g,'<br>')}</div>` : '';
+  const hasFull = newsPostHasFullContent(p);
+  // A plain (non-recap) post can have a Facebook link, an Instagram link,
+  // both, or neither — the card itself can only click through to one
+  // place, so Facebook wins if both are set (matches which field existed
+  // here first); the detail view (see renderActivityDetailView) shows both.
+  const extLink = p.link || p.linkIg;
+  const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
+  const clickable = hasFull || extLink;
+  const clickAttr = hasFull ? `onclick="showSitePage('activities');openActivityDetail('${p.id}')"`
+                   : (extLink ? `data-link="${extLink}" onclick="newsCardClick(this)"` : '');
+  const styleAttr = clickable ? 'style="cursor:pointer"' : '';
+  const badge = hasFull
+    ? `<div style="margin-top:12px;font-size:13px;color:#f97316;font-weight:600">📖 קרא את הסקירה המלאה ←</div>`
+    : (extLink ? `<div style="margin-top:12px;font-size:13px;color:#4267B2;font-weight:600">&#x1F4D8; ${extLabel} &#x2197;</div>` : '');
+  return `<div class="news-slide"><div class="news-card" ${styleAttr} ${clickAttr}>${img}<div class="news-card-body">${date}${title}${body}${badge}</div></div></div>`;
+}
+
+// Shows NEWS_VISIBLE (3) posts side by side, rotating one at a time. To keep
+// that rotation seamless — real content visible on both edges of the window
+// at every scroll position, including right at the wrap-around point — the
+// DOM holds a few cloned slides at each end (last ones cloned to the front,
+// first ones cloned to the back) and scrolling into a clone snaps invisibly
+// back to the equivalent real slide once its slide-in animation finishes
+// (see newsStep): the clone is pixel-identical to the real slide it stands
+// in for, so the snap is imperceptible. With NEWS_VISIBLE or fewer posts,
+// everything already fits in view at once, so there's nothing to rotate.
 function renderNewsCarousel() {
   const inner = document.getElementById('news-inner');
   const dotsEl = document.getElementById('news-dots');
   if (!inner) return;
-  inner.innerHTML = _newsPosts.map((p,i) => {
-    const img = p.imageData
-      ? `<img class="news-card-img" src="${p.imageData}" alt="">`
-      : `<div class="news-card-no-img">📰</div>`;
-    const date  = p.date  ? `<div class="news-card-date">${p.date}</div>` : '';
-    const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
-    const body  = p.body  ? `<div class="news-card-text">${(p.body).replace(/\n/g,'<br>')}</div>` : '';
-    const hasFull = newsPostHasFullContent(p);
-    // A plain (non-recap) post can have a Facebook link, an Instagram link,
-    // both, or neither — the card itself can only click through to one
-    // place, so Facebook wins if both are set (matches which field existed
-    // here first); the detail view (see renderActivityDetailView) shows both.
-    const extLink = p.link || p.linkIg;
-    const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
-    const clickable = hasFull || extLink;
-    const clickAttr = hasFull ? `onclick="showSitePage('activities');openActivityDetail('${p.id}')"`
-                     : (extLink ? `data-link="${extLink}" onclick="newsCardClick(this)"` : '');
-    const styleAttr = clickable ? 'style="cursor:pointer"' : '';
-    const badge = hasFull
-      ? `<div style="margin-top:12px;font-size:13px;color:#f97316;font-weight:600">📖 קרא את הסקירה המלאה ←</div>`
-      : (extLink ? `<div style="margin-top:12px;font-size:13px;color:#4267B2;font-weight:600">&#x1F4D8; ${extLabel} &#x2197;</div>` : '');
-    return `<div class="news-slide"><div class="news-card" ${styleAttr} ${clickAttr}>${img}<div class="news-card-body">${date}${title}${body}${badge}</div></div></div>`;
-  }).join('');
-  if (dotsEl) dotsEl.innerHTML = _newsPosts.map((_,i) =>
-    `<button class="news-dot${i===0?' active':''}" onclick="newsGoTo(${i})"></button>`).join('');
-  newsGoTo(0);
+  const n = _newsPosts.length;
+  _newsPad = n > NEWS_VISIBLE ? Math.min(NEWS_VISIBLE - 1, n) : 0;
+  const renderList = _newsPad > 0
+    ? [..._newsPosts.slice(-_newsPad), ..._newsPosts, ..._newsPosts.slice(0, _newsPad)]
+    : _newsPosts;
+  inner.innerHTML = renderList.map(renderNewsSlide).join('');
+  if (dotsEl) dotsEl.innerHTML = _newsPad > 0
+    ? _newsPosts.map((_,i) => `<button class="news-dot${i===0?' active':''}" onclick="newsGoTo(${i})"></button>`).join('')
+    : '';
+  _newsIdx = 0;
+  _newsPos = _newsPad;
+  positionNewsTrack(_newsPos, true);
+  updateNewsDots();
   startNewsTimer();
 }
 
-function newsGoTo(i) {
-  _newsIdx = ((i % _newsPosts.length) + _newsPosts.length) % _newsPosts.length;
+// How many slides are actually visible right now — read from the real
+// layout rather than assumed, so this still moves by exactly one slide's
+// width under the mobile breakpoint (styles.css switches .news-slide to
+// 100% width there), without duplicating that breakpoint value here.
+function newsVisibleCount() {
   const inner = document.getElementById('news-inner');
-  if (inner) inner.style.transform = `translateX(${_newsIdx * -100}%)`;
+  const slide = inner && inner.querySelector('.news-slide');
+  const slideWidth = slide && slide.getBoundingClientRect().width;
+  if (!inner || !slideWidth || !inner.clientWidth) return NEWS_VISIBLE;
+  return Math.max(1, Math.round(inner.clientWidth / slideWidth));
+}
+
+function positionNewsTrack(pos, instant) {
+  const inner = document.getElementById('news-inner');
+  if (!inner) return;
+  const step = 100 / newsVisibleCount();
+  if (instant) inner.style.transition = 'none';
+  inner.style.transform = `translateX(${pos * -step}%)`;
+  if (instant) { void inner.offsetHeight; inner.style.transition = ''; }
+}
+
+function updateNewsDots() {
   document.querySelectorAll('.news-dot').forEach((d,j) => d.classList.toggle('active', j === _newsIdx));
 }
-window.newsGoTo = newsGoTo;
-window.newsNav  = dir => { newsGoTo(_newsIdx + dir); restartNewsTimer(); };
 
-function startNewsTimer()   { clearInterval(_newsTimer); if (_newsPosts.length > 1) _newsTimer = setInterval(() => newsGoTo(_newsIdx + 1), 5000); }
+function newsGoTo(realIndex) {
+  const n = _newsPosts.length;
+  if (n === 0) return;
+  _newsIdx = ((realIndex % n) + n) % n;
+  _newsPos = _newsPad + _newsIdx;
+  positionNewsTrack(_newsPos, false);
+  updateNewsDots();
+}
+window.newsGoTo = newsGoTo;
+
+function newsStep(dir) {
+  const n = _newsPosts.length;
+  if (n === 0) return;
+  if (_newsPad === 0) return; // everything already fits — nothing to rotate
+  _newsPos += dir;
+  _newsIdx = (((_newsPos - _newsPad) % n) + n) % n;
+  positionNewsTrack(_newsPos, false);
+  updateNewsDots();
+  clearTimeout(_newsSnapTimer);
+  _newsSnapTimer = setTimeout(() => {
+    if (_newsPos >= _newsPad + n) { _newsPos -= n; positionNewsTrack(_newsPos, true); }
+    else if (_newsPos < _newsPad) { _newsPos += n; positionNewsTrack(_newsPos, true); }
+  }, 520);
+}
+window.newsNav = dir => { newsStep(dir); restartNewsTimer(); };
+
+function startNewsTimer()   { clearInterval(_newsTimer); if (_newsPad > 0) _newsTimer = setInterval(() => newsStep(1), 5000); }
 function restartNewsTimer() { startNewsTimer(); }
 window.newsCardClick = function(el) { const lnk = el.getAttribute('data-link'); if (lnk) window.open(lnk, '_blank'); };
 
