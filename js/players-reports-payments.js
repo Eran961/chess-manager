@@ -214,7 +214,19 @@ async function savePlayerProfile() {
   const player = g.subGroups[subGroupIdx].players[playerIdx];
 
   const genderVal = document.getElementById('pe-gender')?.value || null;
-  player.name          = `${firstName} ${lastName}`;
+  const newName = `${firstName} ${lastName}`;
+  const PAY_LABELS = { trial: 'ניסיון', pending: 'ממתין לתשלום', paid: 'שילם' };
+  const GENDER_LABELS = { m: 'זכר', f: 'נקבה' };
+  const changes = [];
+  if (player.name !== newName) changes.push(`שם: ${player.name || '—'} ← ${newName}`);
+  if ((player.birthYear || null) !== birthYear) changes.push(`שנת לידה: ${player.birthYear || '—'} ← ${birthYear || '—'}`);
+  if ((player.fedId || null) !== fedId) changes.push(`מס' שחקן: ${player.fedId || '—'} ← ${fedId || '—'}`);
+  if ((player.paymentStatus || 'trial') !== paymentStatus) changes.push(`תשלום: ${PAY_LABELS[player.paymentStatus || 'trial']} ← ${PAY_LABELS[paymentStatus]}`);
+  if ((player.gender || null) !== (genderVal || null)) changes.push(`מין: ${GENDER_LABELS[player.gender] || '—'} ← ${GENDER_LABELS[genderVal] || '—'}`);
+  if ((player.parentPhone || null) !== parentPhone) changes.push('טלפון הורה עודכן');
+  if ((player.parentEmail || null) !== parentEmail) changes.push('אימייל הורה עודכן');
+
+  player.name          = newName;
   player.birthYear     = birthYear;
   player.fedId         = fedId;
   player.paymentStatus = paymentStatus;
@@ -243,7 +255,7 @@ async function savePlayerProfile() {
       })));
     }
     await Promise.all(writes);
-    logAudit('update_player', g.id, g.name, `עודכן: ${lastName} ${firstName}`);
+    logAudit('update_player', g.id, g.name, `עודכן: ${lastName} ${firstName}${changes.length ? ' — ' + changes.join(' · ') : ''}`);
   }
 
   document.getElementById('panel-' + g.id).innerHTML = renderGroup(g, groupIdx);

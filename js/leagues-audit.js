@@ -1037,27 +1037,50 @@ async function logAudit(action, groupId, groupName, details) {
   } catch(e) { console.warn('logAudit failed:', e.message); }
 }
 
+let _auditAllEntries = [];
+let _auditPage = 0;
+const AUDIT_PAGE_SIZE = 20;
+
 async function loadAuditLog() {
   const el = document.getElementById('panel-audit');
   if (!el) return;
-  el.innerHTML = buildAuditPanelHTML([], true);
+  el.innerHTML = buildAuditPanelHTML([], true, {});
   try {
     const snap = await db.ref('auditLog').limitToLast(300).get();
     const raw = snap.val() || {};
-    const entries = Object.values(raw).sort((a, b) => b.ts - a.ts);
-    el.innerHTML = buildAuditPanelHTML(entries, false);
+    _auditAllEntries = Object.values(raw).sort((a, b) => b.ts - a.ts);
+    _auditPage = 0;
+    renderAuditPage();
   } catch(e) { el.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה: ${e.message}</div>`; }
 }
 window.loadAuditLog = loadAuditLog;
+
+function renderAuditPage() {
+  const el = document.getElementById('panel-audit');
+  if (!el) return;
+  const inst   = document.getElementById('audit-filter-inst')?.value   || '';
+  const action = document.getElementById('audit-filter-action')?.value || '';
+  const filtered = _auditAllEntries.filter(e =>
+    (!inst   || e.name   === inst) &&
+    (!action || e.action === action)
+  );
+  el.innerHTML = buildAuditPanelHTML(filtered, false, { inst, action });
+}
+
+function auditGoPage(delta) {
+  _auditPage += delta;
+  renderAuditPage();
+}
+window.auditGoPage = auditGoPage;
 
 async function loadAuditWidget() {
   if (currentUser?.role !== 'admin') return;
   const el = document.getElementById('dash-audit-rows');
   if (!el) return;
   try {
-    const snap = await db.ref('auditLog').limitToLast(6).get();
+    const snap = await db.ref('auditLog').limitToLast(5).get();
     const raw = snap.val() || {};
-    const entries = Object.values(raw).sort((a, b) => b.ts - a.ts).slice(0, 6);
+    const entries = Object.values(raw).sort((a, b) => b.ts - a.ts).slice(0, 5);
     if (!entries.length) {
       el.innerHTML = '<div style="color:#a0aec0;font-size:13px;padding:10px 0">אין פעילות עדיין</div>';
       return;
@@ -1069,8 +1092,8 @@ async function loadAuditWidget() {
       const mins = Math.floor(diff / 60000);
       const hrs  = Math.floor(diff / 3600000);
       const days = Math.floor(diff / 86400000);
-      const ago  = days > 0 ? `לפני ${days} יום${days > 1 ? 'ות' : ''}`
-                 : hrs  > 0 ? `לפני ${hrs} שעה${hrs > 1 ? 'ות' : ''}`
+      const ago  = days > 0 ? `לפני ${days === 1 ? 'יום' : days + ' ימים'}`
+                 : hrs  > 0 ? `לפני ${hrs === 1 ? 'שעה' : hrs + ' שעות'}`
                  : mins > 0 ? `לפני ${mins} דק'`
                  : 'כרגע';
       const detail = e.details ? ` · ${e.details}` : '';
@@ -1090,23 +1113,28 @@ async function loadAuditWidget() {
 }
 window.loadAuditWidget = loadAuditWidget;
 
-function buildAuditPanelHTML(entries, loading) {
-  const instructors = [...new Set(entries.map(e => e.name))].sort();
-  const instrOpts = instructors.map(n => `<option value="${n}">${n}</option>`).join('');
+function buildAuditPanelHTML(entries, loading, filters = {}) {
+  const instructors = [...new Set(_auditAllEntries.map(e => e.name))].sort();
+  const instrOpts = instructors.map(n => `<option value="${n}"${filters.inst === n ? ' selected' : ''}>${n}</option>`).join('');
   const actionOpts = Object.entries(AUDIT_LABELS).map(([k,v]) =>
-    `<option value="${k}">${v.icon} ${v.label}</option>`).join('');
+    `<option value="${k}"${filters.action === k ? ' selected' : ''}>${v.icon} ${v.label}</option>`).join('');
+
+  const totalPages = Math.max(1, Math.ceil(entries.length / AUDIT_PAGE_SIZE));
+  if (_auditPage >= totalPages) _auditPage = totalPages - 1;
+  if (_auditPage < 0) _auditPage = 0;
+  const pageEntries = entries.slice(_auditPage * AUDIT_PAGE_SIZE, _auditPage * AUDIT_PAGE_SIZE + AUDIT_PAGE_SIZE);
 
   const rows = loading
     ? `<tr><td colspan="5" style="text-align:center;padding:32px;color:#a0aec0">⏳ טוען...</td></tr>`
     : entries.length === 0
     ? `<tr><td colspan="5" style="text-align:center;padding:32px;color:#a0aec0">אין רשומות עדיין</td></tr>`
-    : entries.map(e => {
+    : pageEntries.map(e => {
         const meta = AUDIT_LABELS[e.action] || { label: e.action, color: '#718096', bg: '#f7fafc', icon: '•' };
         const d = new Date(e.ts);
         const dateStr = d.toLocaleDateString('he-IL');
         const timeStr = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
         return `
-          <tr class="audit-row" data-instructor="${e.name||''}" data-action="${e.action||''}">
+          <tr>
             <td style="padding:9px 12px;white-space:nowrap;font-size:12px;color:#718096">${dateStr}<br><span style="font-size:11px">${timeStr}</span></td>
             <td style="padding:9px 12px;font-size:13px;font-weight:600;color:#2d3748">${e.name||'—'}</td>
             <td style="padding:9px 8px">
@@ -1116,6 +1144,13 @@ function buildAuditPanelHTML(entries, loading) {
             <td style="padding:9px 12px;font-size:13px;color:#4a5568">${e.details||''}</td>
           </tr>`;
       }).join('');
+
+  const pagination = (!loading && entries.length > 0) ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 0">
+      <button onclick="auditGoPage(-1)" ${_auditPage <= 0 ? 'disabled' : ''} style="background:#e2e8f0;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit${_auditPage <= 0 ? ';opacity:.4;cursor:default' : ''}">‹ הקודם</button>
+      <span style="font-size:12px;color:#718096">עמוד ${_auditPage + 1} מתוך ${totalPages}</span>
+      <button onclick="auditGoPage(1)" ${_auditPage >= totalPages - 1 ? 'disabled' : ''} style="background:#e2e8f0;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit${_auditPage >= totalPages - 1 ? ';opacity:.4;cursor:default' : ''}">הבא ›</button>
+    </div>` : '';
 
   return `
     <div style="max-width:960px">
@@ -1128,7 +1163,7 @@ function buildAuditPanelHTML(entries, loading) {
           <option value="">כל הפעולות</option>${actionOpts}
         </select>
         <button onclick="loadAuditLog()" style="background:#e2e8f0;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 רענן</button>
-        <span style="font-size:12px;color:#a0aec0;margin-right:auto">${entries.length} רשומות אחרונות</span>
+        <span style="font-size:12px;color:#a0aec0;margin-right:auto">${entries.length} רשומות</span>
       </div>
       <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:white">
         <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
@@ -1144,17 +1179,13 @@ function buildAuditPanelHTML(entries, loading) {
           <tbody id="audit-tbody">${rows}</tbody>
         </table>
       </div>
+      ${pagination}
     </div>`;
 }
 
 function filterAudit() {
-  const inst   = document.getElementById('audit-filter-inst')?.value   || '';
-  const action = document.getElementById('audit-filter-action')?.value || '';
-  document.querySelectorAll('.audit-row').forEach(row => {
-    const show = (!inst   || row.dataset.instructor === inst)
-              && (!action || row.dataset.action     === action);
-    row.style.display = show ? '' : 'none';
-  });
+  _auditPage = 0;
+  renderAuditPage();
 }
 window.filterAudit = filterAudit;
 
