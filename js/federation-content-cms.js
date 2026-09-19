@@ -405,10 +405,12 @@ async function initData() {
   // refresh dashboard after data loaded
   const hp = document.getElementById('panel-home');
   if (hp) hp.innerHTML = renderDashboard();
+  loadAuditWidget();
   // Load weekly attendance alerts async and update dashboard again
   loadWeeklyAttendanceAlerts().then(missingAtt => {
     const hp2 = document.getElementById('panel-home');
     if (hp2) hp2.innerHTML = renderDashboard(missingAtt);
+    loadAuditWidget();
   });
 }
 
