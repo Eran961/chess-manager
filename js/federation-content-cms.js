@@ -391,6 +391,7 @@ async function initData() {
     loadTeamPlayers(),
     loadCampPlayers(),
     loadPlayerOverrides(),
+    loadPlayerLinks(),
     loadHiddenPlayers(),
     loadPayments(),
     loadParentContacts(),

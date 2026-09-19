@@ -608,6 +608,124 @@ async function restorePlayer(groupIdx, subGroupIdx, playerIdx, histKey) {
 }
 window.restorePlayer = restorePlayer;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DUPLICATE PLAYERS (ילד רשום פעמיים — למשל פעמיים בשבוע)
+// A child in two sessions is, today, two entirely separate registrations
+// (one per group/sub-group) with no shared identity — inflating headcounts
+// and requiring payment to be marked twice for what's really one payment.
+// This tool finds likely-duplicate registrations and, once an admin
+// confirms, links them via player.linkedId (player_links/{gid}/{si}/{pi})
+// without touching the underlying registrations — attendance/history per
+// session is untouched. Linking also immediately unifies their payment
+// status (see linkDuplicateCluster below and the propagation in
+// savePlayerProfile), and every aggregate "total children" count elsewhere
+// (dashboard, payments panel) counts a linked group once instead of once
+// per registration.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function findDuplicateClusters() {
+  const all = [];
+  groups.forEach((g, gi) => g.subGroups.forEach((sg, si) => {
+    (sg.players || []).forEach((p, pi) => {
+      if (p.hidden) return;
+      all.push({ p, gi, si, pi, groupId: g.id, groupName: g.name, subName: sg.time || '' });
+    });
+  }));
+
+  // Primary signal — matching federation player number (מספר שחקן) is
+  // authoritative: the same fedId can only ever belong to one real person.
+  const byFedId = {};
+  all.forEach(e => { if (e.p.fedId) (byFedId[e.p.fedId] = byFedId[e.p.fedId] || []).push(e); });
+
+  // Secondary, weaker signal — full name + birth year — only for
+  // registrations with NO fedId at all (a fedId match already fully
+  // explains those). Shown separately for manual confirmation, since two
+  // different children can share both a name and a birth year.
+  const byNameYear = {};
+  all.forEach(e => {
+    if (e.p.fedId || !e.p.name) return;
+    const key = e.p.name.trim() + '|' + (e.p.birthYear || '');
+    (byNameYear[key] = byNameYear[key] || []).push(e);
+  });
+
+  return {
+    strong: Object.values(byFedId).filter(c => c.length > 1),
+    weak: Object.values(byNameYear).filter(c => c.length > 1),
+  };
+}
+
+function clusterIsFullyLinked(cluster) {
+  const ids = cluster.map(e => e.p.linkedId).filter(Boolean);
+  return ids.length === cluster.length && new Set(ids).size === 1;
+}
+
+async function loadDuplicatesAdmin() {
+  const el = document.getElementById('duplicates-admin-container');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:30px;opacity:.5">⏳ בודק כפילויות...</div>';
+  const { strong, weak } = findDuplicateClusters();
+  const clusters = [...strong.map(c => ({ c, isStrong: true })), ...weak.map(c => ({ c, isStrong: false }))]
+    .filter(({ c }) => !clusterIsFullyLinked(c));
+  window._dupClusters = clusters.map(x => x.c); // index referenced by the link button below
+
+  const header = '<h3 style="margin:0 0 6px;font-size:18px">🔍 כפילויות אפשריות</h3>' +
+    '<p style="font-size:12px;opacity:.6;margin:0 0 20px;line-height:1.6">מזהה ילדים שרשומים ביותר מקבוצה/מפגש אחד — לפי מספר שחקן זהה (ודאי) או שם מלא + שנת לידה זהים (יש לאשר ידנית, כי שני ילדים שונים יכולים לחלוק שם). קישור מאחד גם את סטטוס התשלום, כדי שלא יהיה צורך לסמן פעמיים.</p>';
+
+  if (clusters.length === 0) {
+    el.innerHTML = header + '<div style="text-align:center;padding:30px;color:#68d391">✅ לא נמצאו כפילויות פתוחות</div>';
+    return;
+  }
+  el.innerHTML = header + clusters.map(({ c, isStrong }, ci) => renderDupCluster(c, ci, isStrong)).join('');
+}
+window.loadDuplicatesAdmin = loadDuplicatesAdmin;
+
+function renderDupCluster(cluster, ci, isStrong) {
+  const name = cluster[0].p.name || '(ללא שם)';
+  const badge = isStrong
+    ? '<span style="color:#276749;font-size:11px;font-weight:700">✓ לפי מספר שחקן</span>'
+    : '<span style="color:#b7791f;font-size:11px;font-weight:700">⚠ לפי שם — ודא ידנית</span>';
+  const rowsHtml = cluster.map(e => {
+    const payLabel = { trial: 'ניסיון', pending: 'ממתין', paid: 'שילם' }[e.p.paymentStatus || 'trial'];
+    return `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px">
+      <span>${e.groupName}${e.subName ? ' · '+e.subName : ''}</span>
+      <span style="color:#718096">${payLabel}</span>
+    </div>`;
+  }).join('');
+  return `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--bg-card)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="font-weight:700">${name} ${badge}</div>
+      <button onclick="linkDuplicateCluster(${ci})" style="background:#f97316;color:white;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">🔗 קשר כאותו ילד</button>
+    </div>
+    ${rowsHtml}
+  </div>`;
+}
+
+window.linkDuplicateCluster = async function(ci) {
+  const cluster = (window._dupClusters || [])[ci];
+  if (!cluster) return;
+  // Reuse an existing linkedId if any member already has one, instead of
+  // minting a new one — keeps a growing family of registrations under one
+  // id rather than fragmenting it across separate link groups.
+  const existing = cluster.map(e => e.p.linkedId).find(Boolean);
+  const linkedId = existing || ('link' + Date.now() + Math.random().toString(36).slice(2, 8));
+  // "makes one payment" — use whichever status is most advanced among the
+  // cluster, so linking can never silently downgrade someone already marked
+  // paid back to pending/trial.
+  const rank = { paid: 2, pending: 1, trial: 0 };
+  let bestStatus = 'trial';
+  cluster.forEach(e => { const s = e.p.paymentStatus || 'trial'; if (rank[s] > rank[bestStatus]) bestStatus = s; });
+
+  try {
+    await Promise.all(cluster.flatMap(e => [
+      db.ref(`player_links/${e.groupId}/${e.si}/${e.pi}`).set(linkedId),
+      db.ref(`payment/${e.groupId}/${e.si}/${e.pi}`).set(bestStatus),
+    ]));
+    cluster.forEach(e => { e.p.linkedId = linkedId; e.p.paymentStatus = bestStatus; });
+    showToast('✅ קושר בהצלחה — סטטוס התשלום אוחד');
+    loadDuplicatesAdmin();
+  } catch(e) { showToast('❌ שגיאה: ' + e.message, 'error'); }
+};
+
 function printTeamPlayerList(teamIdx, subTeamIdx) {
   const t = teams[teamIdx];
   const sg = t.subGroups[subTeamIdx];

@@ -539,6 +539,33 @@ async function deleteSubmission(id) {
   loadSubmissions();
 }
 
+// A child registered more than once (e.g. two sessions a week) is, under the
+// hood, two completely separate player records — one per group/sub-group —
+// with no shared identity at all. player_links/{groupId}/{subGroupIdx}/
+// {playerIdx} = <linkedId> ties confirmed-duplicate registrations together
+// (see leagues-audit.js's loadDuplicatesAdmin/linkDuplicateCluster, which is
+// what writes these) without touching the underlying registrations
+// themselves — attendance/history per session stays exactly as it was.
+async function loadPlayerLinks() {
+  if (!db) return;
+  try {
+    const snap = await db.ref('player_links').get();
+    if (!snap.val()) return;
+    const data = snap.val();
+    groups.forEach(g => {
+      if (!data[g.id]) return;
+      g.subGroups.forEach((sg, si) => {
+        const links = data[g.id][si];
+        if (!links) return;
+        Object.entries(links).forEach(([idxStr, linkedId]) => {
+          const idx = parseInt(idxStr);
+          if (sg.players[idx]) sg.players[idx].linkedId = linkedId;
+        });
+      });
+    });
+  } catch(e) { console.error('Error loading player links:', e); }
+}
+
 // Load extra players + overrides from Firebase
 async function loadPlayerOverrides() {
   if (!db) return;

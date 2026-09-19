@@ -223,13 +223,26 @@ async function savePlayerProfile() {
   player.gender        = genderVal || null;
 
   if (db) {
-    await Promise.all([
+    const writes = [
       db.ref(`player_overrides/${g.id}/${subGroupIdx}/${playerIdx}`)
         .set({ firstName, lastName, birthYear: birthYear || null, fedId: fedId || null, gender: genderVal || null }),
       db.ref(`payment/${g.id}/${subGroupIdx}/${playerIdx}`).set(paymentStatus),
       db.ref(`player_contacts/${g.id}/${subGroupIdx}/${playerIdx}`)
         .set({ parentPhone: parentPhone || null, parentEmail: parentEmail || null }),
-    ]);
+    ];
+    // A registration linked to another one (see leagues-audit.js's
+    // loadDuplicatesAdmin — same real child in 2+ groups) shares one payment
+    // obligation, per how the club actually charges: keep every sibling
+    // registration's status in sync instead of requiring it to be marked
+    // separately each time.
+    if (player.linkedId) {
+      groups.forEach(og => og.subGroups.forEach((osg, osi) => (osg.players || []).forEach((op, opi) => {
+        if (op === player || op.linkedId !== player.linkedId) return;
+        op.paymentStatus = paymentStatus;
+        writes.push(db.ref(`payment/${og.id}/${osi}/${opi}`).set(paymentStatus));
+      })));
+    }
+    await Promise.all(writes);
     logAudit('update_player', g.id, g.name, `עודכן: ${lastName} ${firstName}`);
   }
 
@@ -1030,14 +1043,36 @@ window.switchPayTab = function(tab) {
 };
 
 function renderGroupPaymentsContent() {
-  // Build full list with group info
-  const all = [];
+  // allRaw: one entry per actual registration — used for the per-sub-group
+  // summary cards below, which must keep counting real session attendance
+  // regardless of payment-linking (see player.linkedId).
+  const allRaw = [];
   groups.forEach((g, gi) => g.subGroups.forEach((sg, si) => {
     sortedPlayers(sg.players).forEach(({ p }) => {
       if (p.hidden) return;
-      all.push({ p, g, gi, si, groupName: g.name, subName: sg.time || '' });
+      allRaw.push({ p, g, gi, si, groupName: g.name, subName: sg.time || '' });
     });
   }));
+
+  // all: the same registrations, but a child linked across 2+ of them (one
+  // real child, one real payment — see leagues-audit.js's
+  // loadDuplicatesAdmin) collapses to a single row, with its other
+  // group(s)/session(s) appended to the label — used for the table itself
+  // and the global counts, so a dual-registered child isn't shown or
+  // counted twice for what's really one payment.
+  const all = [];
+  const linkedRowByLinkId = new Map();
+  allRaw.forEach(entry => {
+    if (entry.p.linkedId && linkedRowByLinkId.has(entry.p.linkedId)) {
+      const row = linkedRowByLinkId.get(entry.p.linkedId);
+      row.extraLabels.push(`${entry.groupName}${entry.subName ? ' · '+entry.subName : ''}`);
+      row.matchKeys.add(`${entry.gi}-${entry.si}`); // so filtering by ANY of its sessions still finds this merged row
+      return;
+    }
+    const merged = { ...entry, extraLabels: [], matchKeys: new Set([`${entry.gi}-${entry.si}`]) };
+    all.push(merged);
+    if (entry.p.linkedId) linkedRowByLinkId.set(entry.p.linkedId, merged);
+  });
 
   // Global counts (all groups)
   const globalCounts = { trial: 0, pending: 0, paid: 0 };
@@ -1048,7 +1083,7 @@ function renderGroupPaymentsContent() {
   groups.forEach((g, gi) => {
     g.subGroups.forEach((sg, si) => {
       const key = `${gi}-${si}`;
-      const sgPlayers = all.filter(x => x.gi === gi && x.si === si);
+      const sgPlayers = allRaw.filter(x => x.gi === gi && x.si === si);
       const c = { trial: 0, pending: 0, paid: 0 };
       sgPlayers.forEach(({ p }) => c[p.paymentStatus || 'trial']++);
       const isActive = _payGroupFilter === key;
@@ -1074,11 +1109,12 @@ function renderGroupPaymentsContent() {
   });
   const groupSummaries = subGroupCards.join('');
 
-  // Filter by sub-group + status
+  // Filter by sub-group + status. A merged (linked) row matches if ANY of
+  // its underlying registrations is in the filtered session, not just the
+  // one it happens to display as its primary group/name.
   let filtered = all;
   if (_payGroupFilter !== 'all') {
-    const [fgi, fsi] = _payGroupFilter.split('-').map(Number);
-    filtered = all.filter(x => x.gi === fgi && x.si === fsi);
+    filtered = all.filter(x => x.matchKeys.has(_payGroupFilter));
   }
   filtered = _payFilter === 'all' ? filtered : filtered.filter(({ p }) => (p.paymentStatus || 'trial') === _payFilter);
 
@@ -1086,14 +1122,16 @@ function renderGroupPaymentsContent() {
   filtered.forEach(({ p }) => filteredCounts[p.paymentStatus || 'trial']++);
 
   const showGroupCol = _payGroupFilter === 'all';
-  const rows = filtered.map(({ p, groupName, subName }, i) => {
+  const rows = filtered.map(({ p, groupName, subName, extraLabels }, i) => {
     const { first, last } = splitName(p.name);
     const status = p.paymentStatus || 'trial';
     const badge = `<span class="pay-badge pay-${status}">${{trial:'ניסיון',pending:'ממתין לתשלום',paid:'שילם ✓'}[status]}</span>`;
+    const linkedBadge = extraLabels && extraLabels.length ? ' <span style="color:#805ad5;font-size:11px;font-weight:700">🔗 רשום/ה גם ב</span>' : '';
+    const groupLabel = `${groupName}${subName ? ' · '+subName : ''}` + (extraLabels && extraLabels.length ? `<span style="color:#805ad5"> + ${extraLabels.join(', ')}</span>` : '');
     return `<tr>
       <td class="idx">${i+1}</td>
-      <td style="font-weight:600">${last} ${first}</td>
-      ${showGroupCol ? `<td style="color:#4a5568;font-size:13px">${groupName}${subName ? ' · '+subName : ''}</td>` : ''}
+      <td style="font-weight:600">${last} ${first}${linkedBadge}</td>
+      ${showGroupCol ? `<td style="color:#4a5568;font-size:13px">${groupLabel}</td>` : ''}
       <td>${badge}</td>
     </tr>`;
   }).join('');
