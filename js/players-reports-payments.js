@@ -1977,6 +1977,17 @@ async function loadWeeklyAttendanceAlerts() {
   try {
     for (let gi = 0; gi < groups.length; gi++) {
       const g = groups[gi];
+      // A day marked "🚫 חופשה" (toggleVacation) is a deliberate "no session
+      // happened" record, saved under vacations/{groupId}/{date} — a
+      // completely separate path from attendance/{groupId}/{subGroupIdx}/
+      // {date}. This check never looked at it, so a vacation day still had
+      // no attendance record and got flagged as "missing" every time.
+      let vacDates = new Set();
+      try {
+        const vacSnap = await db.ref(`vacations/${g.id}`).get();
+        const vacVal = vacSnap.val();
+        if (vacVal) vacDates = new Set(Object.keys(vacVal));
+      } catch(e) { /* no vacations recorded for this group — none to skip */ }
       // Each sub-group can meet on its own day (see getSubGroupMeetingDates) —
       // computing weekDates once per group from g.dayOfWeek and reusing it
       // for every sub-group meant a group with e.g. Sunday+Wednesday
@@ -1987,6 +1998,7 @@ async function loadWeeklyAttendanceAlerts() {
           const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
         });
         for (const date of weekDates) {
+          if (vacDates.has(date)) continue;
           try {
             const snap = await db.ref(`attendance/${g.id}/${si}/${date}`).get();
             if (!snap.val()) missingGroups.push({ groupName: g.name, subGroupName: g.subGroups[si].time || '', date: formatDate(date), instructor: g.instructor || '', instructorWa: groupPhones[g.id] || '' });
@@ -2000,6 +2012,12 @@ async function loadWeeklyAttendanceAlerts() {
   try {
     for (let ti = 0; ti < teams.length; ti++) {
       const t = teams[ti];
+      let vacDates = new Set();
+      try {
+        const vacSnap = await db.ref(`teamVacations/${t.id}`).get();
+        const vacVal = vacSnap.val();
+        if (vacVal) vacDates = new Set(Object.keys(vacVal));
+      } catch(e) { /* no vacations recorded for this team — none to skip */ }
       for (let si = 0; si < t.subGroups.length; si++) {
         const sg = t.subGroups[si];
         if (sg.day == null) continue;
@@ -2007,6 +2025,7 @@ async function loadWeeklyAttendanceAlerts() {
           const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
         });
         for (const date of weekDates) {
+          if (vacDates.has(date)) continue;
           try {
             const snap = await db.ref(`team_attendance/${t.id}/${si}/${date}`).get();
             if (!snap.val()) missingTeams.push({ groupName: t.name, subGroupName: sg.time || '', date: formatDate(date), instructor: t.coach || '', instructorWa: teamPhones[t.id] || '' });
