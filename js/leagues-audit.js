@@ -540,7 +540,7 @@ const CAMP_EXPENSE_ICONS = { 'אוכל': '🍔', 'שכר מדריך': '🧑‍�
 
 function calcCampIncome(camp) {
   let total = 0;
-  if (camp.income) Object.values(camp.income).forEach(e => total += e.amount || 0);
+  if (camp.income) Object.values(camp.income).forEach(e => total += (e.amount || 0) * (e.count || 1));
   return total;
 }
 
@@ -556,16 +556,18 @@ function renderCampFinance(id, camp, income, expenses, balance) {
   const emptyRow = (text) => `<div style="color:#a0aec0;font-size:13px;padding:14px;text-align:center">${text}</div>`;
 
   const manualIncomeRows = manualIncome.map(([eid, e]) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #edf2f7;font-size:13px">
-      <span style="flex-shrink:0">📌</span>
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #edf2f7;font-size:13px">
       <input type="text" value="${(e.description||'').replace(/"/g,'&quot;')}" onchange="updateCampEntry('${id}','income','${eid}','description',this.value)"
-        style="flex:1;min-width:0;border:1px solid transparent;background:none;font-size:13px;color:#4a5568;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span style="color:#718096">₪</span>
+        style="flex:2;min-width:0;border:1px solid transparent;background:none;font-size:13px;color:#4a5568;padding:4px 6px;border-radius:6px;font-family:inherit" onfocus="this.style.borderColor='#e2e8f0'" onblur="this.style.borderColor='transparent'">
+      <div style="display:flex;align-items:center;gap:3px;color:#718096;font-size:12px;flex-shrink:0">
         <input type="number" value="${e.amount||0}" min="0" onchange="updateCampEntry('${id}','income','${eid}','amount',this.value)"
-          style="width:70px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-weight:700;color:#2f855a;font-family:inherit">
-        <button onclick="deleteCampEntry('${id}','income','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px" title="מחק">✕</button>
+          style="width:56px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
+        <span>₪ ×</span>
+        <input type="number" value="${e.count||1}" min="1" onchange="updateCampEntry('${id}','income','${eid}','count',this.value)"
+          style="width:48px;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;font-family:inherit">
       </div>
+      <span style="width:70px;text-align:left;font-size:13px;font-weight:700;color:#2f855a;flex-shrink:0">₪${((e.amount||0)*(e.count||1)).toLocaleString()}</span>
+      <button onclick="deleteCampEntry('${id}','income','${eid}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:13px;flex-shrink:0" title="מחק">✕</button>
     </div>`).join('');
 
   const byCategory = {};
@@ -624,6 +626,8 @@ function renderCampFinance(id, camp, income, expenses, balance) {
           <input type="text" id="new-camp-income-desc-${id}" placeholder="לדוגמה: דמי הרשמה" class="modal-input" style="width:100%"></div>
         <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">סכום ₪</div>
           <input type="number" id="new-camp-income-amount-${id}" placeholder="0" min="0" class="modal-input" style="width:100%"></div>
+        <div><div style="font-size:11px;color:#718096;font-weight:600;margin-bottom:4px">כמות</div>
+          <input type="number" id="new-camp-income-count-${id}" placeholder="1" min="1" value="1" class="modal-input" style="width:100%"></div>
       </div>
       <button onclick="addCampEntry('${id}','income')" style="width:100%;background:#2f855a;color:white;border:none;border-radius:7px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ הוסף</button>
     </div>
@@ -669,7 +673,8 @@ async function addCampEntry(campId, type) {
   if (!desc) { showToast('יש להזין תיאור', 'error'); return; }
   if (!amount) { showToast('יש להזין סכום', 'error'); return; }
   const entry = { description: desc, amount, date: new Date().toISOString().split('T')[0] };
-  if (!isIncome) entry.category = document.getElementById(`new-camp-expense-cat-${campId}`)?.value || 'אחר';
+  if (isIncome) entry.count = parseInt(document.getElementById(`new-camp-income-count-${campId}`)?.value) || 1;
+  else entry.category = document.getElementById(`new-camp-expense-cat-${campId}`)?.value || 'אחר';
   const camp = camps.find(c => c.id === campId);
   if (!camp) return;
   try {
@@ -689,7 +694,9 @@ async function updateCampEntry(campId, type, eid, field, value) {
     refreshCampFinancePanel(campId);
     return;
   }
-  const val = field === 'amount' ? (parseFloat(value) || 0) : value.trim();
+  const val = field === 'amount' ? (parseFloat(value) || 0)
+            : field === 'count'  ? (parseInt(value) || 1)
+            : value.trim();
   try {
     await db.ref(`dbCamps/${campId}/${type}/${eid}/${field}`).set(val);
     camp[type][eid][field] = val;
