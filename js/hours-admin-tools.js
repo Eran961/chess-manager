@@ -980,6 +980,7 @@ function renderSettingsPanel() {
     { icon: '👥', label: 'ניהול מדריכים', key: 'instructors' },
     ...(isAdmin ? [{ icon: '🔐', label: 'ניהול משתמשים', key: 'users' }] : []),
     { icon: '📊', label: 'פעילות מדריכים', key: 'audit' },
+    ...(isAdmin ? [{ icon: '🔍', label: 'כפילויות', key: 'duplicates' }] : []),
     { icon: '📂', label: 'ארכיון שנים קודמות', key: 'viewarchive' },
     { icon: '🏁', label: 'סיום שנה',      key: 'endyear', danger: true },
   ];
@@ -1005,6 +1006,13 @@ window.openSettingsSection = function(key) {
     if (window._tabCatMap) window._tabCatMap['audit'] = 'settings';
     switchTab('audit');
     loadAuditLog();
+    return;
+  }
+  if (key === 'duplicates') {
+    document.getElementById('settings-section-modal')?.remove();
+    if (window._tabCatMap) window._tabCatMap['duplicates'] = 'settings';
+    switchTab('duplicates');
+    loadDuplicatesAdmin();
     return;
   }
   if (key === 'refereeRates') {
