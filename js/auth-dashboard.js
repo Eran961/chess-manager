@@ -1774,10 +1774,6 @@ if (currentUser?.role === 'admin') {
   auditPanel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">לחץ על הלשונית לטעינת הנתונים</div>';
   content.appendChild(auditPanel);
 
-  const dupBtn = document.createElement('button');
-  dupBtn.className = 'tab-btn'; dupBtn.dataset.tab = 'duplicates'; dupBtn.textContent = '🔍 כפילויות';
-  dupBtn.onclick = () => { switchTab('duplicates'); loadDuplicatesAdmin(); };
-  tabsBar.appendChild(dupBtn);
   const dupPanel = document.createElement('div');
   dupPanel.className = 'tab-panel'; dupPanel.id = 'panel-duplicates';
   dupPanel.innerHTML = '<div id="duplicates-admin-container" style="padding:20px;direction:rtl;max-width:800px"></div>';

@@ -1042,7 +1042,7 @@ async function loadAuditLog() {
   if (!el) return;
   el.innerHTML = buildAuditPanelHTML([], true);
   try {
-    const snap = await db.ref('auditLog').orderByChild('ts').limitToLast(300).get();
+    const snap = await db.ref('auditLog').limitToLast(300).get();
     const raw = snap.val() || {};
     const entries = Object.values(raw).sort((a, b) => b.ts - a.ts);
     el.innerHTML = buildAuditPanelHTML(entries, false);
@@ -1055,7 +1055,7 @@ async function loadAuditWidget() {
   const el = document.getElementById('dash-audit-rows');
   if (!el) return;
   try {
-    const snap = await db.ref('auditLog').orderByChild('ts').limitToLast(6).get();
+    const snap = await db.ref('auditLog').limitToLast(6).get();
     const raw = snap.val() || {};
     const entries = Object.values(raw).sort((a, b) => b.ts - a.ts).slice(0, 6);
     if (!entries.length) {
