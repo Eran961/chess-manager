@@ -674,9 +674,3 @@ function previewAdminCal() {
 window.previewAdminCal = previewAdminCal;
 
 // ===== END MONTHLY ACTIVITY CALENDAR =====
-
-
-// Load news carousel on initial page load
-window.addEventListener('load', function() {
-  setTimeout(function() { if (db) loadNewsCarousel(); }, 1200);
-});

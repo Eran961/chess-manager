@@ -604,22 +604,66 @@ async function loadTeamReportsData() {
 }
 window.loadTeamReportsData = loadTeamReportsData;
 
-let _campRepState = { campId: null, levelIdx: 0 };
+// Camp attendance reports — deliberately mirrors the group reports above
+// (same print button, same 👥שנתי/📆חודשי/📅לפי תאריך modes, same table
+// columns) rather than the old simpler "last 5" layout, per explicit
+// request. The one real difference is under the hood: camp attendance is
+// keyed by player _key (a Firebase push key), not by array index like
+// groups, and dates come from the camp's own start/end range
+// (getCampDates) instead of the season + weekday-based
+// getSubGroupMeetingDates.
+let _campRepState = { campId: null, levelIdx: 0, mode: 'summary', date: null, month: null };
+let _campReportsCache = { attendance: {}, notes: {} };
+
+function getCampMonths(camp) {
+  const heMonthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const seen = new Set();
+  const months = [];
+  getCampDates(camp).forEach(d => {
+    const key = d.slice(0, 7);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const [y, m] = key.split('-').map(Number);
+    months.push({ value: key, label: `${heMonthNames[m - 1]} ${y}` });
+  });
+  return months;
+}
 
 function renderCampReportsContent() {
   if (!camps || camps.length === 0) return '<div style="padding:24px;text-align:center;color:#a0aec0">אין מחנות מוקצים</div>';
   if (!_campRepState.campId || !camps.find(c => c.id === _campRepState.campId)) _campRepState.campId = camps[0].id;
   const c = camps.find(cc => cc.id === _campRepState.campId);
+  if (!_campRepState.month) _campRepState.month = (getCampMonths(c)[0] || {}).value || new Date().toISOString().slice(0, 7);
+  if (!_campRepState.date) _campRepState.date = defaultDateForCamp(c);
   const campOptions = camps.map(cc => `<option value="${cc.id}" ${cc.id===_campRepState.campId?'selected':''}>${cc.name}</option>`).join('');
   const levelOptions = c.levels.map((lv, i) => `<option value="${i}" ${i===_campRepState.levelIdx?'selected':''}>${lv.name||'רמה'}</option>`).join('');
+  const dateOptions = getCampDates(c).map(d =>
+    `<option value="${d}"${d === _campRepState.date ? ' selected' : ''}>${formatDate(d)}</option>`
+  ).join('');
   return `
     <div class="att-card">
-      <div class="att-card-header">📊 דוחות נוכחות — מחנות</div>
+      <div class="att-card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>📊 דוחות נוכחות — מחנות</span>
+        <button class="btn-print-report" onclick="printCampReport()" style="background:white;color:#2b6cb0;border:1px solid #bee3f8;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">🖨️ הדפס / PDF</button>
+      </div>
       <div class="att-controls">
         <div class="att-control-row"><label>מחנה</label>
           <select onchange="onCampRepChange(this.value)">${campOptions}</select></div>
         <div class="att-control-row"><label>רמה</label>
-          <select onchange="onCampRepLevelChange(this.value)" ${c.levels.length===1?'disabled':''}>${levelOptions}</select></div>
+          <select id="repCampLevelSel" onchange="onCampRepLevelChange(this.value)" ${c.levels.length===1?'disabled':''}>${levelOptions}</select></div>
+      </div>
+      <div class="reports-mode-bar">
+        <button class="mode-btn${_campRepState.mode === 'summary' ? ' active' : ''}" onclick="onCampRepModeChange('summary',this)">👥 שנתי</button>
+        <button class="mode-btn${_campRepState.mode === 'monthly' ? ' active' : ''}" onclick="onCampRepModeChange('monthly',this)">📆 חודשי</button>
+        <button class="mode-btn${_campRepState.mode === 'bydate' ? ' active' : ''}" onclick="onCampRepModeChange('bydate',this)">📅 לפי תאריך</button>
+      </div>
+      <div class="att-controls" id="repCampMonthRow" style="${_campRepState.mode === 'monthly' ? '' : 'display:none'}">
+        <div class="att-control-row"><label>חודש</label>
+          <select id="repCampMonthSel" onchange="onCampRepMonthChange(this.value)">${getCampMonths(c).map(m => `<option value="${m.value}"${m.value === _campRepState.month ? ' selected' : ''}>${m.label}</option>`).join('')}</select></div>
+      </div>
+      <div class="att-controls" id="repCampDateRow" style="${_campRepState.mode === 'bydate' ? '' : 'display:none'}">
+        <div class="att-control-row"><label>תאריך</label>
+          <select id="repCampDateSel" onchange="onCampRepDateChange(this.value)">${dateOptions}</select></div>
       </div>
       <div id="campReportsContent">
         <div style="padding:24px;text-align:center;color:#718096">⏳ טוען נתונים...</div>
@@ -630,6 +674,8 @@ function renderCampReportsContent() {
 function onCampRepChange(val) {
   _campRepState.campId = val;
   _campRepState.levelIdx = 0;
+  _campRepState.date = null;
+  _campRepState.month = null;
   const panel = document.getElementById('panel-reports');
   if (panel) { panel.innerHTML = renderReportsPanel(); window.switchRepTab('camps'); }
   loadCampReportsData();
@@ -642,6 +688,31 @@ function onCampRepLevelChange(val) {
 }
 window.onCampRepLevelChange = onCampRepLevelChange;
 
+function onCampRepModeChange(mode, btn) {
+  _campRepState.mode = mode;
+  const bar = btn ? btn.closest('.reports-mode-bar') : null;
+  if (bar) bar.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const monthRow = document.getElementById('repCampMonthRow');
+  const dateRow = document.getElementById('repCampDateRow');
+  if (monthRow) monthRow.style.display = mode === 'monthly' ? '' : 'none';
+  if (dateRow) dateRow.style.display = mode === 'bydate' ? '' : 'none';
+  displayCampReports();
+}
+window.onCampRepModeChange = onCampRepModeChange;
+
+function onCampRepMonthChange(val) {
+  _campRepState.month = val;
+  displayCampReports();
+}
+window.onCampRepMonthChange = onCampRepMonthChange;
+
+function onCampRepDateChange(val) {
+  _campRepState.date = val;
+  displayCampReports();
+}
+window.onCampRepDateChange = onCampRepDateChange;
+
 async function loadCampReportsData() {
   const content = document.getElementById('campReportsContent');
   if (!content || !db) return;
@@ -650,36 +721,232 @@ async function loadCampReportsData() {
   const lv = c?.levels[_campRepState.levelIdx];
   if (!c || !lv) return;
   try {
-    const snap = await db.ref(`camp_attendance/${c.id}/${_campRepState.levelIdx}`).get();
-    const attData = snap.val() || {};
-    const dates = Object.keys(attData).sort();
-    const players = lv.players.filter(p => !p.hidden);
-    if (!dates.length) { content.innerHTML = '<div style="padding:24px;text-align:center;color:#a0aec0">אין נתוני נוכחות עדיין</div>'; return; }
-    const rows = players.map(p => {
-      const key = p._key;
-      const presentCount = dates.filter(d => key ? attData[d]?.[key] : false).length;
-      const pct = Math.round(presentCount / dates.length * 100);
-      const color = pct >= 80 ? '#276749' : pct >= 60 ? '#d69e2e' : '#c53030';
-      const { first, last } = splitName(p.name);
-      return `<tr>
-        <td style="padding:8px 12px;font-weight:600">${last} ${first}</td>
-        <td style="text-align:center;padding:8px">${presentCount}/${dates.length}</td>
-        <td style="text-align:center;padding:8px;font-weight:700;color:${color}">${pct}%</td>
-        <td style="padding:8px">${dates.slice(-5).map(d => `<span class="att-dot ${attData[d]?.[key] ? 'present' : 'absent'}" title="${formatDate(d)}">${attData[d]?.[key] ? '✓' : '✗'}</span>`).join('')}</td>
-      </tr>`;
-    }).join('');
-    content.innerHTML = `
-      <div style="font-size:12px;color:#718096;padding:8px 12px">${dates.length} ימי מחנה מתועדים</div>
-      <div class="table-scroll"><table>
-        <thead><tr>
-          <th>שחקן</th><th style="text-align:center">נוכחות</th>
-          <th style="text-align:center">אחוז</th><th>5 אחרונים</th>
-        </tr></thead>
-        <tbody>${rows || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#a0aec0">אין שחקנים</td></tr>'}</tbody>
-      </table></div>`;
-  } catch(e) { content.innerHTML = `<div style="padding:24px;color:#c53030">שגיאה: ${e.message}</div>`; }
+    const [attSnap, notesSnap] = await Promise.all([
+      db.ref(`camp_attendance/${c.id}/${_campRepState.levelIdx}`).get(),
+      db.ref(`camp_notes/${c.id}/${_campRepState.levelIdx}`).get(),
+    ]);
+    const inRange = (d) => (!c.startDate || d >= c.startDate) && (!c.endDate || d <= c.endDate);
+    const filterToRange = (obj) => Object.fromEntries(Object.entries(obj || {}).filter(([d]) => inRange(d)));
+    _campReportsCache.attendance = filterToRange(attSnap.val());
+    _campReportsCache.notes = filterToRange(notesSnap.val());
+    displayCampReports();
+  } catch(e) {
+    content.innerHTML = '<div style="padding:24px;text-align:center;color:#e53e3e">שגיאה בטעינת הנתונים</div>';
+    console.error('Camp reports load error:', e);
+  }
 }
 window.loadCampReportsData = loadCampReportsData;
+
+function displayCampReports() {
+  const content = document.getElementById('campReportsContent');
+  if (!content) return;
+  if (_campRepState.mode === 'summary') content.innerHTML = renderCampSummaryTable();
+  else if (_campRepState.mode === 'monthly') content.innerHTML = renderCampMonthlyTable();
+  else content.innerHTML = renderCampByDateTable();
+}
+
+function renderCampSummaryTable() {
+  const c = camps.find(cc => cc.id === _campRepState.campId);
+  const lv = c.levels[_campRepState.levelIdx];
+  const att = _campReportsCache.attendance;
+  const notes = _campReportsCache.notes;
+  const allDates = Object.keys(att).sort();
+
+  if (allDates.length === 0) {
+    return '<div style="padding:24px;text-align:center;color:#718096">אין נתוני נוכחות עדיין לרמה זו.</div>';
+  }
+
+  const players = sortedPlayers(lv.players.filter(p => !p.hidden));
+  const rows = players.map(({ p }, displayNum) => {
+    const key = p._key;
+    const { first, last } = splitName(p.name);
+    const presentCount = allDates.filter(d => key && att[d]?.[key]).length;
+    const excusedCount = allDates.filter(d => !(key && att[d]?.[key]) && key && notes[d]?.[key]).length;
+    const effectiveTotal = allDates.length;
+    const pct = effectiveTotal > 0 ? Math.round((presentCount / effectiveTotal) * 100) : 0;
+    const color = pct >= 80 ? '#276749' : pct >= 60 ? '#d69e2e' : '#e53e3e';
+    return `
+      <tr>
+        <td class="idx">${displayNum + 1}</td>
+        <td style="font-weight:600">${last} ${first}</td>
+        <td style="text-align:center;font-weight:700;color:#2b6cb0">${presentCount}</td>
+        <td style="text-align:center;color:#718096">${effectiveTotal}</td>
+        <td style="text-align:center;font-weight:700;color:${color}">${pct}%</td>
+        <td style="padding-left:12px">
+          <div class="progress-bar-wrap">
+            <div class="progress-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+        </td>
+        <td style="font-size:12px;color:#718096">${excusedCount > 0 ? `${excusedCount} בהצדקה` : ''}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div style="padding:10px 20px 4px;font-size:13px;color:#4a5568;font-weight:600">
+      סה"כ ${allDates.length} מפגשים עם נתונים
+    </div>
+    <table class="rep-table">
+      <thead><tr>
+        <th>#</th><th>שם</th><th>נוכח</th><th>מתוך</th><th>אחוז</th><th>גרף</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderCampByDateTable() {
+  const c = camps.find(cc => cc.id === _campRepState.campId);
+  const lv = c.levels[_campRepState.levelIdx];
+  const date = _campRepState.date;
+  const dateAtt = _campReportsCache.attendance[date] || {};
+  const dateNotes = _campReportsCache.notes[date] || {};
+  const players = sortedPlayers(lv.players.filter(p => !p.hidden));
+  const presentCount = players.filter(({ p }) => p._key && dateAtt[p._key]).length;
+  const hasData = Object.keys(dateAtt).length > 0;
+
+  const rows = players.map(({ p }) => {
+    const key = p._key;
+    const { first, last } = splitName(p.name);
+    const isPresent = !!(key && dateAtt[key]);
+    if (isPresent) {
+      return `
+        <div class="bydate-row present">
+          <span class="bydate-icon">✅</span>
+          <span class="bydate-name">${last} ${first}</span>
+        </div>`;
+    }
+    const note = (key && dateNotes[key]) || '';
+    return `
+      <div class="bydate-row absent" id="cbdrow-${key}">
+        <span class="bydate-icon">❌</span>
+        <span class="bydate-name">${last} ${first}</span>
+        <span class="note-area" id="campNoteArea-${key}">
+          ${note
+            ? `<span class="note-text">${note}</span><button class="btn-edit-note" onclick="startEditCampNote('${key}')" title="ערוך הערה">✎</button>`
+            : `<button class="btn-add-note" onclick="startEditCampNote('${key}')">+ הוסף הערה</button>`}
+        </span>
+      </div>`;
+  }).join('');
+
+  return `
+    <div style="padding:10px 20px;font-size:13px;font-weight:600;color:#4a5568;border-bottom:1px solid #e2e8f0">
+      נוכחו ${presentCount} מתוך ${players.length} שחקנים
+      ${!hasData ? ' &nbsp;·&nbsp; <span style="color:#e53e3e;font-weight:400">לא הוזנה נוכחות לתאריך זה</span>' : ''}
+    </div>
+    <div class="bydate-list">${rows}</div>`;
+}
+
+function renderCampMonthlyTable() {
+  const c = camps.find(cc => cc.id === _campRepState.campId);
+  const lv = c.levels[_campRepState.levelIdx];
+  const att = _campReportsCache.attendance;
+  const month = _campRepState.month;
+  const monthLabel = getCampMonths(c).find(m => m.value === month)?.label || month;
+
+  const allCampDates = getCampDates(c).filter(d => d.startsWith(month));
+  if (allCampDates.length === 0) {
+    return `<div style="padding:24px;text-align:center;color:#718096">אין ימי מחנה מתוכננים ל${monthLabel}.</div>`;
+  }
+
+  const dayNames = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+  const dateHeaders = allCampDates.map(d => {
+    const dt = new Date(d);
+    const hasData = !!att[d];
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    return `<th style="text-align:center;font-size:12px;min-width:48px${hasData ? '' : ';opacity:.5'}">${dd}.${mm}<br><span style="font-weight:400;opacity:.8">${dayNames[dt.getDay()]}</span></th>`;
+  }).join('');
+
+  const players = sortedPlayers(lv.players.filter(p => !p.hidden));
+  const rows = players.map(({ p }, displayNum) => {
+    const key = p._key;
+    const { first, last } = splitName(p.name);
+    const enteredDates = allCampDates.filter(d => !!att[d]);
+    const presentCount = enteredDates.filter(d => key && att[d]?.[key]).length;
+    const total = enteredDates.length;
+    const pct = total > 0 ? Math.round((presentCount / total) * 100) : null;
+    const color = pct === null ? '#718096' : pct >= 80 ? '#276749' : pct >= 60 ? '#d69e2e' : '#e53e3e';
+
+    const cells = allCampDates.map(d => {
+      if (!att[d]) return `<td style="text-align:center;color:#cbd5e0">—</td>`;
+      const present = !!(key && att[d][key]);
+      return `<td style="text-align:center;font-size:15px">${present ? '✅' : '❌'}</td>`;
+    }).join('');
+
+    return `
+      <tr>
+        <td class="idx">${displayNum + 1}</td>
+        <td style="font-weight:600;white-space:nowrap">${last} ${first}</td>
+        ${cells}
+        <td style="text-align:center;font-weight:700;color:${color};padding-right:8px;white-space:nowrap">
+          ${pct !== null ? `${presentCount}/${total}` : '—'}
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div style="padding:10px 20px 4px;font-size:13px;color:#4a5568;font-weight:600">
+      ${monthLabel} — ${allCampDates.length} ימי מחנה מתוכננים
+    </div>
+    <div style="overflow-x:auto">
+    <table class="rep-table" style="min-width:max-content">
+      <thead><tr>
+        <th>#</th><th style="white-space:nowrap">שם</th>${dateHeaders}<th style="text-align:center">סה"כ</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>`;
+}
+
+function startEditCampNote(key) {
+  const noteArea = document.getElementById(`campNoteArea-${key}`);
+  if (!noteArea) return;
+  const existing = (_campReportsCache.notes[_campRepState.date] || {})[key] || '';
+  noteArea.innerHTML = `
+    <div class="note-input-wrap">
+      <input type="text" id="campNoteInput-${key}" value="${existing.replace(/"/g,'&quot;')}"
+        placeholder='סיבה: חולה, חו"ל, אירוע...'
+        onkeydown="if(event.key==='Enter')saveCampNoteForPlayer('${key}');if(event.key==='Escape')cancelCampNote('${key}')">
+      <button class="btn-note-save" onclick="saveCampNoteForPlayer('${key}')">שמור</button>
+      <button class="btn-note-cancel" onclick="cancelCampNote('${key}')">✕</button>
+    </div>`;
+  document.getElementById(`campNoteInput-${key}`).focus();
+}
+window.startEditCampNote = startEditCampNote;
+
+async function saveCampNoteForPlayer(key) {
+  const input = document.getElementById(`campNoteInput-${key}`);
+  if (!input) return;
+  const note = input.value.trim();
+  const date = _campRepState.date;
+  const c = camps.find(cc => cc.id === _campRepState.campId);
+
+  if (db) {
+    await db.ref(`camp_notes/${c.id}/${_campRepState.levelIdx}/${date}/${key}`).set(note || null);
+  }
+
+  if (!_campReportsCache.notes[date]) _campReportsCache.notes[date] = {};
+  if (note) _campReportsCache.notes[date][key] = note;
+  else delete _campReportsCache.notes[date][key];
+
+  const noteArea = document.getElementById(`campNoteArea-${key}`);
+  if (noteArea) {
+    noteArea.innerHTML = note
+      ? `<span class="note-text">${note}</span><button class="btn-edit-note" onclick="startEditCampNote('${key}')" title="ערוך הערה">✎</button>`
+      : `<button class="btn-add-note" onclick="startEditCampNote('${key}')">+ הוסף הערה</button>`;
+  }
+}
+window.saveCampNoteForPlayer = saveCampNoteForPlayer;
+
+function cancelCampNote(key) {
+  const note = (_campReportsCache.notes[_campRepState.date] || {})[key] || '';
+  const noteArea = document.getElementById(`campNoteArea-${key}`);
+  if (noteArea) {
+    noteArea.innerHTML = note
+      ? `<span class="note-text">${note}</span><button class="btn-edit-note" onclick="startEditCampNote('${key}')" title="ערוך הערה">✎</button>`
+      : `<button class="btn-add-note" onclick="startEditCampNote('${key}')">+ הוסף הערה</button>`;
+  }
+}
+window.cancelCampNote = cancelCampNote;
 
 async function loadReportsData() {
   const content = document.getElementById('reportsContent');

@@ -1745,11 +1745,51 @@ function openEditCampPlayerModal(campId, li, playerKey) {
             <input type="hidden" id="cpe-pay" value="${p.paymentStatus || 'trial'}">
           </div>
           <button onclick="saveEditedCampPlayer('${campId}',${li},'${playerKey}')" style="background:#276749;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור</button>
+          ${camp.levels.length > 1 ? `
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
+            <label style="font-size:12px;color:#718096;font-weight:600;display:block;margin-bottom:6px">↔ העבר לרמה אחרת</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="cpe-transfer-target" class="modal-input" style="flex:1;min-width:180px">
+                <option value="">— בחר רמה יעד —</option>
+                ${camp.levels.map((lv, lvi) => lvi === li ? '' : `<option value="${lvi}">${lv.name || 'רמה'}</option>`).join('')}
+              </select>
+              <button onclick="transferCampPlayer('${campId}',${li},'${playerKey}')" style="background:#744210;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">↔ העבר</button>
+            </div>
+          </div>` : ''}
         </div>
       </div>
     </div>`);
 }
 window.openEditCampPlayerModal = openEditCampPlayerModal;
+
+// Mirrors transferPlayer() (groups): creates a fresh record at the
+// destination level, hides the source one — no attendance/notes history
+// carries over, same as groups' transfer.
+async function transferCampPlayer(campId, li, playerKey) {
+  const target = document.getElementById('cpe-transfer-target')?.value;
+  if (target === '' || target == null) { showToast('בחר רמה יעד', 'error'); return; }
+  const dstLi = parseInt(target);
+  const camp = camps.find(c => c.id === campId);
+  const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
+  if (!camp || !p) return;
+  const newPlayer = {
+    firstName: p.firstName || '', lastName: p.lastName || '', birthYear: p.birthYear || null,
+    fedId: p.fedId || null, gender: p.gender || null, rating: p.rating || null,
+    cardExpiry: p.cardExpiry || null, parentName: p.parentName || null,
+    parentPhone: p.parentPhone || null, parentEmail: p.parentEmail || null,
+    paymentStatus: p.paymentStatus || 'trial',
+  };
+  try {
+    const ref = await db.ref(`camp_players/${campId}/${dstLi}`).push(newPlayer);
+    await db.ref(`camp_players/${campId}/${li}/${playerKey}/hidden`).set(true);
+    p.hidden = true;
+    camp.levels[dstLi].players.push({ name: `${newPlayer.firstName} ${newPlayer.lastName}`.trim(), ...newPlayer, hidden: false, _key: ref.key });
+    document.querySelector('.friday-modal')?.remove();
+    showToast(`הועבר ל"${camp.levels[dstLi].name || 'רמה'}" ✅`);
+    refreshCampPanel(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.transferCampPlayer = transferCampPlayer;
 
 async function saveEditedCampPlayer(campId, li, playerKey) {
   const v = validatePlayerForm('cpe');

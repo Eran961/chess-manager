@@ -781,17 +781,13 @@ async function loadPayments() {
   }
 }
 
-function printReport() {
-  const g = groups[reportsState.groupIdx];
-  const sg = g.subGroups[reportsState.subGroupIdx];
-  const modeLabel = reportsState.mode === 'summary' ? 'דוח שנתי'
-    : reportsState.mode === 'monthly' ? `דוח חודשי — ${getSchoolMonths().find(m=>m.value===reportsState.month)?.label||reportsState.month}`
-    : `לפי תאריך — ${formatDate(reportsState.date)}`;
-  const subLabel = sg.time ? ` — ${sg.time}` : '';
+// Shared by printReport() (groups) and printCampReport() (camps) — only the
+// title/subtitle/mode-label and which content div to grab differ per kind.
+function printAttendanceReport({ title, subLabel, mode, modeLabel, contentElId }) {
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head>
     <meta charset="UTF-8">
-    <title>דוח נוכחות — ${g.name}${subLabel}</title>
+    <title>דוח נוכחות — ${title}${subLabel}</title>
     <style>
       body { font-family: Arial, sans-serif; color: #1a1a2e; padding: 24px; }
       h2 { font-size: 18px; margin-bottom: 4px; }
@@ -799,25 +795,51 @@ function printReport() {
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
       th { background: #2b6cb0; color: white; padding: 8px 12px; text-align: right; }
       th:nth-child(1) { width: 36px; text-align: center; }
-      ${reportsState.mode === 'monthly'
+      ${mode === 'monthly'
         ? 'th, td { text-align: center; padding: 6px 8px; font-size: 12px; } td:nth-child(2), th:nth-child(2) { text-align: right; white-space: nowrap; }'
         : 'th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: center; width: 60px; } th:nth-child(6) { display: none; }'}
       td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; }
-      ${reportsState.mode !== 'monthly' ? 'td:nth-child(6) { display: none; }' : ''}
+      ${mode !== 'monthly' ? 'td:nth-child(6) { display: none; }' : ''}
       tr:nth-child(even) td { background: #f7fafc; }
       .progress-bar-wrap { display: none; }
-    
+
     /style>
   </head><body>
-    <h2>דוח נוכחות — ${g.name}${subLabel}</h2>
+    <h2>דוח נוכחות — ${title}${subLabel}</h2>
     <div class="sub">${modeLabel} · ${new Date().toLocaleDateString('he-IL')}</div>
-    ${document.getElementById('reportsContent').innerHTML}
-  
+    ${document.getElementById(contentElId).innerHTML}
+
 </body></html>`);
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 400);
 }
+
+function printReport() {
+  const g = groups[reportsState.groupIdx];
+  const sg = g.subGroups[reportsState.subGroupIdx];
+  const modeLabel = reportsState.mode === 'summary' ? 'דוח שנתי'
+    : reportsState.mode === 'monthly' ? `דוח חודשי — ${getSchoolMonths().find(m=>m.value===reportsState.month)?.label||reportsState.month}`
+    : `לפי תאריך — ${formatDate(reportsState.date)}`;
+  printAttendanceReport({
+    title: g.name, subLabel: sg.time ? ` — ${sg.time}` : '',
+    mode: reportsState.mode, modeLabel, contentElId: 'reportsContent',
+  });
+}
+
+function printCampReport() {
+  const c = camps.find(cc => cc.id === _campRepState.campId);
+  const lv = c?.levels[_campRepState.levelIdx];
+  if (!c) return;
+  const modeLabel = _campRepState.mode === 'summary' ? 'דוח שנתי'
+    : _campRepState.mode === 'monthly' ? `דוח חודשי — ${getCampMonths(c).find(m=>m.value===_campRepState.month)?.label||_campRepState.month}`
+    : `לפי תאריך — ${formatDate(_campRepState.date)}`;
+  printAttendanceReport({
+    title: c.name, subLabel: lv?.name ? ` — ${lv.name}` : '',
+    mode: _campRepState.mode, modeLabel, contentElId: 'campReportsContent',
+  });
+}
+window.printCampReport = printCampReport;
 
 async function loadParentContacts() {
   if (!db) return;
