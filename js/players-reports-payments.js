@@ -2290,66 +2290,74 @@ async function loadWeeklyAttendanceAlerts() {
     });
   } catch(e) { /* no phones available — reminders just won't show a button */ }
 
+  const inWeek = d => { const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO; };
+
+  // Vacation days (a day marked "🚫 חופשה" via toggleVacation, saved under
+  // vacations/{groupId}/{date} — a separate path from attendance/{groupId}/
+  // {subGroupIdx}/{date}) and the per-date attendance checks below used to
+  // be fetched one at a time in nested loops — one sequential round-trip per
+  // group, then another sequential round-trip per sub-group-meeting-date
+  // this week. For a mid-size club that's 40-60+ Firebase reads fired one
+  // after another on every single login. Firing them all in parallel
+  // instead turns that into a couple of round-trips' worth of wall-clock
+  // time no matter how many groups/dates there are — this was the single
+  // biggest contributor to a slow portal startup.
   const missingGroups = [];
   try {
-    for (let gi = 0; gi < groups.length; gi++) {
-      const g = groups[gi];
-      // A day marked "🚫 חופשה" (toggleVacation) is a deliberate "no session
-      // happened" record, saved under vacations/{groupId}/{date} — a
-      // completely separate path from attendance/{groupId}/{subGroupIdx}/
-      // {date}. This check never looked at it, so a vacation day still had
-      // no attendance record and got flagged as "missing" every time.
-      let vacDates = new Set();
-      try {
-        const vacSnap = await db.ref(`vacations/${g.id}`).get();
-        const vacVal = vacSnap.val();
-        if (vacVal) vacDates = new Set(Object.keys(vacVal));
-      } catch(e) { /* no vacations recorded for this group — none to skip */ }
-      // Each sub-group can meet on its own day (see getSubGroupMeetingDates) —
-      // computing weekDates once per group from g.dayOfWeek and reusing it
-      // for every sub-group meant a group with e.g. Sunday+Wednesday
-      // sub-groups only ever got checked against one of those two days,
-      // same bug as the attendance-entry and reports date pickers.
-      for (let si = 0; si < g.subGroups.length; si++) {
-        const weekDates = getSubGroupMeetingDates(g, si).filter(d => {
-          const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
+    const groupVacSnaps = await Promise.all(groups.map(g => db.ref(`vacations/${g.id}`).get().catch(() => null)));
+    const vacDatesByGroup = {};
+    groups.forEach((g, gi) => {
+      const val = groupVacSnaps[gi]?.val();
+      vacDatesByGroup[g.id] = val ? new Set(Object.keys(val)) : new Set();
+    });
+
+    // Each sub-group can meet on its own day (see getSubGroupMeetingDates) —
+    // computing weekDates once per group from g.dayOfWeek and reusing it
+    // for every sub-group meant a group with e.g. Sunday+Wednesday
+    // sub-groups only ever got checked against one of those two days,
+    // same bug as the attendance-entry and reports date pickers.
+    const checks = [];
+    groups.forEach(g => {
+      g.subGroups.forEach((sg, si) => {
+        getSubGroupMeetingDates(g, si).filter(inWeek).forEach(date => {
+          if (vacDatesByGroup[g.id].has(date)) return;
+          checks.push({ g, si, date });
         });
-        for (const date of weekDates) {
-          if (vacDates.has(date)) continue;
-          try {
-            const snap = await db.ref(`attendance/${g.id}/${si}/${date}`).get();
-            if (!snap.val()) missingGroups.push({ groupName: g.name, subGroupName: g.subGroups[si].time || '', date: formatDate(date), instructor: g.instructor || '', instructorWa: groupPhones[g.id] || '' });
-          } catch(e) { /* skip */ }
-        }
+      });
+    });
+    const attSnaps = await Promise.all(checks.map(c => db.ref(`attendance/${c.g.id}/${c.si}/${c.date}`).get().catch(() => null)));
+    checks.forEach((c, i) => {
+      if (!attSnaps[i]?.val()) {
+        missingGroups.push({ groupName: c.g.name, subGroupName: c.g.subGroups[c.si].time || '', date: formatDate(c.date), instructor: c.g.instructor || '', instructorWa: groupPhones[c.g.id] || '' });
       }
-    }
+    });
   } catch(e) { console.error('loadWeeklyAttendanceAlerts groups error:', e); }
 
   const missingTeams = [];
   try {
-    for (let ti = 0; ti < teams.length; ti++) {
-      const t = teams[ti];
-      let vacDates = new Set();
-      try {
-        const vacSnap = await db.ref(`teamVacations/${t.id}`).get();
-        const vacVal = vacSnap.val();
-        if (vacVal) vacDates = new Set(Object.keys(vacVal));
-      } catch(e) { /* no vacations recorded for this team — none to skip */ }
-      for (let si = 0; si < t.subGroups.length; si++) {
-        const sg = t.subGroups[si];
-        if (sg.day == null) continue;
-        const weekDates = getGroupDates(sg.day).filter(d => {
-          const dt = new Date(d); return dt >= weekStart && dt <= weekEnd && d <= todayISO;
+    const teamVacSnaps = await Promise.all(teams.map(t => db.ref(`teamVacations/${t.id}`).get().catch(() => null)));
+    const vacDatesByTeam = {};
+    teams.forEach((t, ti) => {
+      const val = teamVacSnaps[ti]?.val();
+      vacDatesByTeam[t.id] = val ? new Set(Object.keys(val)) : new Set();
+    });
+
+    const checks = [];
+    teams.forEach(t => {
+      t.subGroups.forEach((sg, si) => {
+        if (sg.day == null) return;
+        getGroupDates(sg.day).filter(inWeek).forEach(date => {
+          if (vacDatesByTeam[t.id].has(date)) return;
+          checks.push({ t, si, date, sg });
         });
-        for (const date of weekDates) {
-          if (vacDates.has(date)) continue;
-          try {
-            const snap = await db.ref(`team_attendance/${t.id}/${si}/${date}`).get();
-            if (!snap.val()) missingTeams.push({ groupName: t.name, subGroupName: sg.time || '', date: formatDate(date), instructor: t.coach || '', instructorWa: teamPhones[t.id] || '' });
-          } catch(e) { /* skip */ }
-        }
+      });
+    });
+    const attSnaps = await Promise.all(checks.map(c => db.ref(`team_attendance/${c.t.id}/${c.si}/${c.date}`).get().catch(() => null)));
+    checks.forEach((c, i) => {
+      if (!attSnaps[i]?.val()) {
+        missingTeams.push({ groupName: c.t.name, subGroupName: c.sg.time || '', date: formatDate(c.date), instructor: c.t.coach || '', instructorWa: teamPhones[c.t.id] || '' });
       }
-    }
+    });
   } catch(e) { console.error('loadWeeklyAttendanceAlerts teams error:', e); }
 
   return { groups: missingGroups, teams: missingTeams };
