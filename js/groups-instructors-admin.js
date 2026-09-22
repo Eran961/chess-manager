@@ -1326,33 +1326,19 @@ function renderCampsPanel() {
 }
 window.renderCampsPanel = renderCampsPanel;
 
-// The operational page for one camp — reached via its own top-nav tab (like a group/team page)
+// The operational page for one camp — reached via its own top-nav tab (like a group/team page).
+// Finance (income/expenses) lives in the centralized 💰 כספים section, not here — see
+// leagues-audit.js's renderFinancePanel/openCampFinanceModal.
 function renderCampOwnPage(camp) {
   const dates = camp.startDate ? `${formatDate(camp.startDate)}${camp.endDate ? ' – ' + formatDate(camp.endDate) : ''}` : '';
-  const isAdmin = currentUser?.role === 'admin';
-  if (!_campSubTab[camp.id]) _campSubTab[camp.id] = 'details';
-  const sub = isAdmin ? _campSubTab[camp.id] : 'details';
-
-  const tabBarHtml = isAdmin ? `
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
-      ${[{key:'details',label:'📋 פרטים'},{key:'finance',label:'💰 כספים'}].map(tb => `
-        <button onclick="switchCampTab('${camp.id}','${tb.key}')"
-          style="padding:10px 18px;border:none;background:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border-bottom:3px solid ${sub===tb.key?'#2b6cb0':'transparent'};color:${sub===tb.key?'#2b6cb0':'var(--text-muted)'};margin-bottom:-2px">
-          ${tb.label}</button>`).join('')}
-    </div>` : '';
-
-  const bodyHtml = sub === 'finance'
-    ? renderCampFinance(camp.id, camp, calcCampIncome(camp), calcCampExpenses(camp), calcCampIncome(camp) - calcCampExpenses(camp))
-    : camp.levels.map((lv, li) => renderCampLevelCard(camp, lv, li)).join('');
-
+  const levelsHtml = camp.levels.map((lv, li) => renderCampLevelCard(camp, lv, li)).join('');
   return `
     <div style="direction:rtl;max-width:900px;padding:20px">
       <div style="margin-bottom:20px">
         <h3 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">🏕️ ${camp.name}</h3>
         ${dates ? `<div style="font-size:13px;color:var(--text-muted);margin-top:4px">${dates}</div>` : ''}
       </div>
-      ${tabBarHtml}
-      ${bodyHtml}
+      ${levelsHtml}
     </div>`;
 }
 window.renderCampOwnPage = renderCampOwnPage;

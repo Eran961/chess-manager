@@ -1,7 +1,6 @@
 // ===== CLUB TOURNAMENTS =====
 
 let _tournaments = {};
-let _tournamentSubTab = {};
 
 const TOURNAMENT_TYPES = ['קצב מלא', 'אקטיבי', 'בזק'];
 const EXPENSE_CATEGORIES = ['שופטים', 'כיבוד', 'גביעים', 'קרן פרסים', 'ציוד', 'הדפסות', 'שכירות', 'פרסום', 'אחר'];
@@ -202,14 +201,6 @@ window.saveNewTournament = saveNewTournament;
 function openTournamentDetail(id) {
   const t = _tournaments[id];
   if (!t) return;
-  if (!_tournamentSubTab[id]) _tournamentSubTab[id] = 'details';
-  const sub = _tournamentSubTab[id];
-  const income = calcTournamentIncome(t), expenses = calcTournamentExpenses(t);
-  const tabs = [{key:'details',label:'📋 פרטים'},{key:'finance',label:'💰 כספים'}];
-  const tabBar = tabs.map(tb => `
-    <button onclick="switchTournamentTab('${id}','${tb.key}')"
-      style="padding:12px 18px;border:none;background:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border-bottom:3px solid ${sub===tb.key?'#f97316':'transparent'};color:${sub===tb.key?'#f97316':'#a0aec0'};margin-bottom:-2px;transition:color .15s">
-      ${tb.label}</button>`).join('');
   const date = formatTournamentDate(t);
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
@@ -221,31 +212,37 @@ function openTournamentDetail(id) {
           </div>
           <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
         </div>
-        <div style="border-bottom:1px solid #e2e8f0;padding:0 20px;display:flex;background:#fafbfc">${tabBar}</div>
-        <div class="profile-modal-body" style="padding:22px;background:white" id="tournament-tab-content-${id}">
-          ${sub==='details'?renderTournamentDetails(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses)}
+        <div class="profile-modal-body" style="padding:22px;background:white">
+          ${renderTournamentDetails(id,t)}
         </div>
       </div>
     </div>`);
 }
 window.openTournamentDetail = openTournamentDetail;
 
-function switchTournamentTab(id, tab) {
-  _tournamentSubTab[id] = tab;
-  const t = _tournaments[id]; if (!t) return;
+// Finance (income/expenses) management for one tournament — reached from the
+// centralized 💰 כספים section, not from here (see renderFinancePanel).
+function openTournamentFinanceModal(id) {
+  const t = _tournaments[id];
+  if (!t) return;
   const income = calcTournamentIncome(t), expenses = calcTournamentExpenses(t);
-  const modal = document.querySelector('.friday-modal:last-of-type');
-  if (modal) {
-    modal.querySelectorAll('[onclick*="switchTournamentTab"]').forEach(btn => {
-      const active = btn.getAttribute('onclick').includes(`'${tab}'`);
-      btn.style.borderBottomColor = active ? '#f97316' : 'transparent';
-      btn.style.color = active ? '#f97316' : '#a0aec0';
-    });
-  }
-  const el = document.getElementById(`tournament-tab-content-${id}`);
-  if (el) el.innerHTML = tab==='details'?renderTournamentDetails(id,t):renderTournamentFinance(id,t,income,expenses,income-expenses);
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="profile-modal-box" style="width:640px;max-width:calc(100vw - 24px)">
+        <div style="background:linear-gradient(135deg,#1e3a5f,#0d2137);color:white;padding:20px 24px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:19px;font-weight:800">💰 ${t.name}</div>
+            <div style="font-size:12px;opacity:0.75;margin-top:3px">ניהול הכנסות והוצאות</div>
+          </div>
+          <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
+        </div>
+        <div class="profile-modal-body" style="padding:22px;background:white" id="tournament-finance-content-${id}">
+          ${renderTournamentFinance(id,t,income,expenses,income-expenses)}
+        </div>
+      </div>
+    </div>`);
 }
-window.switchTournamentTab = switchTournamentTab;
+window.openTournamentFinanceModal = openTournamentFinanceModal;
 
 function renderTournamentDetails(id, t) {
   const statusLabels = { upcoming:'🔵 עתידי', active:'🟢 פעיל', finished:'⚪ הסתיים' };
@@ -443,7 +440,7 @@ async function updateFeeCategory(id, catId, field, value) {
   if (field === 'label' && !value.trim()) {
     showToast('יש להזין שם קטגוריה', 'error');
     const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     return;
   }
   const val = field === 'label' ? value.trim() : (parseFloat(value)||0);
@@ -451,7 +448,7 @@ async function updateFeeCategory(id, catId, field, value) {
     await db.ref(`clubTournaments/${id}/feeCategories/${catId}/${field}`).set(val);
     t.feeCategories[catId][field] = val;
     const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     renderTournamentsPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -466,7 +463,7 @@ async function addFeeCategory(id) {
     if (!_tournaments[id].feeCategories) _tournaments[id].feeCategories = {};
     _tournaments[id].feeCategories[ref.key] = {label, fee, count: 0};
     const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     renderTournamentsPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -477,7 +474,7 @@ async function deleteFeeCategory(id, catId) {
     await db.ref(`clubTournaments/${id}/feeCategories/${catId}`).remove();
     delete _tournaments[id].feeCategories[catId];
     const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     renderTournamentsPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -496,7 +493,7 @@ async function addTournamentEntry(id, type) {
     if (!_tournaments[id][type]) _tournaments[id][type] = {};
     _tournaments[id][type][ref.key] = entry;
     const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     renderTournamentsPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -507,7 +504,7 @@ async function updateTournamentEntry(id, type, eid, field, value) {
   if (field === 'description' && !value.trim()) {
     showToast('יש להזין תיאור', 'error');
     const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     return;
   }
   const val = field === 'amount' ? (parseFloat(value)||0) : value.trim();
@@ -515,7 +512,7 @@ async function updateTournamentEntry(id, type, eid, field, value) {
     await db.ref(`clubTournaments/${id}/${type}/${eid}/${field}`).set(val);
     t[type][eid][field] = val;
     const inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     renderTournamentsPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
@@ -526,15 +523,14 @@ async function deleteTournamentEntry(id, type, eid) {
     await db.ref(`clubTournaments/${id}/${type}/${eid}`).remove();
     delete _tournaments[id][type][eid];
     const t = _tournaments[id], inc = calcTournamentIncome(t), exp = calcTournamentExpenses(t);
-    document.getElementById(`tournament-tab-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
+    document.getElementById(`tournament-finance-content-${id}`).innerHTML = renderTournamentFinance(id,t,inc,exp,inc-exp);
     renderTournamentsPanel();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.deleteTournamentEntry = deleteTournamentEntry;
 
-// ===== CAMP FINANCES (admin-only, lives on the camp's own page — not under תחרויות) =====
+// ===== CAMP FINANCES (admin-only, reached from the centralized 💰 כספים section) =====
 
-let _campSubTab = {};
 const CAMP_EXPENSE_CATEGORIES = ['אוכל', 'שכר מדריך', 'אחר'];
 const CAMP_EXPENSE_ICONS = { 'אוכל': '🍔', 'שכר מדריך': '🧑‍🏫', 'אחר': '📌' };
 
@@ -650,20 +646,41 @@ function renderCampFinance(id, camp, income, expenses, balance) {
 }
 window.renderCampFinance = renderCampFinance;
 
-function switchCampTab(campId, tab) {
-  _campSubTab[campId] = tab;
+// Finance (income/expenses) management for one camp — reached from the
+// centralized 💰 כספים section, not from the camp's own page (see
+// renderFinancePanel below).
+function openCampFinanceModal(campId) {
   const camp = camps.find(c => c.id === campId);
   if (!camp) return;
-  const panel = document.getElementById('panel-camp-' + campId);
-  if (panel) panel.innerHTML = renderCampOwnPage(camp);
+  const income = calcCampIncome(camp), expenses = calcCampExpenses(camp);
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="profile-modal-box" style="width:640px;max-width:calc(100vw - 24px)">
+        <div style="background:linear-gradient(135deg,#1e3a5f,#0d2137);color:white;padding:20px 24px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:19px;font-weight:800">💰 ${camp.name}</div>
+            <div style="font-size:12px;opacity:0.75;margin-top:3px">ניהול הכנסות והוצאות</div>
+          </div>
+          <button onclick="this.closest('.modal-overlay').remove()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px">✕</button>
+        </div>
+        <div class="profile-modal-body" style="padding:22px;background:white" id="camp-finance-content-${campId}">
+          ${renderCampFinance(campId, camp, income, expenses, income-expenses)}
+        </div>
+      </div>
+    </div>`);
 }
-window.switchCampTab = switchCampTab;
+window.openCampFinanceModal = openCampFinanceModal;
 
 function refreshCampFinancePanel(campId) {
   const camp = camps.find(c => c.id === campId);
   if (!camp) return;
-  const panel = document.getElementById('panel-camp-' + campId);
-  if (panel) panel.innerHTML = renderCampOwnPage(camp);
+  const el = document.getElementById('camp-finance-content-' + campId);
+  if (el) {
+    const income = calcCampIncome(camp), expenses = calcCampExpenses(camp);
+    el.innerHTML = renderCampFinance(campId, camp, income, expenses, income-expenses);
+  }
+  const financePanel = document.getElementById('panel-finance');
+  if (financePanel && _financeSubTab === 'camps') financePanel.innerHTML = renderFinancePanel();
 }
 
 async function addCampEntry(campId, type) {
@@ -715,6 +732,85 @@ async function deleteCampEntry(campId, type, eid) {
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.deleteCampEntry = deleteCampEntry;
+
+// ===== CENTRALIZED FINANCE HUB (💰 כספים) =====
+// Lists every tournament and camp with its income/expenses/balance; clicking
+// one opens the same finance modal the calc/CRUD functions above already
+// target (tournament-finance-content-*/camp-finance-content-*) — no new
+// finance logic here, just a shared entry point instead of one buried in
+// the tournament's own modal and one on each camp's own page.
+
+let _financeSubTab = 'tournaments';
+
+function renderFinanceTournamentRow(id, t) {
+  const income = calcTournamentIncome(t), expenses = calcTournamentExpenses(t), balance = income - expenses;
+  const balColor = balance >= 0 ? '#2f855a' : '#c53030';
+  return `
+    <div onclick="openTournamentFinanceModal('${id}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--bg-card)">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text-primary)">🏆 ${t.name}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${formatTournamentDate(t)}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <span style="background:rgba(74,222,128,.14);color:#4ade80;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">💰 ₪${income.toLocaleString()}</span>
+        <span style="background:rgba(248,113,113,.14);color:#f87171;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">📤 ₪${expenses.toLocaleString()}</span>
+        <span style="background:${balColor}22;color:${balColor};border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">${balance>=0?'+':''}₪${balance.toLocaleString()}</span>
+      </div>
+    </div>`;
+}
+
+function renderFinanceCampRow(camp) {
+  const income = calcCampIncome(camp), expenses = calcCampExpenses(camp), balance = income - expenses;
+  const balColor = balance >= 0 ? '#2f855a' : '#c53030';
+  const dates = camp.startDate ? `${formatDate(camp.startDate)}${camp.endDate ? ' – ' + formatDate(camp.endDate) : ''}` : '';
+  return `
+    <div onclick="openCampFinanceModal('${camp.id}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--bg-card)">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text-primary)">🏕️ ${camp.name}</div>
+        ${dates ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${dates}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <span style="background:rgba(74,222,128,.14);color:#4ade80;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">💰 ₪${income.toLocaleString()}</span>
+        <span style="background:rgba(248,113,113,.14);color:#f87171;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">📤 ₪${expenses.toLocaleString()}</span>
+        <span style="background:${balColor}22;color:${balColor};border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">${balance>=0?'+':''}₪${balance.toLocaleString()}</span>
+      </div>
+    </div>`;
+}
+
+function renderFinancePanel() {
+  const tabs = [{key:'tournaments',label:'🏆 תחרויות'},{key:'camps',label:'🏕️ מחנות'}];
+  const tabBar = tabs.map(tb => `
+    <button onclick="switchFinanceTab('${tb.key}')"
+      style="padding:10px 18px;border:none;background:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border-bottom:3px solid ${_financeSubTab===tb.key?'#2b6cb0':'transparent'};color:${_financeSubTab===tb.key?'#2b6cb0':'var(--text-muted)'};margin-bottom:-2px">
+      ${tb.label}</button>`).join('');
+
+  let body;
+  if (_financeSubTab === 'tournaments') {
+    const list = Object.entries(_tournaments);
+    body = list.length
+      ? list.sort((a,b) => (b[1].startDate||'').localeCompare(a[1].startDate||'')).map(([id,t]) => renderFinanceTournamentRow(id,t)).join('')
+      : `<div style="text-align:center;color:var(--text-muted);padding:40px 20px">אין תחרויות עדיין</div>`;
+  } else {
+    body = camps.length
+      ? camps.map(renderFinanceCampRow).join('')
+      : `<div style="text-align:center;color:var(--text-muted);padding:40px 20px">אין מחנות עדיין</div>`;
+  }
+
+  return `
+    <div style="direction:rtl;max-width:760px">
+      <div style="font-size:22px;font-weight:800;color:var(--text-primary);margin-bottom:16px">💰 כספים</div>
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">${tabBar}</div>
+      <div>${body}</div>
+    </div>`;
+}
+window.renderFinancePanel = renderFinancePanel;
+
+function switchFinanceTab(tab) {
+  _financeSubTab = tab;
+  const el = document.getElementById('panel-finance');
+  if (el) el.innerHTML = renderFinancePanel();
+}
+window.switchFinanceTab = switchFinanceTab;
 
 async function toggleHistory(groupIdx) {
   const g = groups[groupIdx];

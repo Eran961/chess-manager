@@ -1779,6 +1779,11 @@ if (currentUser?.role === 'admin') {
   dupPanel.innerHTML = '<div id="duplicates-admin-container" style="padding:20px;direction:rtl;max-width:800px"></div>';
   content.appendChild(dupPanel);
 
+  const financePanel = document.createElement('div');
+  financePanel.className = 'tab-panel'; financePanel.id = 'panel-finance';
+  financePanel.innerHTML = '<div style="padding:32px;text-align:center;color:#888;">לחץ על הלשונית לטעינת הנתונים</div>';
+  content.appendChild(financePanel);
+
   
   // Schedule editor tab
   const scheduleEditorBtn = document.createElement('button');
@@ -2024,6 +2029,9 @@ function buildTopNav() {
     mapCat(systemCards.map(c => c.tab), 'cat-system');
     catDefs.push({ key: 'system', label: '🖥 ניהול אתר', cards: systemCards });
   }
+
+  // Finance (direct) — admin only
+  if (isAdmin) catDefs.push({ key: 'finance', label: '💰 כספים', direct: 'finance', onOpen: () => { const el = document.getElementById('panel-finance'); if (el) el.innerHTML = renderFinancePanel(); } });
 
   // Settings (direct) — admin only
   if (isAdmin) catDefs.push({ key: 'settings', label: '⚙️ הגדרות', direct: 'settings' });
