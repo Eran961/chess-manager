@@ -803,7 +803,7 @@ function printAttendanceReport({ title, subLabel, mode, modeLabel, contentElId }
       tr:nth-child(even) td { background: #f7fafc; }
       .progress-bar-wrap { display: none; }
 
-    /style>
+    </style>
   </head><body>
     <h2>דוח נוכחות — ${title}${subLabel}</h2>
     <div class="sub">${modeLabel} · ${new Date().toLocaleDateString('he-IL')}</div>
