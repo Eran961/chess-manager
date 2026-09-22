@@ -1341,6 +1341,8 @@ async function loadSiteContent() {
     const d = snap.val();
     if (d.about) renderAboutContent(d.about);
     if (d.achievements) renderAchievementsContent(d.achievements);
+    const achSubEl = document.getElementById('home-achievements-subtitle');
+    if (achSubEl && d.achievementsSubtitle) achSubEl.textContent = d.achievementsSubtitle;
     if (d.testimonials) renderTestimonialsContent(d.testimonials);
     if (d.gallery) renderGalleryContent(d.gallery);
     if (d.tournaments) renderTournamentsContent(d.tournaments);
@@ -1603,7 +1605,7 @@ window.loadSiteContentAdmin = async function() {
     }).join('') +
     '</div>' +
     '<div id="sec-about" class="site-sec-panel" style="display:none">' + renderAboutAdmin(d.about) + '</div>' +
-    '<div id="sec-achievements" class="site-sec-panel" style="display:none">' + renderAchievementsAdmin(d.achievements) + '</div>' +
+    '<div id="sec-achievements" class="site-sec-panel" style="display:none">' + renderAchievementsAdmin(d.achievements, d.achievementsSubtitle) + '</div>' +
     '<div id="sec-testimonials" class="site-sec-panel" style="display:none">' + renderTestimonialsAdmin(d.testimonials) + '</div>' +
     '<div id="sec-gallery" class="site-sec-panel" style="display:none">' + renderGalleryAdmin(d.gallery) + '</div>' +
     '<div id="sec-seasonLaunch" class="site-sec-panel" style="display:none">' + renderSeasonLaunchAdmin(d.seasonLaunch) + '</div>';
@@ -1835,7 +1837,7 @@ window.saveAboutContent = async function() {
   } catch(e) { showToast('❌ ' + e.message); }
 };
 
-function renderAchievementsAdmin(data) {
+function renderAchievementsAdmin(data, subtitle) {
   const defaults = [
     { icon:'👑', num:'6', label:'אליפויות ליגת נשים ברצף', desc:'קבוצת הנשים שלנו — מהחזקות בישראל עם 10 אליפויות ב-12 שנים האחרונות', active:true, order:0 },
     { icon:'🥉', num:'מדליית ארד', label:'ליגת העל הגברים', desc:'קבוצת הגברים עם גרנד מאסטרים בליגה הלאומית הגבוהה ביותר', active:true, order:1 },
@@ -1849,6 +1851,13 @@ function renderAchievementsAdmin(data) {
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
     '<h4 style="margin:0">🏆 הישגי המועדון</h4>' +
     '<button onclick="openAchModal(null)" style="background:#f97316;color:white;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:700;font-size:13px">+ הוסף הישג</button>' +
+    '</div>' +
+    '<div style="margin-bottom:18px">' +
+      '<label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;opacity:.8">כיתוב קטן מתחת לכותרת</label>' +
+      '<div style="display:flex;gap:8px">' +
+        '<input type="text" id="ach-subtitle-input" value="' + (subtitle || 'גאים בהישגים שצברנו לאורך השנים').replace(/"/g,'&quot;') + '" class="modal-input" style="flex:1">' +
+        '<button onclick="saveAchSubtitle()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap">💾 שמור</button>' +
+      '</div>' +
     '</div>' +
     '<div id="ach-admin-list">' +
     items.map(function(a) {
@@ -1867,6 +1876,11 @@ function renderAchievementsAdmin(data) {
     '</div>';
 }
 
+window.saveAchSubtitle = async function() {
+  const val = document.getElementById('ach-subtitle-input')?.value.trim();
+  try { await db.ref('siteContent/achievementsSubtitle').set(val || null); loadSiteContent(); showToast('✅ נשמר'); }
+  catch(e) { showToast('❌ ' + e.message); }
+};
 window.toggleAch = async function(id, val) {
   if (!id) return;
   try { await db.ref('siteContent/achievements/' + id + '/active').set(val); loadSiteContent(); }
