@@ -160,10 +160,10 @@ function selectModalGender(g, prefix = 'mf') {
 }
 window.selectModalGender = selectModalGender;
 
-function selectPayStatus(btn, status) {
+function selectPayStatus(btn, status, prefix = 'pe') {
   btn.closest('.pay-select').querySelectorAll('.pay-btn').forEach(b => { b.className = 'pay-btn'; });
   btn.className = `pay-btn active-${status}`;
-  document.getElementById('pe-pay').value = status;
+  document.getElementById(`${prefix}-pay`).value = status;
 }
 
 function selectLevel(btn, level) {

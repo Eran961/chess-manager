@@ -1373,9 +1373,9 @@ function renderCampLevelCard(camp, lv, li) {
     const { first, last } = splitName(p.name);
     const age = p.birthYear ? `${p.birthYear} (גיל ${CURRENT_YEAR - p.birthYear})` : '—';
     return `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:6px;background:var(--bg-subtle);margin-bottom:4px">
-        <div style="font-size:13px;color:var(--text-primary)">${last} ${first} <span style="color:var(--text-muted);font-size:11px">· ${age}</span></div>
-        <button onclick="removeCampPlayer('${camp.id}',${li},'${p._key}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button>
+      <div onclick="openEditCampPlayerModal('${camp.id}',${li},'${p._key}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:6px;background:var(--bg-subtle);margin-bottom:4px;cursor:pointer">
+        <div style="font-size:13px;color:var(--text-primary)">${last} ${first} <span style="color:var(--text-muted);font-size:11px">· ${age}</span> <span style="color:var(--text-muted);font-size:12px">✎</span></div>
+        <button onclick="event.stopPropagation();removeCampPlayer('${camp.id}',${li},'${p._key}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button>
       </div>`;
   }).join('');
   return `
@@ -1680,4 +1680,113 @@ async function removeCampPlayer(campId, li, playerKey) {
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
 window.removeCampPlayer = removeCampPlayer;
+
+function openEditCampPlayerModal(campId, li, playerKey) {
+  const camp = camps.find(c => c.id === campId);
+  const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
+  if (!camp || !p) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+          <span class="modal-title">✎ עריכת פרטי ילד — ${p.name}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+          <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:10px;padding:14px">
+            <label style="font-size:13px;font-weight:700;color:#2b6cb0;display:block;margin-bottom:2px">מספר שחקן באיגוד</label>
+            <div style="font-size:11px;color:#4a5568;margin-bottom:8px">לא חובה — רק אם כבר רשום/ה באיגוד. שליפה תמלא אוטומטית את הפרטים למטה.</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="text" id="cpe-fed" value="${p.fedId || ''}" placeholder="לדוגמה: 123456" inputmode="numeric" style="flex:1">
+              <button type="button" id="cpe-fed-btn" onclick="lookupFedPlayer('cpe')"
+                style="padding:9px 14px;background:#2b6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;font-family:inherit">
+                🔍 שלוף
+              </button>
+            </div>
+            <div id="cpe-fed-status" style="font-size:12px;margin-top:6px;min-height:16px"></div>
+          </div>
+          <div class="modal-field">
+            <label>שם פרטי <span class="required">*</span></label>
+            <input type="text" id="cpe-first" value="${p.firstName || ''}" placeholder="שם פרטי">
+          </div>
+          <div class="modal-field">
+            <label>שם משפחה <span class="required">*</span></label>
+            <input type="text" id="cpe-last" value="${p.lastName || ''}" placeholder="שם משפחה">
+          </div>
+          <div class="modal-field">
+            <label>שנת לידה <span class="required">*</span></label>
+            <input type="number" id="cpe-year" value="${p.birthYear || ''}" placeholder="לדוגמה: 2015" min="1900" max="2024" oninput="updateModalAge(this.value,'cpe')">
+            <div class="age-hint" id="cpe-age">${p.birthYear ? `גיל ${CURRENT_YEAR - p.birthYear}` : ''}</div>
+          </div>
+          <div class="modal-field">
+            <label>מין <span class="required">*</span></label>
+            <div class="pay-select" id="cpe-gender-select">
+              <button type="button" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" id="cpe-gender-m" onclick="selectModalGender('m','cpe')">👦 זכר</button>
+              <button type="button" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" id="cpe-gender-f" onclick="selectModalGender('f','cpe')">👧 נקבה</button>
+            </div>
+            <input type="hidden" id="cpe-gender" value="${p.gender || ''}">
+          </div>
+          <div class="modal-field">
+            <label>מד כושר ישראלי</label>
+            <input type="text" id="cpe-rating" value="${p.rating || ''}" placeholder="ממולא אוטומטית בשליפה" inputmode="numeric">
+          </div>
+          <div class="modal-field">
+            <label>תוקף כרטיס שחמטאי</label>
+            <input type="date" id="cpe-card-expiry" value="${p.cardExpiry || ''}" placeholder="ממולא אוטומטית בשליפה">
+          </div>
+          <div style="margin-top:22px;padding-top:14px;border-top:1px dashed #e2e8f0">
+            <div style="font-size:13px;font-weight:700;color:#4a5568;margin-bottom:2px">👪 פרטי הורים של הילד/ה</div>
+            <div class="modal-field">
+              <label>שם הורה <span class="required">*</span></label>
+              <input type="text" id="cpe-parent-name" value="${p.parentName || ''}" placeholder="שם ההורה">
+            </div>
+            <div class="modal-field">
+              <label>טלפון הורה <span class="required">*</span></label>
+              <input type="tel" id="cpe-phone" value="${p.parentPhone || ''}" placeholder="05X-XXXXXXX" dir="ltr">
+            </div>
+            <div class="modal-field">
+              <label>✉ מייל הורה</label>
+              <input type="email" id="cpe-email" value="${p.parentEmail || ''}" placeholder="example@mail.com" dir="ltr">
+            </div>
+          </div>
+          <div class="modal-field" style="margin-top:8px;padding-top:14px;border-top:1px solid #e2e8f0">
+            <label>סטטוס תשלום</label>
+            <div class="pay-select">
+              <button type="button" class="pay-btn${(p.paymentStatus||'trial')==='trial'?' active-trial':''}" onclick="selectPayStatus(this,'trial','cpe')">ניסיון</button>
+              <button type="button" class="pay-btn${p.paymentStatus==='pending'?' active-pending':''}" onclick="selectPayStatus(this,'pending','cpe')">ממתין לתשלום</button>
+              <button type="button" class="pay-btn${p.paymentStatus==='paid'?' active-paid':''}" onclick="selectPayStatus(this,'paid','cpe')">שילם ✓</button>
+            </div>
+            <input type="hidden" id="cpe-pay" value="${p.paymentStatus || 'trial'}">
+          </div>
+          <button onclick="saveEditedCampPlayer('${campId}',${li},'${playerKey}')" style="background:#276749;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openEditCampPlayerModal = openEditCampPlayerModal;
+
+async function saveEditedCampPlayer(campId, li, playerKey) {
+  const v = validatePlayerForm('cpe');
+  if (!v) return;
+  const { firstName, lastName, birthYear, gender, parentPhone, parentName } = v;
+
+  const fedIdRaw   = document.getElementById('cpe-fed')?.value?.trim()   || '';
+  const fedId      = fedIdRaw ? (parseInt(fedIdRaw) || null) : null;
+  const ratingRaw  = document.getElementById('cpe-rating')?.value?.trim() || '';
+  const rating     = ratingRaw ? (parseInt(ratingRaw) || null) : null;
+  const cardExpiry = document.getElementById('cpe-card-expiry')?.value || null;
+  const parentEmail = document.getElementById('cpe-email')?.value?.trim() || null;
+  const paymentStatus = document.getElementById('cpe-pay')?.value || 'trial';
+  const updates = { firstName, lastName, birthYear, fedId, gender, rating, cardExpiry, parentPhone, parentName, parentEmail, paymentStatus };
+  try {
+    await db.ref(`camp_players/${campId}/${li}/${playerKey}`).update(updates);
+    const camp = camps.find(c => c.id === campId);
+    const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
+    if (p) Object.assign(p, updates, { name: `${firstName} ${lastName}`.trim() });
+    document.querySelector('.friday-modal')?.remove();
+    showToast('הפרטים עודכנו ✅');
+    refreshCampPanel(campId);
+  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
+}
+window.saveEditedCampPlayer = saveEditedCampPlayer;
 
