@@ -82,16 +82,20 @@ async function loadUpcomingActivities() {
 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    const upcoming = [];
-    // Scan the same admin-configured "months ahead" window as the public calendar,
-    // stopping once we have enough candidates
-    for (let offset = 0; offset < monthsAhead && upcoming.length < 3; offset++) {
+    // Scan the same admin-configured "months ahead" window as the public calendar.
+    // Fetched in parallel, not one month at a time — a sequential await-in-a-loop
+    // here turned every extra month in the window into another full round-trip,
+    // making this the slowest thing on the home page whenever monthsAhead > 1.
+    const monthKeys = Array.from({ length: monthsAhead }, (_, offset) => {
       const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-      const snap = await db.ref('monthlyCalendar/' + key + '/events').get();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    });
+    const snaps = await Promise.all(monthKeys.map(key => db.ref('monthlyCalendar/' + key + '/events').get()));
+    const upcoming = [];
+    snaps.forEach(function(snap) {
       const events = snap.val() ? Object.values(snap.val()) : [];
       events.forEach(function(ev) { if (ev.date && ev.date >= todayStr) upcoming.push(ev); });
-    }
+    });
     upcoming.sort(function(a, b) { return a.date.localeCompare(b.date); });
     const next3 = upcoming.slice(0, 3);
 
