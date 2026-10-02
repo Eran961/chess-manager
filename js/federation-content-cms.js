@@ -444,6 +444,11 @@ async function loadNewsCarousel() {
     _newsPosts = [];
     if (snap.exists()) snap.forEach(c => { const v = c.val(); if (v.active !== false) _newsPosts.push({id: c.key, ...v}); });
     _newsPosts.sort((a,b) => (a.order||99) - (b.order||99));
+    // The carousel is a rotating homepage widget, not the full article
+    // archive (that's the separate "עדכוני המועדון" list page) — cap it at
+    // the 9 most prominent posts so it doesn't grow without bound as the
+    // club accumulates more articles.
+    _newsPosts = _newsPosts.slice(0, 9);
     const sec = document.getElementById('news-section');
     if (_newsPosts.length) { renderNewsCarousel(); if (sec) sec.style.display = ''; }
     else if (sec) sec.style.display = 'none';
@@ -992,8 +997,10 @@ window.openNewsModal = async function(postId) {
         <div style="display:flex;align-items:center;gap:10px">
           <input type="checkbox" id="nm-archived" ${post.archived?'checked':''} style="width:16px;height:16px">
           <label for="nm-archived" style="font-size:14px;cursor:pointer">📦 בארכיון (לא מוצג ברשימת העדכונים השוטפת)</label></div>
+        ${postId ? `
         <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">סדר הצגה בקרוסלה (0 = ראשון)</label>
           <input id="nm-order" type="number" value="${post.order||0}" min="0" style="width:80px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px"></div>
+        ` : `<input type="hidden" id="nm-order" value="0"><div style="font-size:12px;opacity:.65">📌 עדכון חדש מתווסף תמיד ראשון בקרוסלה</div>`}
         <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפוסט בפייסבוק (אופציונלי)</label>
           <input id="nm-link" value="${(post.link||'').replace(/"/g,'&quot;')}" placeholder="https://www.facebook.com/..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box"></div>
         <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">&#x1F517; קישור לפוסט באינסטגרם (אופציונלי)</label>
@@ -1077,7 +1084,13 @@ window.saveNewsPost = async function(postId) {
   const active = document.getElementById('nm-active').checked;
   const archived = document.getElementById('nm-archived').checked;
   const categoryId = document.getElementById('nm-category').value || DEFAULT_NEWS_CATEGORY.id;
-  const order  = parseInt(document.getElementById('nm-order').value)||0;
+  // Existing posts keep whatever manual order the admin set; a brand-new
+  // post always gets a lower (more negative) order than literally anything
+  // else, so it's first in the carousel without the admin having to think
+  // about it — a 0-default order field just meant new posts tied with
+  // every other untouched post and lost that tie to older ones (stable
+  // sort), which is the bug this replaces.
+  const order  = postId ? (parseInt(document.getElementById('nm-order').value)||0) : -Date.now();
   const link   = normalizeExternalUrl(document.getElementById('nm-link')?.value);
   const linkIg = normalizeExternalUrl(document.getElementById('nm-link-ig')?.value);
   const expanded = document.getElementById('nm-expand-toggle').checked;
