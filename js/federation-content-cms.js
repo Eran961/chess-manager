@@ -405,6 +405,16 @@ async function initData() {
   // refresh dashboard after data loaded
   const hp = document.getElementById('panel-home');
   if (hp) hp.innerHTML = renderDashboard();
+  // The payments tab can already be open/visible at this point (its tab
+  // button is clickable the moment buildApp() runs, before this — the end
+  // of initData() — resolves), in which case it was first rendered against
+  // still-empty group/subGroup player arrays (loadExtraPlayers/loadPayments/
+  // etc. hadn't populated them yet) and showed everything as 0/0. Refresh it
+  // here too, same as the home dashboard above, so it self-corrects instead
+  // of staying stuck on that zeroed snapshot until the user leaves the tab
+  // and comes back.
+  const pp = document.getElementById('panel-payments');
+  if (pp) pp.innerHTML = renderPaymentsPanel();
   loadAuditWidget();
   // Load weekly attendance alerts async and update dashboard again
   loadWeeklyAttendanceAlerts().then(missingAtt => {

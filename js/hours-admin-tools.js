@@ -364,7 +364,10 @@ function renderHoursHistoryUI() {
         <td style="padding:10px 12px;font-size:13px;color:#718096">${e.description || '<span style="color:#cbd5e0">—</span>'}</td>
         <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:15px;color:#553c9a">${valueCell}</td>
         <td style="padding:10px 12px;font-size:12px;color:#a0aec0">${new Date(e.ts).toLocaleDateString('he-IL')}</td>
-        ${isAdmin ? `<td style="padding:10px 8px;text-align:center"><button onclick="deleteHoursEntry('${e.id}')" title="מחק" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1">🗑</button></td>` : ''}
+        ${isAdmin ? `<td style="padding:10px 8px;text-align:center;white-space:nowrap">
+          <button onclick="openEditHoursEntryModal('${e.id}')" title="ערוך" style="background:none;border:none;color:#4299e1;cursor:pointer;font-size:16px;line-height:1;margin-left:8px">✏️</button>
+          <button onclick="deleteHoursEntry('${e.id}')" title="מחק" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;line-height:1">🗑</button>
+        </td>` : ''}
       </tr>`;
   }).join('');
 
@@ -400,6 +403,130 @@ async function deleteHoursEntry(id) {
     loadHoursHistory();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
+
+// ===== EDIT AN EXISTING HOURS/REFEREE ENTRY =====
+// Reuses the same rate table / salary-calc logic as the "new report" form
+// (refereeFieldsHTML / computeRefereePay), but pre-filled from the existing
+// entry and saved with update() in place of a new push() — who the report
+// is attributed to (instructorId/instructorName/enteredByAdmin) is left
+// untouched; only the report's own details are editable here.
+function editHoursFieldsHTML(e) {
+  const tournOptions = Object.entries(_tournaments || {})
+    .sort((a, b) => (b[1].startDate || '').localeCompare(a[1].startDate || ''))
+    .map(([id, t]) => `<option value="${id}"${id === e.tournamentId ? ' selected' : ''}>${t.name}</option>`).join('');
+  const typeOptions = _refereeRates.map(r => `<option value="${r.id}"${r.id === e.refereeTypeId ? ' selected' : ''}>${r.label}</option>`).join('');
+  return `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;flex-direction:column;gap:4px;max-width:180px">
+        <label style="font-size:13px;font-weight:600;color:#4a5568">תאריך</label>
+        <input type="date" id="eh-date" value="${e.date || ''}" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">סוג תחרות (לפי מחירון)</label>
+          <select id="eh-type" onchange="updateEditHoursSalary()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">${typeOptions}</select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">תפקיד</label>
+          <select id="eh-role" onchange="updateEditHoursSalary()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="chief"${e.refereeRole === 'chief' ? ' selected' : ''}>שופט ראשי</option>
+            <option value="second"${e.refereeRole === 'second' ? ' selected' : ''}>שופט שני/שלישי</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div id="eh-duty-wrap" style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">תפקיד בפועל</label>
+          <select id="eh-duty" onchange="updateEditHoursSalary()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="manage"${e.refereeDuty === 'manage' ? ' selected' : ''}>ניהול</option>
+            <option value="judge"${e.refereeDuty === 'judge' ? ' selected' : ''}>שיפוט</option>
+            <option value="both"${e.refereeDuty === 'both' ? ' selected' : ''}>ניהול ושיפוט</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px">
+          <label style="font-size:13px;font-weight:600;color:#4a5568">תחרות מקושרת (לא חובה)</label>
+          <select id="eh-tournament" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="">— ללא קישור —</option>
+            ${tournOptions}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:13px;font-weight:600;color:#4a5568">הערות</label>
+        <input type="text" id="eh-desc" value="${(e.description || '').replace(/"/g,'&quot;')}" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+      </div>
+      <div style="background:#e6fffa;border:1px solid #b2f5ea;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:600;color:#234e52">שכר מחושב</span>
+        <span id="eh-salary-display" style="font-size:20px;font-weight:800;color:#2c7a7b">0 ₪</span>
+      </div>
+    </div>`;
+}
+
+async function openEditHoursEntryModal(id) {
+  const e = (_hoursHistoryEntries || []).find(x => x.id === id);
+  if (!e) return;
+  await loadRefereeRates();
+  if (typeof loadTournaments === 'function' && Object.keys(_tournaments || {}).length === 0) await loadTournaments().catch(() => {});
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" id="editHoursOverlay" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:520px">
+        <div class="modal-header">
+          <span class="modal-title">✏️ עריכת דיווח${e.instructorName ? ' — ' + e.instructorName : ''}</span>
+          <button class="modal-close" onclick="document.getElementById('editHoursOverlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px" id="eh-fields">${editHoursFieldsHTML(e)}</div>
+        <div class="modal-actions">
+          <button class="btn-form-cancel" onclick="document.getElementById('editHoursOverlay').remove()">ביטול</button>
+          <button class="btn-form-submit" onclick="saveEditedHoursEntry('${id}')">💾 שמור שינויים</button>
+        </div>
+      </div>
+    </div>`);
+  updateEditHoursSalary();
+}
+window.openEditHoursEntryModal = openEditHoursEntryModal;
+
+function updateEditHoursSalary() {
+  const typeId = document.getElementById('eh-type')?.value;
+  const role = document.getElementById('eh-role')?.value;
+  const duty = document.getElementById('eh-duty')?.value;
+  const dutyWrap = document.getElementById('eh-duty-wrap');
+  const rate = (_refereeRates || []).find(r => r.id === typeId);
+  if (dutyWrap) dutyWrap.style.opacity = role === 'second' ? '0.4' : '1';
+  const disp = document.getElementById('eh-salary-display');
+  if (disp) disp.textContent = computeRefereePay(rate, role, duty).toLocaleString() + ' ₪';
+}
+window.updateEditHoursSalary = updateEditHoursSalary;
+
+async function saveEditedHoursEntry(id) {
+  const date = document.getElementById('eh-date').value;
+  if (!date) { showToast('יש למלא תאריך', 'error'); return; }
+  const typeId = document.getElementById('eh-type').value;
+  const role = document.getElementById('eh-role').value;
+  const duty = document.getElementById('eh-duty').value;
+  const tournamentId = document.getElementById('eh-tournament').value || null;
+  const desc = document.getElementById('eh-desc').value.trim();
+  const rate = (_refereeRates || []).find(r => r.id === typeId);
+  if (!rate) { showToast('יש לבחור סוג תחרות', 'error'); return; }
+
+  const updates = {
+    date,
+    description: desc,
+    refereeTypeId: typeId,
+    refereeTypeLabel: rate.label,
+    refereeRole: role,
+    refereeDuty: duty,
+    tournamentId,
+    tournamentName: tournamentId ? (_tournaments?.[tournamentId]?.name || '') : '',
+    amount: computeRefereePay(rate, role, duty),
+  };
+  try {
+    await db.ref('hourLogs/' + id).update(updates);
+    showToast('הדיווח עודכן ✅');
+    document.getElementById('editHoursOverlay')?.remove();
+    loadHoursHistory();
+  } catch(err) { showToast('שגיאה: ' + err.message, 'error'); }
+}
+window.saveEditedHoursEntry = saveEditedHoursEntry;
 
 // ===== HOURS/REFEREE PAYMENT REPORT PRINTING (PDF via browser print) =====
 // Same identity key used to group entries by person whether or not they
