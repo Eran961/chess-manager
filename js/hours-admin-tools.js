@@ -82,7 +82,14 @@ function renderHoursPanel() {
 // account at all (a plain name, no uid) — covers both cases the club asked
 // for: referees who never get a login, and entering on behalf of someone
 // who does have one.
+// _allUsersForHours: null = not yet attempted, [] = attempted and genuinely
+// empty/failed (see _allUsersForHoursError to tell those apart), array =
+// loaded. Kept distinct from an empty array so onBehalfHTML() can show a
+// "loading" state instead of silently looking like the feature doesn't
+// exist (this is exactly what happened in practice — the fetch has to
+// finish and re-render before any real users show up at all).
 let _allUsersForHours = null;
+let _allUsersForHoursError = false;
 async function loadUsersForHoursOnBehalf() {
   if (_allUsersForHours || !db) return _allUsersForHours || [];
   try {
@@ -90,23 +97,38 @@ async function loadUsersForHoursOnBehalf() {
     const data = snap.val() || {};
     _allUsersForHours = Object.entries(data).map(([uid, r]) => ({ uid, name: r.name || r.email || uid }))
       .sort((a, b) => a.name.localeCompare(b.name, 'he'));
-  } catch(e) { _allUsersForHours = []; }
+  } catch(e) {
+    console.error('loadUsersForHoursOnBehalf:', e);
+    _allUsersForHoursError = true;
+    _allUsersForHours = [];
+  }
   return _allUsersForHours;
 }
 
 function onBehalfHTML() {
   if (currentUser?.role !== 'admin') return '';
-  const options = (_allUsersForHours || [])
-    .filter(u => u.uid !== currentUser.uid)
-    .map(u => `<option value="${u.uid}">${u.name}</option>`).join('');
+  const others = (_allUsersForHours || []).filter(u => u.uid !== currentUser.uid);
+  const options = others.map(u => `<option value="${u.uid}">${u.name}</option>`).join('');
+  // Three distinct states, so a genuinely empty user list doesn't look
+  // identical to "still loading" or to a failed fetch — all three used to
+  // render the exact same two options, with no way to tell them apart.
+  let note = '';
+  if (_allUsersForHours === null) {
+    note = `<div style="font-size:11px;color:#a0aec0;margin-top:2px">טוען רשימת משתמשי מערכת...</div>`;
+  } else if (_allUsersForHoursError) {
+    note = `<div style="font-size:11px;color:#e53e3e;margin-top:2px">שגיאה בטעינת רשימת המשתמשים — נסה/י לרענן את הדף</div>`;
+  } else if (others.length === 0) {
+    note = `<div style="font-size:11px;color:#a0aec0;margin-top:2px">אין עדיין משתמשי מערכת נוספים רשומים (ניתן להוסיף ב"ניהול משתמשים")</div>`;
+  }
   return `
-    <div style="display:flex;flex-direction:column;gap:4px;max-width:320px">
-      <label style="font-size:13px;font-weight:600;color:#4a5568">מדווח עבור</label>
+    <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:13px;font-weight:700;color:#2c5282">מדווח עבור</label>
       <select id="ref-on-behalf" onchange="onRefOnBehalfChange()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
         <option value="">עצמי</option>
-        ${options}
+        ${options ? `<optgroup label="משתמשי מערכת קיימים">${options}</optgroup>` : ''}
         <option value="__other__">אדם ללא משתמש במערכת...</option>
       </select>
+      ${note}
       <input type="text" id="ref-on-behalf-name" placeholder="שם מלא" hidden
         style="margin-top:4px;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
     </div>`;
