@@ -380,7 +380,9 @@ function renderHoursHistoryUI() {
     const valueCell = isRef ? `${(e.amount || 0).toLocaleString()} ₪` : (e.hours != null ? `${e.hours} ש׳` : '—');
     return `
       <tr style="border-bottom:1px solid #f0f4f8">
-        ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}${e.enteredByAdmin ? `<div style="font-size:11px;font-weight:400;color:#a0aec0">הוזן ע"י ${e.enteredByAdmin}</div>` : ''}</td>` : ''}
+        ${isAdmin ? `<td style="padding:10px 12px;font-size:13px;font-weight:600">${e.instructorName || '—'}
+          ${e.instructorId ? `<span title="מקושר לחשבון משתמש — הוא/היא יראו דיווח זה בהיסטוריה שלהם" style="display:inline-block;margin-right:6px;font-size:10px;font-weight:700;color:#276749;background:#f0fff4;border-radius:8px;padding:1px 6px">🔗 מקושר</span>` : `<span title="שם בלבד, לא מקושר לחשבון — לא יופיע בהיסטוריה של אף משתמש" style="display:inline-block;margin-right:6px;font-size:10px;font-weight:700;color:#b7791f;background:#fffbeb;border-radius:8px;padding:1px 6px">⚠ ללא קישור</span>`}
+          ${e.enteredByAdmin ? `<div style="font-size:11px;font-weight:400;color:#a0aec0">הוזן ע"י ${e.enteredByAdmin}</div>` : ''}</td>` : ''}
         <td style="padding:10px 12px;font-size:13px">${e.date || '—'}</td>
         <td style="padding:10px 12px;font-size:13px;color:#4a5568">${detail || '<span style="color:#cbd5e0">—</span>'}</td>
         <td style="padding:10px 12px;font-size:13px;color:#718096">${e.description || '<span style="color:#cbd5e0">—</span>'}</td>
@@ -429,9 +431,44 @@ async function deleteHoursEntry(id) {
 // ===== EDIT AN EXISTING HOURS/REFEREE ENTRY =====
 // Reuses the same rate table / salary-calc logic as the "new report" form
 // (refereeFieldsHTML / computeRefereePay), but pre-filled from the existing
-// entry and saved with update() in place of a new push() — who the report
-// is attributed to (instructorId/instructorName/enteredByAdmin) is left
-// untouched; only the report's own details are editable here.
+// entry and saved with update() in place of a new push(). Admins can also
+// change who it's attributed to here — e.g. an entry saved as a plain name
+// ("אדם ללא משתמש במערכת") can be re-linked to that person's real account
+// after the fact, so it starts showing up in their own history too.
+function editOnBehalfHTML(e) {
+  if (currentUser?.role !== 'admin') return '';
+  const others = (_allUsersForHours || []).filter(u => u.uid !== currentUser.uid);
+  const options = others.map(u => `<option value="${u.uid}"${u.uid === e.instructorId ? ' selected' : ''}>${u.name}</option>`).join('');
+  const isSelf = e.instructorId === currentUser.uid;
+  const isOther = !e.instructorId; // null = free-text name, not linked to any account
+  const linkedToKnownUser = e.instructorId && others.some(u => u.uid === e.instructorId);
+  let note = '';
+  if (_allUsersForHours === null) {
+    note = `<div style="font-size:11px;color:#a0aec0;margin-top:2px">טוען רשימת משתמשי מערכת...</div>`;
+  } else if (e.instructorId && !isSelf && !linkedToKnownUser) {
+    note = `<div style="font-size:11px;color:#b7791f;margin-top:2px">⚠ מקושר למזהה משתמש שלא נמצא ברשימה הנוכחית</div>`;
+  }
+  return `
+    <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:13px;font-weight:700;color:#2c5282">מדווח עבור</label>
+      <select id="eh-on-behalf" onchange="onEhOnBehalfChange()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+        <option value=""${isSelf ? ' selected' : ''}>עצמי (${currentUser.name})</option>
+        ${options ? `<optgroup label="משתמשי מערכת קיימים">${options}</optgroup>` : ''}
+        <option value="__other__"${isOther ? ' selected' : ''}>אדם ללא משתמש במערכת...</option>
+      </select>
+      ${note}
+      <input type="text" id="eh-on-behalf-name" placeholder="שם מלא" value="${(e.instructorName || '').replace(/"/g,'&quot;')}" ${isOther ? '' : 'hidden'}
+        style="margin-top:4px;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+    </div>`;
+}
+
+function onEhOnBehalfChange() {
+  const sel = document.getElementById('eh-on-behalf');
+  const nameInput = document.getElementById('eh-on-behalf-name');
+  if (nameInput) nameInput.hidden = sel.value !== '__other__';
+}
+window.onEhOnBehalfChange = onEhOnBehalfChange;
+
 function editHoursFieldsHTML(e) {
   const tournOptions = Object.entries(_tournaments || {})
     .sort((a, b) => (b[1].startDate || '').localeCompare(a[1].startDate || ''))
@@ -489,6 +526,7 @@ async function openEditHoursEntryModal(id) {
   if (!e) return;
   await loadRefereeRates();
   if (typeof loadTournaments === 'function' && Object.keys(_tournaments || {}).length === 0) await loadTournaments().catch(() => {});
+  if (currentUser?.role === 'admin' && !_allUsersForHours) await loadUsersForHoursOnBehalf();
   document.body.insertAdjacentHTML('beforeend', `
     <div class="modal-overlay open friday-modal" id="editHoursOverlay" onclick="if(event.target===this)this.remove()">
       <div class="modal-box" style="max-width:520px">
@@ -496,7 +534,10 @@ async function openEditHoursEntryModal(id) {
           <span class="modal-title">✏️ עריכת דיווח${e.instructorName ? ' — ' + e.instructorName : ''}</span>
           <button class="modal-close" onclick="document.getElementById('editHoursOverlay').remove()">✕</button>
         </div>
-        <div class="modal-body" style="padding:20px" id="eh-fields">${editHoursFieldsHTML(e)}</div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px" id="eh-fields">
+          ${editOnBehalfHTML(e)}
+          ${editHoursFieldsHTML(e)}
+        </div>
         <div class="modal-actions">
           <button class="btn-form-cancel" onclick="document.getElementById('editHoursOverlay').remove()">ביטול</button>
           <button class="btn-form-submit" onclick="saveEditedHoursEntry('${id}')">💾 שמור שינויים</button>
@@ -541,6 +582,30 @@ async function saveEditedHoursEntry(id) {
     tournamentName: tournamentId ? (_tournaments?.[tournamentId]?.name || '') : '',
     amount: computeRefereePay(rate, role, duty),
   };
+
+  // Only present for admins (see editOnBehalfHTML) — lets them fix
+  // attribution on an existing entry, e.g. re-link one that was saved as a
+  // plain name to the person's real account.
+  const behalfSel = document.getElementById('eh-on-behalf');
+  if (behalfSel) {
+    if (behalfSel.value === '__other__') {
+      const name = document.getElementById('eh-on-behalf-name')?.value?.trim();
+      if (!name) { showToast('יש להזין שם', 'error'); return; }
+      updates.instructorId = null;
+      updates.instructorName = name;
+      updates.enteredByAdmin = currentUser.name;
+    } else if (behalfSel.value === '') {
+      updates.instructorId = currentUser.uid;
+      updates.instructorName = currentUser.name;
+      updates.enteredByAdmin = null;
+    } else {
+      const u = (_allUsersForHours || []).find(u => u.uid === behalfSel.value);
+      updates.instructorId = behalfSel.value;
+      updates.instructorName = u?.name || behalfSel.value;
+      updates.enteredByAdmin = currentUser.name;
+    }
+  }
+
   try {
     await db.ref('hourLogs/' + id).update(updates);
     showToast('הדיווח עודכן ✅');
