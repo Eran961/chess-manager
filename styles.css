@@ -1629,7 +1629,7 @@
     .nav-tab.active { color:white; border-bottom-color:#f97316; background:rgba(255,255,255,0.08); }
     .nav-tab-login { margin-right:auto; color:#f97316; border-right:1px solid rgba(255,255,255,0.1); }
     .nav-social-icons { display:flex; align-items:center; gap:2px; padding:0 10px; border-right:1px solid rgba(255,255,255,.1); }
-    .nav-social-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:6px; opacity:.72; transition:opacity .2s,background .2s; text-decoration:none; }
+    .nav-social-icon { display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:8px; opacity:.72; transition:opacity .2s,background .2s; text-decoration:none; }
     .nav-social-icon:hover { opacity:1; background:rgba(255,255,255,.12); }
     .site-page { display:none; }
     .site-page.active { display:block; }
@@ -1920,7 +1920,7 @@
       flex-direction: row !important;
       align-items: center !important;
       justify-content: space-between !important;
-      height: 64px !important;
+      height: 84px !important;
       padding: 0 28px !important;
       gap: 12px !important;
       flex-shrink: 0 !important;
@@ -1931,16 +1931,16 @@
       height: 100% !important;
       display: flex !important;
       align-items: center !important;
-      gap: 12px !important;
+      gap: 14px !important;
       border-bottom: none !important;
     }
     .site-title-text h1 {
-      font-size: 16px !important;
+      font-size: 22px !important;
       font-weight: 800 !important;
       white-space: nowrap !important;
       letter-spacing: -0.2px !important;
     }
-    .site-logo-img { height: 40px !important; border-radius: 50% !important; }
+    .site-logo-img { height: 56px !important; border-radius: 50% !important; }
     .site-header-actions {
       display: flex !important;
       align-items: center !important;
@@ -2196,19 +2196,19 @@
        ============================================================ */
 
     @media (max-width: 860px) {
-      .site-topbar { padding: 0 16px !important; height: 58px !important; }
+      .site-topbar { padding: 0 16px !important; height: 76px !important; }
       .site-nav { padding: 0 16px !important; height: 46px !important; }
-      .site-title-text h1 { font-size: 14px !important; }
-      .site-logo-img { height: 36px !important; }
+      .site-title-text h1 { font-size: 19px !important; }
+      .site-logo-img { height: 48px !important; }
       .nav-tab { padding: 0 11px !important; font-size: 13px !important; }
       .btn-theme-toggle { display: none !important; }
     }
 
     @media (max-width: 600px) {
-      .site-topbar { height: 52px !important; padding: 0 12px !important; }
+      .site-topbar { height: 68px !important; padding: 0 12px !important; }
       .site-nav { padding: 0 12px !important; height: 42px !important; }
       .site-title-text h1 { display: none !important; }
-      .site-logo-img { height: 32px !important; }
+      .site-logo-img { height: 42px !important; }
       .nav-tab { padding: 0 9px !important; font-size: 12px !important; }
       .nav-tab-login { padding: 0 12px !important; font-size: 12px !important; }
     }
