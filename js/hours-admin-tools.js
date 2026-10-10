@@ -371,7 +371,10 @@ function renderHoursHistoryUI() {
   container.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       ${selectorHTML}
-      <span style="font-size:14px;font-weight:700;color:#2d3748">דיווחים: ${entriesForMonth.length}${monthTotal > 0 ? ` &nbsp;·&nbsp; <span style="color:#553c9a;font-weight:800">סה"כ: ${monthTotal.toLocaleString()} ₪</span>` : ''}</span>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:14px;font-weight:700;color:#2d3748">דיווחים: ${entriesForMonth.length}${monthTotal > 0 ? ` &nbsp;·&nbsp; <span style="color:#553c9a;font-weight:800">סה"כ: ${monthTotal.toLocaleString()} ₪</span>` : ''}</span>
+        ${isAdmin ? `<button onclick="openHoursReportModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🖨️ הדפסת דוח</button>` : ''}
+      </div>
     </div>
     <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0">
       <table style="width:100%;border-collapse:collapse">
@@ -397,6 +400,173 @@ async function deleteHoursEntry(id) {
     loadHoursHistory();
   } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
 }
+
+// ===== HOURS/REFEREE PAYMENT REPORT PRINTING (PDF via browser print) =====
+// Same identity key used to group entries by person whether or not they
+// have a system account — on-behalf-of entries for people with no login
+// (instructorId null) fall back to a name-prefixed key instead.
+function hoursJudgeKey(e) { return e.instructorId || ('name:' + (e.instructorName || '')); }
+
+function hoursReportMonthLabel(mk) {
+  const [y, m] = mk.split('-');
+  return `${HOURS_HISTORY_MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`;
+}
+
+function openHoursReportModal() {
+  const all = (_hoursHistoryEntries || []).filter(e => e.date);
+  if (!all.length) { showToast('אין דיווחים להצגה בדוח', 'error'); return; }
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open friday-modal" id="hoursReportOverlay" onclick="if(event.target===this)this.remove()">
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-header">
+          <span class="modal-title">🖨️ הדפסת דוח תשלומים</span>
+          <button class="modal-close" onclick="document.getElementById('hoursReportOverlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:13px;font-weight:600;color:#4a5568">סוג דוח</label>
+            <select id="hr-mode" onchange="updateHoursReportFields()" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+              <option value="month">לפי חודש (כל השופטים)</option>
+              <option value="judge">לפי שופט</option>
+            </select>
+          </div>
+          <div id="hr-judge-wrap" style="display:none;flex-direction:column;gap:4px">
+            <label style="font-size:13px;font-weight:600;color:#4a5568">שופט</label>
+            <select id="hr-judge" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit"></select>
+          </div>
+          <div id="hr-month-wrap" style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:13px;font-weight:600;color:#4a5568">חודש</label>
+            <select id="hr-month" style="padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit"></select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-form-cancel" onclick="document.getElementById('hoursReportOverlay').remove()">ביטול</button>
+          <button class="btn-form-submit" onclick="printHoursReport()">🖨️ הדפס</button>
+        </div>
+      </div>
+    </div>`);
+  updateHoursReportFields();
+}
+window.openHoursReportModal = openHoursReportModal;
+
+function updateHoursReportFields() {
+  const mode = document.getElementById('hr-mode')?.value || 'month';
+  const all = (_hoursHistoryEntries || []).filter(e => e.date);
+
+  const judgeWrap = document.getElementById('hr-judge-wrap');
+  if (judgeWrap) judgeWrap.style.display = mode === 'judge' ? 'flex' : 'none';
+  if (mode === 'judge') {
+    const seen = new Map();
+    all.forEach(e => { const key = hoursJudgeKey(e); if (!seen.has(key)) seen.set(key, e.instructorName || '—'); });
+    const judgeSel = document.getElementById('hr-judge');
+    if (judgeSel) {
+      judgeSel.innerHTML = [...seen.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1], 'he'))
+        .map(([key, name]) => `<option value="${key}">${name}</option>`).join('');
+    }
+  }
+
+  const monthKeys = [...new Set(all.map(e => e.date.slice(0, 7)))].sort().reverse();
+  const monthSel = document.getElementById('hr-month');
+  if (monthSel) {
+    const allOpt = mode === 'judge' ? `<option value="__all__">כל החודשים</option>` : '';
+    monthSel.innerHTML = allOpt + monthKeys.map(mk => `<option value="${mk}">${hoursReportMonthLabel(mk)}</option>`).join('');
+  }
+}
+window.updateHoursReportFields = updateHoursReportFields;
+
+// Builds the filtered rows, groups them by person+month (always — even a
+// single-judge report can span several months, and a single-month report
+// always spans several people), and prints a formatted PDF-ready report
+// with a per-group subtotal and one grand total at the end.
+function printHoursReport() {
+  const mode = document.getElementById('hr-mode').value;
+  const monthVal = document.getElementById('hr-month').value;
+  const all = (_hoursHistoryEntries || []).filter(e => e.date);
+  let filtered, reportTitle, reportSubtitle;
+
+  if (mode === 'judge') {
+    const judgeKey = document.getElementById('hr-judge').value;
+    filtered = all.filter(e => hoursJudgeKey(e) === judgeKey);
+    const judgeName = filtered[0]?.instructorName || '';
+    if (monthVal !== '__all__') filtered = filtered.filter(e => e.date.slice(0, 7) === monthVal);
+    reportTitle = `דוח תשלומים — ${judgeName}`;
+    reportSubtitle = monthVal === '__all__' ? 'כל החודשים' : hoursReportMonthLabel(monthVal);
+  } else {
+    filtered = all.filter(e => e.date.slice(0, 7) === monthVal);
+    reportTitle = 'דוח תשלומים חודשי';
+    reportSubtitle = hoursReportMonthLabel(monthVal);
+  }
+
+  if (!filtered.length) { showToast('אין נתונים להצגה בדוח זה', 'error'); return; }
+
+  const groups = {};
+  filtered.forEach(e => {
+    const monthKey = e.date.slice(0, 7);
+    const key = hoursJudgeKey(e) + '__' + monthKey;
+    if (!groups[key]) groups[key] = { name: e.instructorName || '—', monthKey, rows: [] };
+    groups[key].rows.push(e);
+  });
+
+  const groupKeys = Object.keys(groups).sort((a, b) => {
+    const ga = groups[a], gb = groups[b];
+    if (ga.monthKey !== gb.monthKey) return gb.monthKey.localeCompare(ga.monthKey);
+    return ga.name.localeCompare(gb.name, 'he');
+  });
+
+  let grandTotal = 0;
+  const sectionsHtml = groupKeys.map(key => {
+    const g = groups[key];
+    const rows = g.rows.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    let subtotal = 0;
+    const rowsHtml = rows.map(e => {
+      subtotal += e.amount || 0;
+      const detail = [e.refereeTypeLabel, e.tournamentName].filter(Boolean).join(' · ');
+      return `<tr>
+        <td>${e.date}</td>
+        <td>${detail || '—'}</td>
+        <td>${e.description || '—'}</td>
+        <td style="text-align:center;font-weight:700">${(e.amount || 0).toLocaleString()} ₪</td>
+      </tr>`;
+    }).join('');
+    grandTotal += subtotal;
+    return `
+      <div style="margin-bottom:18px">
+        <div style="font-size:14px;font-weight:800;margin-bottom:6px">${g.name} — ${hoursReportMonthLabel(g.monthKey)}</div>
+        <table>
+          <thead><tr><th>תאריך</th><th>פירוט</th><th>הערות</th><th style="text-align:center">שכר</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div style="text-align:left;font-weight:800;margin-top:4px;padding:6px 4px;border-top:2px solid #2b6cb0">סה"כ: ${subtotal.toLocaleString()} ₪</div>
+      </div>`;
+  }).join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head>
+    <meta charset="UTF-8">
+    <title>${reportTitle}</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #1a1a2e; padding: 24px; }
+      h2 { font-size: 18px; margin-bottom: 4px; }
+      .sub { font-size: 13px; color: #718096; margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }
+      th { background: #2b6cb0; color: white; padding: 7px 10px; text-align: right; }
+      th:nth-child(4), td:nth-child(4) { text-align: center; }
+      td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+      tr:nth-child(even) td { background: #f7fafc; }
+      .grand-total { margin-top: 16px; padding-top: 12px; border-top: 3px solid #1a1a2e; font-size: 16px; font-weight: 800; text-align: left; }
+    </style>
+  </head><body>
+    <h2>${reportTitle}</h2>
+    <div class="sub">${reportSubtitle} · הופק ב-${new Date().toLocaleDateString('he-IL')}</div>
+    ${sectionsHtml}
+    <div class="grand-total">סה"כ כולל: ${grandTotal.toLocaleString()} ₪</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+window.printHoursReport = printHoursReport;
 
 async function openRefereeRatesModal() {
   await loadRefereeRates();

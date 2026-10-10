@@ -124,7 +124,7 @@ function buildTournamentsHTML() {
   if (groups['ללא תאריך']) orderedKeys.push('ללא תאריך');
 
   const sectionsHtml = orderedKeys.map(key => {
-    const items = groups[key].sort((a,b) => (a[1].startDate||'').localeCompare(b[1].startDate||''));
+    const items = groups[key].sort((a,b) => (b[1].startDate||'').localeCompare(a[1].startDate||''));
     const label = key === 'ללא תאריך' ? 'ללא תאריך' : tournamentMonthLabel(key, currentKey, nextKey);
     return `
       <div style="margin-bottom:22px">
