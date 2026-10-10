@@ -465,8 +465,9 @@ function newsPostHasFullContent(p) {
 }
 
 function renderNewsSlide(p) {
+  const altText = (p.title || '').replace(/"/g,'&quot;');
   const img = p.imageData
-    ? `<img class="news-card-img" src="${p.imageData}" alt="">`
+    ? `<img class="news-card-img" src="${p.imageData}" alt="${altText}">`
     : `<div class="news-card-no-img">📰</div>`;
   const date  = p.date  ? `<div class="news-card-date">${p.date}</div>` : '';
   const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
@@ -481,11 +482,15 @@ function renderNewsSlide(p) {
   const clickable = hasFull || extLink;
   const clickAttr = hasFull ? `onclick="showSitePage('activities');openActivityDetail('${p.id}')"`
                    : (extLink ? `data-link="${extLink}" onclick="newsCardClick(this)"` : '');
+  // Keyboard/screen-reader access for the whole-card click target — a div
+  // with only onclick is invisible to Tab navigation and has no accessible
+  // role without these.
+  const a11yAttr = clickable ? `tabindex="0" role="button" aria-label="${altText || 'עדכון מועדון'}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"` : '';
   const styleAttr = clickable ? 'style="cursor:pointer"' : '';
   const badge = hasFull
     ? `<div style="margin-top:12px;font-size:13px;color:#f97316;font-weight:600">📖 קרא את הסקירה המלאה ←</div>`
     : (extLink ? `<div style="margin-top:12px;font-size:13px;color:#4267B2;font-weight:600">&#x1F4D8; ${extLabel} &#x2197;</div>` : '');
-  return `<div class="news-slide"><div class="news-card" ${styleAttr} ${clickAttr}>${img}<div class="news-card-body">${date}${title}${body}${badge}</div></div></div>`;
+  return `<div class="news-slide"><div class="news-card" ${styleAttr} ${clickAttr} ${a11yAttr}>${img}<div class="news-card-body">${date}${title}${body}${badge}</div></div></div>`;
 }
 
 // Shows NEWS_VISIBLE (3) posts side by side, rotating one at a time. To keep
@@ -699,7 +704,8 @@ function renderActivitiesListView() {
     return;
   }
   const gridHtml = '<div class="activities-grid">' + filtered.map(p => {
-    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="">` : `<div class="activity-card-noimg">📰</div>`;
+    const altText = (p.title || '').replace(/"/g,'&quot;');
+    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="${altText}">` : `<div class="activity-card-noimg">📰</div>`;
     const hasFull = newsPostHasFullContent(p);
     const extLink = p.link || p.linkIg; // Facebook wins if both are set — see the identical note in renderNewsCarousel
     const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
@@ -707,7 +713,8 @@ function renderActivitiesListView() {
       ? `<div class="activity-card-badge" style="color:#f97316">📖 סקירה מלאה ←</div>`
       : (extLink ? `<div class="activity-card-badge" style="color:#4267B2">📘 ${extLabel} ↗</div>` : '');
     const onclick = hasFull ? `openActivityDetail('${p.id}')` : (extLink ? `window.open('${extLink}','_blank')` : '');
-    return `<div class="activity-card" ${onclick ? `onclick="${onclick}"` : ''}>${img}
+    const a11yAttr = onclick ? `tabindex="0" role="button" aria-label="${altText || 'עדכון מועדון'}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"` : '';
+    return `<div class="activity-card" ${onclick ? `onclick="${onclick}"` : ''} ${a11yAttr}>${img}
       <div class="activity-card-body">
         ${p.date ? `<div class="activity-card-date">${p.date}</div>` : ''}
         <div class="activity-card-title">${p.title || ''}</div>
@@ -748,19 +755,20 @@ function renderActivityDetailView() {
   // image is a plain visual (matches every card elsewhere: clicking a card
   // navigates to the recap, it never opens an image preview instead), so
   // it's deliberately not part of the lightbox's image set here.
-  const galleryImages = photos.map(ph => ph.imageData).filter(Boolean);
+  const galleryImages = photos.filter(ph => ph.imageData).map(ph => ({ src: ph.imageData, alt: ph.caption || post.title || '' }));
   const linksHtml = renderActivityLinksRow(post);
   root.innerHTML = `
     <div class="activity-detail">
       <button onclick="backToActivitiesList()" style="background:none;border:none;color:#f97316;font-size:14px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px">→ חזרה לכל העדכונים</button>
-      ${post.imageData ? `<img class="activity-detail-cover" src="${post.imageData}" alt="">` : ''}
+      ${post.imageData ? `<img class="activity-detail-cover" src="${post.imageData}" alt="${(post.title||'').replace(/"/g,'&quot;')}">` : ''}
       <div class="activity-detail-title">${post.title || ''}</div>
       ${post.date ? `<div class="activity-detail-date">${post.date}</div>` : ''}
       ${linksHtml}
       ${post.fullBody ? `<div class="activity-detail-body">${post.fullBody}</div>` : (post.body ? `<div class="activity-detail-body">${post.body}</div>` : '')}
-      ${photos.length ? `<div class="activity-detail-photos">${photos.map((ph, i) =>
-        `<img src="${ph.imageData}" alt="${ph.caption || ''}" onclick="openActivityLightbox(${i})" title="${ph.caption || ''}">`
-      ).join('')}</div>` : ''}
+      ${photos.length ? `<div class="activity-detail-photos">${photos.map((ph, i) => {
+        const capAlt = (ph.caption || 'תמונה נוספת ' + (i+1)).replace(/"/g,'&quot;');
+        return `<img src="${ph.imageData}" alt="${capAlt}" onclick="openActivityLightbox(${i})" title="${ph.caption || ''}" tabindex="0" role="button" aria-label="הגדלת ${capAlt}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">`;
+      }).join('')}</div>` : ''}
     </div>`;
   window._activityLightboxImages = galleryImages;
 }
@@ -799,7 +807,7 @@ window.openActivityLightbox = function(idx) {
   if (!images.length) return;
   _activityLightboxIdx = idx;
   const img = document.getElementById('activity-lightbox-img');
-  if (img) img.src = images[_activityLightboxIdx];
+  if (img) { img.src = images[_activityLightboxIdx].src; img.alt = images[_activityLightboxIdx].alt; }
   const box = document.getElementById('activity-lightbox');
   if (box) box.classList.add('open');
 };
@@ -808,7 +816,7 @@ window.activityLightboxNav = function(dir) {
   if (!images.length) return;
   _activityLightboxIdx = (_activityLightboxIdx + dir + images.length) % images.length;
   const img = document.getElementById('activity-lightbox-img');
-  if (img) img.src = images[_activityLightboxIdx];
+  if (img) { img.src = images[_activityLightboxIdx].src; img.alt = images[_activityLightboxIdx].alt; }
 };
 window.closeActivityLightbox = function() {
   const box = document.getElementById('activity-lightbox');
@@ -1524,9 +1532,9 @@ window.closeSeasonLightbox = function() {
   if (box) box.classList.remove('open');
 };
 function _updateSeasonLightboxImg() {
-  const src = document.getElementById('season-launch-img' + (_slLightboxIdx + 1))?.src;
+  const thumb = document.getElementById('season-launch-img' + (_slLightboxIdx + 1));
   const img = document.getElementById('season-lightbox-img');
-  if (img && src) img.src = src;
+  if (img && thumb?.src) { img.src = thumb.src; img.alt = thumb.alt || ''; }
 }
 
 function renderTournamentsContent(data) {

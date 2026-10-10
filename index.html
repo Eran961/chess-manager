@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="landing-active">
+<a href="#page-home" class="skip-link" onclick="const p=document.querySelector('.site-page.active');if(p){p.setAttribute('tabindex','-1');p.focus();return false;}">דלג לתוכן הראשי</a>
 <script>
 if(localStorage.getItem('ccm_loggedIn')){
   document.body.classList.remove('landing-active');
@@ -52,17 +53,17 @@ if(localStorage.getItem('ccm_loggedIn')){
        styles.css — the "REDESIGN: NIZKOCHESS-INSPIRED LANDING" section). -->
   <div class="site-header">
     <div class="site-topbar">
-      <div class="site-title-row" onclick="window.showSitePage && showSitePage('home')" style="cursor:pointer" title="חזרה לדף הבית">
+      <div class="site-title-row" onclick="window.showSitePage && showSitePage('home')" style="cursor:pointer" title="חזרה לדף הבית" tabindex="0" role="button" aria-label="חזרה לדף הבית" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="site-title-text"><h1>מועדון השחמט ראשון לציון</h1></div>
         <img class="site-logo-img" src="images/club-logo.jpg" alt="לוגו המועדון">
       </div>
       <div class="site-header-actions">
-        <div class="nav-social-icons"><a class="nav-social-icon" href="https://www.facebook.com/Rishonchess" target="_blank" title="פייסבוק"><svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a><a class="nav-social-icon" href="https://www.instagram.com/rishonchess" target="_blank" title="אינסטגרם"><svg width="18" height="18" viewBox="0 0 24 24" fill="url(#ig-grad)"><defs><linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f09433"/><stop offset="25%" stop-color="#e6683c"/><stop offset="50%" stop-color="#dc2743"/><stop offset="75%" stop-color="#cc2366"/><stop offset="100%" stop-color="#bc1888"/></linearGradient></defs><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a><a class="nav-social-icon" href="https://waze.com/ul?q=%D7%91%D7%9F%20%D7%92%D7%95%D7%A8%D7%99%D7%95%D7%9F%2044%20%D7%A8%D7%90%D7%A9%D7%95%D7%9F%20%D7%9C%D7%A6%D7%99%D7%95%D7%9F&navigate=yes" target="_blank" title="נווט ב-Waze"><svg width="18" height="18" viewBox="0 0 24 24" fill="#33ccff"><path d="M20.548 3.452C18.41 1.312 15.523 0 12.333 0 5.917 0 .667 5.25.667 11.667c0 2.12.569 4.101 1.557 5.813L.667 21.667l4.354-1.5A11.617 11.617 0 0012.333 23.333c6.417 0 11.667-5.25 11.667-11.666 0-3.19-1.312-6.077-3.452-8.215zm-8.215 17.548a9.38 9.38 0 01-4.989-1.43l-.357-.214-3.69.968.984-3.595-.238-.369a9.323 9.323 0 01-1.43-5.026C2.613 6.381 6.99 2 12.333 2c2.596 0 5.035 1.012 6.869 2.845 1.833 1.833 2.845 4.273 2.845 6.869 0 5.345-4.381 9.286-9.714 9.286z"/></svg></a></div>
+        <div class="nav-social-icons"><a class="nav-social-icon" href="https://www.facebook.com/Rishonchess" target="_blank" title="פייסבוק" aria-label="עמוד הפייסבוק של המועדון"><svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a><a class="nav-social-icon" href="https://www.instagram.com/rishonchess" target="_blank" title="אינסטגרם" aria-label="עמוד האינסטגרם של המועדון"><svg width="18" height="18" viewBox="0 0 24 24" fill="url(#ig-grad)" aria-hidden="true"><defs><linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f09433"/><stop offset="25%" stop-color="#e6683c"/><stop offset="50%" stop-color="#dc2743"/><stop offset="75%" stop-color="#cc2366"/><stop offset="100%" stop-color="#bc1888"/></linearGradient></defs><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a><a class="nav-social-icon" href="https://waze.com/ul?q=%D7%91%D7%9F%20%D7%92%D7%95%D7%A8%D7%99%D7%95%D7%9F%2044%20%D7%A8%D7%90%D7%A9%D7%95%D7%9F%20%D7%9C%D7%A6%D7%99%D7%95%D7%9F&navigate=yes" target="_blank" title="נווט ב-Waze" aria-label="נווט למועדון באמצעות Waze"><svg width="18" height="18" viewBox="0 0 24 24" fill="#33ccff" aria-hidden="true"><path d="M20.548 3.452C18.41 1.312 15.523 0 12.333 0 5.917 0 .667 5.25.667 11.667c0 2.12.569 4.101 1.557 5.813L.667 21.667l4.354-1.5A11.617 11.617 0 0012.333 23.333c6.417 0 11.667-5.25 11.667-11.666 0-3.19-1.312-6.077-3.452-8.215zm-8.215 17.548a9.38 9.38 0 01-4.989-1.43l-.357-.214-3.69.968.984-3.595-.238-.369a9.323 9.323 0 01-1.43-5.026C2.613 6.381 6.99 2 12.333 2c2.596 0 5.035 1.012 6.869 2.845 1.833 1.833 2.845 4.273 2.845 6.869 0 5.345-4.381 9.286-9.714 9.286z"/></svg></a></div>
         <button class="nav-tab nav-tab-login" onclick="showLoginModal()" title="כניסה למדריכים וחברי הנהלה בלבד">כניסת צוות ←</button>
-        <button class="btn-theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="מעבר למצב בהיר">☀️</button>
+        <button class="btn-theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="מעבר למצב בהיר" aria-label="מעבר בין מצב כהה למצב בהיר">☀️</button>
       </div>
     </div>
-    <nav class="site-nav">
+    <nav class="site-nav" aria-label="ניווט ראשי">
       <div class="nav-tabs-scroll">
         <button class="nav-tab active" onclick="showSitePage('home')">עמוד הבית</button>
         <button class="nav-tab" onclick="showSitePage('clubs')">חוגים במועדון</button>
@@ -117,8 +118,8 @@ if(localStorage.getItem('ccm_loggedIn')){
         <div class="section-line"></div>
       </div>
       <div class="season-launch-flyers">
-        <img id="season-launch-img1" src="images/flyer-hogim-1.jpg" alt="חוג שחמט לכל הגילאים והרמות" onclick="openSeasonLightbox(1)" title="להגדלה">
-        <img id="season-launch-img2" src="images/flyer-hogim-2.jpg" alt="מערכת שעות חוגי שחמט 2026–2027" onclick="openSeasonLightbox(2)" title="להגדלה">
+        <img id="season-launch-img1" src="images/flyer-hogim-1.jpg" alt="חוג שחמט לכל הגילאים והרמות" onclick="openSeasonLightbox(1)" title="להגדלה" tabindex="0" role="button" aria-label="הגדלת תמונה: חוג שחמט לכל הגילאים והרמות" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+        <img id="season-launch-img2" src="images/flyer-hogim-2.jpg" alt="מערכת שעות חוגי שחמט 2026–2027" onclick="openSeasonLightbox(2)" title="להגדלה" tabindex="0" role="button" aria-label="הגדלת תמונה: מערכת שעות חוגי שחמט 2026–2027" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
       </div>
       <a class="btn-about-link" id="season-launch-cta" style="display:inline-block;text-decoration:none"
         href="https://wa.me/972559573758?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%2F%D7%AA%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%95%D7%93%20%D7%A2%D7%9C%20%D7%A2%D7%95%D7%A0%D7%AA%20%D7%94%D7%97%D7%95%D7%92%D7%99%D7%9D%20%D7%94%D7%97%D7%93%D7%A9%D7%94%20%D7%95%D7%9C%D7%94%D7%99%D7%A8%D7%A9%D7%9D" target="_blank">📞 לפרטים נוספים ורישום</a>
@@ -300,13 +301,13 @@ if(localStorage.getItem('ccm_loggedIn')){
             </div>
           </div>
         </div>
-        <button class="testi-arrow prev" onclick="testiNav(1)" title="הבא">&#10095;</button>
-        <button class="testi-arrow next" onclick="testiNav(-1)" title="הקודם">&#10094;</button>
+        <button class="testi-arrow prev" onclick="testiNav(1)" title="הבא" aria-label="ההמלצה הבאה">&#10095;</button>
+        <button class="testi-arrow next" onclick="testiNav(-1)" title="הקודם" aria-label="ההמלצה הקודמת">&#10094;</button>
       </div>
       <div class="testi-dots" id="testi-dots">
-        <button class="testi-dot active" onclick="testiGoTo(0)"></button>
-        <button class="testi-dot" onclick="testiGoTo(1)"></button>
-        <button class="testi-dot" onclick="testiGoTo(2)"></button>
+        <button class="testi-dot active" onclick="testiGoTo(0)" aria-label="המלצה 1"></button>
+        <button class="testi-dot" onclick="testiGoTo(1)" aria-label="המלצה 2"></button>
+        <button class="testi-dot" onclick="testiGoTo(2)" aria-label="המלצה 3"></button>
       </div>
     </div>
     <!-- GALLERY -->
@@ -347,17 +348,17 @@ if(localStorage.getItem('ccm_loggedIn')){
        the descendant's own display/class — nesting these inside page-home
        (as they were before) meant they only became visible again once you
        navigated back to the home page, wherever you'd actually opened them. -->
-  <div class="site-lightbox" id="season-lightbox" onclick="if(event.target===this) closeSeasonLightbox()">
-    <button class="site-lightbox-close" onclick="closeSeasonLightbox()" title="סגור">✕</button>
-    <button class="site-lightbox-arrow prev" onclick="seasonLightboxNav(1)" title="התמונה הקודמת">&#10095;</button>
+  <div class="site-lightbox" id="season-lightbox" onclick="if(event.target===this) closeSeasonLightbox()" role="dialog" aria-modal="true" aria-label="תצוגה מוגדלת של התמונה">
+    <button class="site-lightbox-close" onclick="closeSeasonLightbox()" title="סגור" aria-label="סגור תצוגה מוגדלת">✕</button>
+    <button class="site-lightbox-arrow prev" onclick="seasonLightboxNav(1)" title="התמונה הקודמת" aria-label="התמונה הקודמת">&#10095;</button>
     <img id="season-lightbox-img" src="" alt="">
-    <button class="site-lightbox-arrow next" onclick="seasonLightboxNav(-1)" title="התמונה הבאה">&#10094;</button>
+    <button class="site-lightbox-arrow next" onclick="seasonLightboxNav(-1)" title="התמונה הבאה" aria-label="התמונה הבאה">&#10094;</button>
   </div>
-  <div class="site-lightbox" id="activity-lightbox" onclick="if(event.target===this) closeActivityLightbox()">
-    <button class="site-lightbox-close" onclick="closeActivityLightbox()" title="סגור">✕</button>
-    <button class="site-lightbox-arrow prev" onclick="activityLightboxNav(1)" title="התמונה הקודמת">&#10095;</button>
+  <div class="site-lightbox" id="activity-lightbox" onclick="if(event.target===this) closeActivityLightbox()" role="dialog" aria-modal="true" aria-label="תצוגה מוגדלת של התמונה">
+    <button class="site-lightbox-close" onclick="closeActivityLightbox()" title="סגור" aria-label="סגור תצוגה מוגדלת">✕</button>
+    <button class="site-lightbox-arrow prev" onclick="activityLightboxNav(1)" title="התמונה הקודמת" aria-label="התמונה הקודמת">&#10095;</button>
     <img id="activity-lightbox-img" src="" alt="">
-    <button class="site-lightbox-arrow next" onclick="activityLightboxNav(-1)" title="התמונה הבאה">&#10094;</button>
+    <button class="site-lightbox-arrow next" onclick="activityLightboxNav(-1)" title="התמונה הבאה" aria-label="התמונה הבאה">&#10094;</button>
   </div>
 
   <!-- ===== WHATSAPP FLOATING BUTTON ===== -->
@@ -415,7 +416,7 @@ if(localStorage.getItem('ccm_loggedIn')){
     <div style="padding:0 20px 28px;direction:rtl">
     <div id="clubs-cat-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0;"></div>
     <div id="clubs-schedule-container">
-      <div style="text-align:center;padding:40px;color:rgba(255,255,255,0.5)">⏳ טוען לוח חוגים...</div>
+      <div style="text-align:center;padding:40px;color:var(--text-muted)">⏳ טוען לוח חוגים...</div>
     </div>
   </div>
   </div><!-- /page-clubs -->
@@ -526,7 +527,7 @@ if(localStorage.getItem('ccm_loggedIn')){
           <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">מועדון השחמט ראשון לציון</h3>
           <div class="cc-role" style="margin-bottom:20px">צוות ניהול המועדון</div>
           <a class="btn-wa-lg" id="cc-wa-link" href="https://wa.me/972559573758?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%95%D7%93%20%D7%A2%D7%9C%20%D7%94%D7%9E%D7%95%D7%A2%D7%93%D7%95%D7%9F" target="_blank"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> שלחו הודעה ב-WhatsApp</a>
-          <div id="cc-wa-display-phone" style="margin-top:12px;font-size:13px;color:rgba(255,255,255,0.5);direction:ltr">055-957-3758</div>
+          <div id="cc-wa-display-phone" style="margin-top:12px;font-size:13px;color:var(--text-muted);direction:ltr">055-957-3758</div>
         </div>
 
       <div class="contact-card">
@@ -591,9 +592,9 @@ if(localStorage.getItem('ccm_loggedIn')){
 </div>
 
 <!-- Instructors Modal -->
-<div id="instructors-modal" onclick="if(event.target===this)hideInstructorsModal()">
+<div id="instructors-modal" onclick="if(event.target===this)hideInstructorsModal()" role="dialog" aria-modal="true" aria-labelledby="instructors-modal-title">
   <div class="instructors-box">
-    <h2>👨‍🏫 נבחרת המדריכים שלנו</h2>
+    <h2 id="instructors-modal-title">👨‍🏫 נבחרת המדריכים שלנו</h2>
     <div class="instructor-item">
       <div class="inst-avatar"><img src="images/instructor-yaron-linik.jpg" alt="ירון"></div>
       <div class="inst-body">
@@ -643,17 +644,17 @@ if(localStorage.getItem('ccm_loggedIn')){
   </div>
 </div>
 <!-- Login Modal -->
-<div id="login-modal">
+<div id="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
   <div class="login-card">
-    <div class="login-logo"><img src="images/club-logo.jpg" style="height:72px;width:auto;margin-bottom:4px"></div>
-    <h2>כניסה למערכת</h2>
+    <div class="login-logo"><img src="images/club-logo.jpg" style="height:72px;width:auto;margin-bottom:4px" alt=""></div>
+    <h2 id="login-modal-title">כניסה למערכת</h2>
     <div class="login-sub">הזן שם משתמש וסיסמה</div>
     <div class="login-field">
-      <label>שם משתמש</label>
+      <label for="login-email">שם משתמש</label>
       <input type="text" id="login-email" placeholder="שם משתמש" dir="ltr" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <div class="login-field">
-      <label>סיסמה</label>
+      <label for="login-password">סיסמה</label>
       <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <div class="login-error" id="login-error"></div>

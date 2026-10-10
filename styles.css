@@ -16,6 +16,19 @@
       --border: #e2e8f0;
     }
     body { background: var(--bg-main); transition: background 0.3s; }
+    .skip-link {
+      position: absolute; right: 12px; top: -60px; z-index: 10000;
+      background: #f97316; color: white; padding: 10px 18px; border-radius: 8px;
+      font-weight: 700; font-size: 14px; text-decoration: none; transition: top 0.15s;
+    }
+    .skip-link:focus { top: 12px; }
+    /* Baseline visible keyboard-focus ring across the public site — covers
+       buttons/links/cards that don't already define their own :focus style
+       (mouse clicks don't trigger :focus-visible, so this never shows up as
+       an unwanted ring on pointer interaction). */
+    a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid #f97316; outline-offset: 2px;
+    }
     #landing-page { background: var(--bg-main); color: var(--text-primary); }
     .landing-main { background: var(--bg-main); }
     .page-clubs { background: var(--bg-main); }
@@ -1824,7 +1837,7 @@
       font-size: 15px; font-family: inherit; direction: ltr; text-align: left;
       transition: border-color 0.2s;
     }
-    .login-field input:focus { outline: none; border-color: #f97316; }
+    .login-field input:focus { outline: none; border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.3); }
     .login-error { color: #e53e3e; font-size: 13px; margin-bottom: 12px; min-height: 18px; }
     .btn-login-submit {
       width: 100%; padding: 12px; background: #f97316; color: white; border: none;
