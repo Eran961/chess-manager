@@ -1,0 +1,25 @@
+# Netlify cache headers — repeat visits reuse cached assets instead of
+# re-downloading everything. Deliberately conservative on anything that gets
+# edited in place (same filename, new content) — JS/CSS/HTML always
+# revalidate (a 304 is still fast, but never stale); images/icons/video get
+# a real cache window since they change far less often, but not "immutable"
+# forever, since a replaced photo/flyer under the same filename should still
+# show up again within a bounded time instead of being stuck indefinitely.
+
+/js/*
+  Cache-Control: no-cache
+
+/*.css
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/images/*
+  Cache-Control: public, max-age=604800
+
+/icons/*
+  Cache-Control: public, max-age=2592000
+
+/*.mp4
+  Cache-Control: public, max-age=604800

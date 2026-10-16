@@ -983,15 +983,29 @@ async function migrateAllLegacyImages(log) {
     }
   }
 
+  // Homepage photo gallery
+  const gallerySnap = await db.ref('siteContent/gallery').get();
+  if (gallerySnap.exists()) {
+    const galleryData = gallerySnap.val();
+    for (const id of Object.keys(galleryData)) {
+      const item = galleryData[id];
+      if (item.imageData && !item.imageUrl) {
+        try {
+          const url = await uploadImageToStorage(item.imageData, `gallery/photo-${id}.jpg`);
+          await db.ref(`siteContent/gallery/${id}`).update({ imageUrl: url, imageData: null });
+          migrated++; log(`✅ תמונת גלריה: ${item.caption || id}`);
+        } catch(e) { failed++; log(`❌ נכשל (גלריה "${item.caption || id}"): ${e.code || ''} ${e.message}`); }
+      }
+    }
+  }
+
   return { migrated, failed };
 }
 
-// Runs once per admin session (first time either the news or the people
-// admin screen is opened — whichever happens first covers both, since
-// migrateAllLegacyImages() always handles both collections together) so old
-// images migrate to Storage with zero manual action — no button needed for
-// the common case. The manual button above still exists for visibility
-// (seeing the log) or to retry after fixing a Storage/rules problem.
+// Runs once per admin session — first time any of the news, people, or
+// site-content (gallery) admin screens is opened, whichever happens first,
+// since migrateAllLegacyImages() always handles all three collections
+// together — so old images migrate to Storage with zero manual action.
 let _imgAutoMigrateChecked = false;
 async function autoMigrateImagesIfNeeded() {
   if (_imgAutoMigrateChecked || !db || !storage) return;
@@ -1619,14 +1633,14 @@ function restartTestiTimer() { startTestiTimer(); }
 function renderGalleryContent(data) {
   const el = document.getElementById('home-gallery-grid');
   if (!el) return;
-  const items = Object.values(data).filter(function(g){ return g.imageData; });
+  const items = Object.values(data).filter(function(g){ return g.imageUrl || g.imageData; });
   items.sort(function(a,b){ return (a.order||99)-(b.order||99); });
   el.innerHTML = items.map(function(g) {
     const colSpan = g.span2 ? 'grid-column:span 2;' : '';
     const imgRatio = g.span2 ? 'aspect-ratio:2/1;' : 'aspect-ratio:1/1;';
     return '<div class="gallery-item" style="' + colSpan + '">'+
       '<div class="gallery-item-img" style="' + imgRatio + '">'+
-      '<img src="' + g.imageData + '" alt="' + (g.caption||'') + '" loading="lazy">'+
+      '<img src="' + (g.imageUrl || g.imageData) + '" alt="' + (g.caption||'') + '" loading="lazy">'+
       '</div>'+
       (g.caption ? '<div class="gallery-caption">' + g.caption + '</div>' : '')+
       '</div>';
@@ -1762,6 +1776,7 @@ function renderContactContent(data) {
 
 // ---- Admin ----
 window.loadSiteContentAdmin = async function() {
+  autoMigrateImagesIfNeeded(); // fire-and-forget — covers the gallery too, in case this is the first admin screen opened this session
   const el = document.getElementById('site-content-admin-container');
   if (!el) return;
   el.innerHTML = '<div style="text-align:center;padding:30px;opacity:.5">⏳ טוען...</div>';
@@ -2179,7 +2194,7 @@ function renderGalleryAdmin(data) {
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">' +
     items.map(function(g) {
       return '<div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;background:#000">' +
-        '<img src="'+g.imageData+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer" onclick="openGalleryEdit(\''+g._id+'\')">' +
+        '<img src="'+(g.imageUrl||g.imageData)+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer" onclick="openGalleryEdit(\''+g._id+'\')">' +
         '<div style="position:absolute;top:4px;right:4px;display:flex;gap:4px">' +
         '<button onclick="openGalleryEdit(\''+g._id+'\')" title="ערוך כיתוב" style="background:rgba(0,0,0,.6);border:none;border-radius:4px;padding:4px 6px;cursor:pointer;color:white;font-size:10px">✏️</button>' +
         '<button onclick="toggleGallerySpan(\''+g._id+'\','+(!g.span2)+')" title="'+(g.span2?'הצג רגיל':'הצג רחב')+'" style="background:rgba(0,0,0,.6);border:none;border-radius:4px;padding:4px 6px;cursor:pointer;color:white;font-size:10px">'+(g.span2?'⬛':'⬜⬜')+'</button>' +
@@ -2221,12 +2236,12 @@ window.saveGalleryItem = async function() {
   const img = document.getElementById('gal-img-data').value;
   if (!img) { showToast('⚠️ יש לבחור תמונה'); return; }
   const data = {
-    imageData: img,
     caption: document.getElementById('gal-caption').value.trim(),
     span2: document.getElementById('gal-span2').checked,
     order: parseInt(document.getElementById('gal-order').value)||99
   };
   try {
+    data.imageUrl = await uploadImageToStorage(img, `gallery/photo-${Date.now()}.jpg`);
     await db.ref('siteContent/gallery').push(data);
     document.querySelector('.modal-overlay.open')?.remove();
     loadSiteContentAdmin(); loadSiteContent(); showToast('✅ תמונה נוספה!');
