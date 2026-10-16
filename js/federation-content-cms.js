@@ -869,6 +869,7 @@ async function uploadImageToStorage(dataUrl, path) {
 }
 
 async function loadNewsAdmin() {
+  autoMigrateImagesIfNeeded(); // fire-and-forget — doesn't block this panel's own render
   const el = document.getElementById('news-admin-container');
   if (!el) return;
   el.innerHTML = '<div style="text-align:center;padding:30px;opacity:.5">⏳ טוען...</div>';
@@ -927,10 +928,11 @@ function renderNewsSettingsAdmin() {
     <div style="border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:16px;margin-bottom:20px">
       <h4 style="margin:0 0 8px">🖼️ אחסון תמונות</h4>
       <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:12px">
-        תמונות ישנות (עדכוני המועדון ואנשי המועדון) שמורות כקובץ מוטבע ישירות במסד הנתונים — זה מה שמאט את טעינת העמודים האלה.
-        הכלי הזה מעביר אותן ל-Firebase Storage ומחליף אותן בקישור קצר. חד-פעמי, בטוח להרצה כמה פעמים (מדלג על מה שכבר הועבר).
+        תמונות חדשות (עדכוני המועדון ואנשי המועדון) עולות אוטומטית ל-Firebase Storage — אין צורך בשום פעולה ידנית.
+        תמונות ישנות שעדיין שמורות מוטבעות במסד הנתונים עוברות אוטומטית ברקע בכניסה הראשונה למסכים האלה.
+        הכפתור כאן הוא רק לשימוש ידני — לראות את ההתקדמות, או להריץ שוב אם משהו נכשל.
       </div>
-      <button onclick="openImageMigrationModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">🔄 העבר תמונות ל-Storage</button>
+      <button onclick="openImageMigrationModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">🔄 הרץ ידנית / בדוק סטטוס</button>
     </div>`;
 }
 
@@ -957,63 +959,72 @@ function openImageMigrationModal() {
 }
 window.openImageMigrationModal = openImageMigrationModal;
 
+// Core migration logic, shared by the manual button (runImageMigration, logs
+// to the modal) and the silent auto-trigger (autoMigrateImagesIfNeeded, logs
+// nowhere — just a toast at the end) — see those two below. `log` is a
+// no-op-safe callback so either caller can pass whatever (or nothing).
+async function migrateAllLegacyImages(log) {
+  let migrated = 0, failed = 0;
+
+  // News posts: cover image + per-post extra photos
+  const newsSnap = await db.ref('newsPosts').get();
+  if (newsSnap.exists()) {
+    const newsData = newsSnap.val();
+    for (const id of Object.keys(newsData)) {
+      const post = newsData[id];
+      if (post.imageData && !post.imageUrl) {
+        try {
+          const url = await uploadImageToStorage(post.imageData, `news/cover-${id}.jpg`);
+          await db.ref(`newsPosts/${id}`).update({ imageUrl: url, imageData: null });
+          migrated++; log(`✅ תמונת שער: ${post.title || id}`);
+        } catch(e) { failed++; log(`❌ נכשל (שער "${post.title || id}"): ${e.code || ''} ${e.message}`); }
+      }
+      if (Array.isArray(post.photos) && post.photos.some(ph => ph && ph.imageData && !ph.imageUrl)) {
+        const newPhotos = [];
+        let anyFailed = false;
+        for (let i = 0; i < post.photos.length; i++) {
+          const ph = post.photos[i];
+          if (ph && ph.imageData && !ph.imageUrl) {
+            try {
+              const url = await uploadImageToStorage(ph.imageData, `news/photo-${id}-${i}.jpg`);
+              newPhotos.push({ ...ph, imageUrl: url, imageData: null });
+              migrated++;
+            } catch(e) { failed++; anyFailed = true; newPhotos.push(ph); log(`❌ נכשל (תמונה נוספת ב"${post.title || id}"): ${e.code || ''} ${e.message}`); }
+          } else newPhotos.push(ph);
+        }
+        await db.ref(`newsPosts/${id}/photos`).set(newPhotos);
+        if (!anyFailed) log(`✅ תמונות נוספות: ${post.title || id}`);
+      }
+    }
+  }
+
+  // Club people photos
+  const peopleSnap = await db.ref('clubPeople').get();
+  if (peopleSnap.exists()) {
+    const peopleData = peopleSnap.val();
+    for (const id of Object.keys(peopleData)) {
+      const person = peopleData[id];
+      if (person.photoData && !person.photoUrl) {
+        try {
+          const url = await uploadImageToStorage(person.photoData, `people/photo-${id}.jpg`);
+          await db.ref(`clubPeople/${id}`).update({ photoUrl: url, photoData: null });
+          migrated++; log(`✅ תמונת איש מועדון: ${person.name || id}`);
+        } catch(e) { failed++; log(`❌ נכשל (${person.name || id}): ${e.code || ''} ${e.message}`); }
+      }
+    }
+  }
+
+  return { migrated, failed };
+}
+
 async function runImageMigration() {
   const logEl = document.getElementById('img-migration-log');
   const btn = document.getElementById('img-migration-start-btn');
   const log = (msg) => { if (logEl) { logEl.textContent += '\n' + msg; logEl.scrollTop = logEl.scrollHeight; } };
   if (btn) { btn.disabled = true; btn.textContent = '⏳ רץ...'; }
   if (logEl) logEl.textContent = 'מתחיל...';
-  let migrated = 0, failed = 0;
-
   try {
-    // News posts: cover image + per-post extra photos
-    const newsSnap = await db.ref('newsPosts').get();
-    if (newsSnap.exists()) {
-      const newsData = newsSnap.val();
-      for (const id of Object.keys(newsData)) {
-        const post = newsData[id];
-        if (post.imageData && !post.imageUrl) {
-          try {
-            const url = await uploadImageToStorage(post.imageData, `news/cover-${id}.jpg`);
-            await db.ref(`newsPosts/${id}`).update({ imageUrl: url, imageData: null });
-            migrated++; log(`✅ תמונת שער: ${post.title || id}`);
-          } catch(e) { failed++; log(`❌ נכשל (שער "${post.title || id}"): ${e.code || ''} ${e.message}`); }
-        }
-        if (Array.isArray(post.photos) && post.photos.some(ph => ph && ph.imageData && !ph.imageUrl)) {
-          const newPhotos = [];
-          let anyFailed = false;
-          for (let i = 0; i < post.photos.length; i++) {
-            const ph = post.photos[i];
-            if (ph && ph.imageData && !ph.imageUrl) {
-              try {
-                const url = await uploadImageToStorage(ph.imageData, `news/photo-${id}-${i}.jpg`);
-                newPhotos.push({ ...ph, imageUrl: url, imageData: null });
-                migrated++;
-              } catch(e) { failed++; anyFailed = true; newPhotos.push(ph); log(`❌ נכשל (תמונה נוספת ב"${post.title || id}"): ${e.code || ''} ${e.message}`); }
-            } else newPhotos.push(ph);
-          }
-          await db.ref(`newsPosts/${id}/photos`).set(newPhotos);
-          if (!anyFailed) log(`✅ תמונות נוספות: ${post.title || id}`);
-        }
-      }
-    }
-
-    // Club people photos
-    const peopleSnap = await db.ref('clubPeople').get();
-    if (peopleSnap.exists()) {
-      const peopleData = peopleSnap.val();
-      for (const id of Object.keys(peopleData)) {
-        const person = peopleData[id];
-        if (person.photoData && !person.photoUrl) {
-          try {
-            const url = await uploadImageToStorage(person.photoData, `people/photo-${id}.jpg`);
-            await db.ref(`clubPeople/${id}`).update({ photoUrl: url, photoData: null });
-            migrated++; log(`✅ תמונת איש מועדון: ${person.name || id}`);
-          } catch(e) { failed++; log(`❌ נכשל (${person.name || id}): ${e.code || ''} ${e.message}`); }
-        }
-      }
-    }
-
+    const { migrated, failed } = await migrateAllLegacyImages(log);
     if (migrated === 0 && failed === 0) log('אין תמונות שצריך להעביר — הכול כבר מעודכן.');
     log(`\n🏁 הסתיים. הועברו: ${migrated}, נכשלו: ${failed}`);
     showToast(failed ? `⚠️ המיגרציה הסתיימה עם ${failed} שגיאות` : '✅ המיגרציה הושלמה בהצלחה!');
@@ -1026,6 +1037,33 @@ async function runImageMigration() {
   }
 }
 window.runImageMigration = runImageMigration;
+
+// Runs once per admin session (first time either the news or the people
+// admin screen is opened — whichever happens first covers both, since
+// migrateAllLegacyImages() always handles both collections together) so old
+// images migrate to Storage with zero manual action — no button needed for
+// the common case. The manual button above still exists for visibility
+// (seeing the log) or to retry after fixing a Storage/rules problem.
+let _imgAutoMigrateChecked = false;
+async function autoMigrateImagesIfNeeded() {
+  if (_imgAutoMigrateChecked || !db || !storage) return;
+  _imgAutoMigrateChecked = true;
+  try {
+    const { migrated, failed } = await migrateAllLegacyImages(() => {});
+    if (migrated > 0) {
+      showToast(failed
+        ? `🔄 ${migrated} תמונות הועברו אוטומטית ל-Storage (${failed} נכשלו — ⚙️ הגדרות לפרטים)`
+        : `🔄 ${migrated} תמונות ישנות הועברו אוטומטית ל-Storage`);
+      loadNewsAdmin(); loadNewsCarousel(); loadPeopleAdmin();
+    }
+  } catch(e) {
+    // Silent by design (e.g. Storage not enabled/rules not set yet) — the
+    // admin finds out why via the manual button's detailed log instead of a
+    // toast firing on every single page they open until it's fixed.
+    console.error('autoMigrateImagesIfNeeded:', e);
+  }
+}
+window.autoMigrateImagesIfNeeded = autoMigrateImagesIfNeeded;
 
 function renderNewsCategoriesList() {
   const wrap = document.getElementById('news-categories-list');
@@ -1331,6 +1369,7 @@ window.switchPeopleTab = function(cat) {
 
 // ---- Admin ----
 window.loadPeopleAdmin = async function() {
+  autoMigrateImagesIfNeeded(); // fire-and-forget — doesn't block this panel's own render
   const el = document.getElementById('people-admin-container');
   if (!el) return;
   el.innerHTML = '<div style="text-align:center;padding:30px;opacity:.5">⏳ טוען...</div>';
