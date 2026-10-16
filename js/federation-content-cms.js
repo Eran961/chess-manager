@@ -1011,18 +1011,24 @@ async function autoMigrateImagesIfNeeded() {
   if (_imgAutoMigrateChecked || !db || !storage) return;
   _imgAutoMigrateChecked = true;
   try {
-    const { migrated, failed } = await migrateAllLegacyImages(() => {});
+    // migrateAllLegacyImages() catches each item's own upload error
+    // internally (so one bad image doesn't abort the rest) — route that
+    // per-item detail to the console here instead of the previous silent
+    // no-op, so a real failure (e.g. Storage rules/plan not set up) is
+    // actually visible instead of just leaving Storage empty with zero clue
+    // why.
+    const { migrated, failed } = await migrateAllLegacyImages((msg) => console.log('[image migration]', msg));
     if (migrated > 0) {
       showToast(failed
-        ? `🔄 ${migrated} תמונות הועברו אוטומטית ל-Storage (${failed} נכשלו — ⚙️ הגדרות לפרטים)`
+        ? `🔄 ${migrated} תמונות הועברו אוטומטית ל-Storage (${failed} נכשלו — פרטים ב-console)`
         : `🔄 ${migrated} תמונות ישנות הועברו אוטומטית ל-Storage`);
       loadNewsAdmin(); loadNewsCarousel(); loadPeopleAdmin();
+    } else if (failed > 0) {
+      showToast(`⚠️ נכשלה העברת ${failed} תמונות ל-Storage — פרטים ב-console (F12)`, 'error');
     }
   } catch(e) {
-    // Silent by design (e.g. Storage not enabled/rules not set yet) — the
-    // admin finds out why via the manual button's detailed log instead of a
-    // toast firing on every single page they open until it's fixed.
     console.error('autoMigrateImagesIfNeeded:', e);
+    showToast('⚠️ שגיאה בהעברת תמונות ל-Storage: ' + e.message, 'error');
   }
 }
 window.autoMigrateImagesIfNeeded = autoMigrateImagesIfNeeded;
