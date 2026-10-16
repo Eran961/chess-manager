@@ -924,45 +924,14 @@ function renderNewsSettingsAdmin() {
       <div id="news-categories-list"></div>
       <button onclick="addNewsCategory()" style="margin-top:6px;background:none;border:1px dashed rgba(255,255,255,.3);color:inherit;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit">+ הוסף קטגוריה</button>
       <div style="margin-top:14px"><button onclick="saveNewsSettings()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">💾 שמור הגדרות</button></div>
-    </div>
-    <div style="border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:16px;margin-bottom:20px">
-      <h4 style="margin:0 0 8px">🖼️ אחסון תמונות</h4>
-      <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:12px">
-        תמונות חדשות (עדכוני המועדון ואנשי המועדון) עולות אוטומטית ל-Firebase Storage — אין צורך בשום פעולה ידנית.
-        תמונות ישנות שעדיין שמורות מוטבעות במסד הנתונים עוברות אוטומטית ברקע בכניסה הראשונה למסכים האלה.
-        הכפתור כאן הוא רק לשימוש ידני — לראות את ההתקדמות, או להריץ שוב אם משהו נכשל.
-      </div>
-      <button onclick="openImageMigrationModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">🔄 הרץ ידנית / בדוק סטטוס</button>
     </div>`;
 }
 
 // ===== IMAGE MIGRATION: base64-in-RTDB → Firebase Storage =====
-function openImageMigrationModal() {
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-overlay open" id="imgMigrationOverlay" onclick="if(event.target===this)this.remove()">
-      <div style="background:var(--bg-card);border-radius:16px;max-width:480px;width:100%;padding:28px;direction:rtl">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <h3 style="margin:0">🖼️ העברת תמונות ל-Storage</h3>
-          <button onclick="document.getElementById('imgMigrationOverlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:inherit">✕</button>
-        </div>
-        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-          מעביר תמונות שמוטבעות כקובץ בתוך מסד הנתונים (עדכוני המועדון + אנשי המועדון) ל-Firebase Storage,
-          ומחליף אותן בקישור קצר. אם תעצור באמצע או תריץ שוב — זה ידלג על מה שכבר הועבר.
-        </div>
-        <div id="img-migration-log" style="font-size:12px;color:var(--text-muted);background:var(--bg-subtle);border-radius:8px;padding:10px;max-height:220px;overflow-y:auto;margin-bottom:16px;white-space:pre-wrap;font-family:monospace">מוכן להתחלה.</div>
-        <div style="display:flex;gap:10px;justify-content:flex-end">
-          <button onclick="document.getElementById('imgMigrationOverlay').remove()" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:10px 20px;cursor:pointer;color:inherit;font-size:14px">סגור</button>
-          <button id="img-migration-start-btn" onclick="runImageMigration()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-weight:700;font-size:14px">▶️ התחל</button>
-        </div>
-      </div>
-    </div>`);
-}
-window.openImageMigrationModal = openImageMigrationModal;
-
-// Core migration logic, shared by the manual button (runImageMigration, logs
-// to the modal) and the silent auto-trigger (autoMigrateImagesIfNeeded, logs
-// nowhere — just a toast at the end) — see those two below. `log` is a
-// no-op-safe callback so either caller can pass whatever (or nothing).
+// Fully automatic (see autoMigrateImagesIfNeeded below) — no admin UI for
+// this on purpose, there's nothing for an admin to do. `log` is a
+// no-op-safe callback, unused here but kept so this stays easy to wire up
+// to a visible log again later if a real need for one shows up.
 async function migrateAllLegacyImages(log) {
   let migrated = 0, failed = 0;
 
@@ -1016,27 +985,6 @@ async function migrateAllLegacyImages(log) {
 
   return { migrated, failed };
 }
-
-async function runImageMigration() {
-  const logEl = document.getElementById('img-migration-log');
-  const btn = document.getElementById('img-migration-start-btn');
-  const log = (msg) => { if (logEl) { logEl.textContent += '\n' + msg; logEl.scrollTop = logEl.scrollHeight; } };
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ רץ...'; }
-  if (logEl) logEl.textContent = 'מתחיל...';
-  try {
-    const { migrated, failed } = await migrateAllLegacyImages(log);
-    if (migrated === 0 && failed === 0) log('אין תמונות שצריך להעביר — הכול כבר מעודכן.');
-    log(`\n🏁 הסתיים. הועברו: ${migrated}, נכשלו: ${failed}`);
-    showToast(failed ? `⚠️ המיגרציה הסתיימה עם ${failed} שגיאות` : '✅ המיגרציה הושלמה בהצלחה!');
-    loadNewsAdmin(); loadNewsCarousel(); loadPeopleAdmin();
-  } catch(e) {
-    log(`❌ שגיאה כללית: ${e.code || ''} ${e.message}`);
-    log('💡 אם זו שגיאת הרשאה — ודא ש-Firebase Storage מופעל בפרויקט (דורש תכנית Blaze) ושחוקי ה-Storage מאפשרים כתיבה למשתמש מחובר.');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '▶️ הרץ שוב'; }
-  }
-}
-window.runImageMigration = runImageMigration;
 
 // Runs once per admin session (first time either the news or the people
 // admin screen is opened — whichever happens first covers both, since
