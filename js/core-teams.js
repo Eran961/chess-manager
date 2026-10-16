@@ -324,8 +324,9 @@ function hasTabPerm(tabKey) {
   return tab ? tab.instructorDefault : false;
 }
 let _useDbTeams = false;
-let _addPlayerIsTeam = false;
+let _addPlayerKind = 'group'; // 'group' | 'team' | 'camp' — which submitAddPlayer() branch the shared addPlayerModal routes to
 let _teamProfileState = { teamIdx: 0, subTeamIdx: 0, playerIdx: 0 };
+let _campProfileState = { campId: null, levelIdx: 0, playerIdx: 0 };
 
 let camps = [];
 let _useDbCamps = false;
@@ -440,6 +441,7 @@ async function loadCampPlayers() {
           gender:        p.gender        || null,
           rating:        p.rating        || null,
           cardExpiry:    p.cardExpiry    || null,
+          joinDate:      p.joinDate      || null,
           parentName:    p.parentName    || null,
           parentPhone:   p.parentPhone   || null,
           parentEmail:   p.parentEmail   || null,
@@ -594,6 +596,38 @@ function renderGroup(group, groupIdx) {
   return header + group.subGroups.map((sg, si) => renderSubGroup(sg, showTime, groupIdx, si)).join('') + historySection;
 }
 
+// ===== CAMPS ROSTER ROW (mirrors renderPlayer exactly, levels standing in for sub-groups) =====
+
+function renderCampPlayerRow(player, displayNum, campId, levelIdx, originalIdx) {
+  const { first, last } = splitName(player.name);
+  const age = calcAge(player.birthYear);
+  const joinDateDisplay = player.joinDate
+    ? `<span style="font-size:12px;color:#2b6cb0">${formatDate(player.joinDate)}</span>`
+    : '<span style="color:#cbd5e0">—</span>';
+  const payStatus = player.paymentStatus || 'trial';
+  const payLabel = { trial: 'ניסיון', pending: 'ממתין', paid: 'שילם ✓' }[payStatus];
+  return `
+    <tr class="player-row" onclick="openCampPlayerProfile('${campId}',${levelIdx},${originalIdx})">
+      <td class="idx">${displayNum}</td>
+      <td class="last-name">${last || '<span style="color:#cbd5e0">—</span>'}</td>
+      <td class="first-name">${first}</td>
+      <td class="gender-col">${player.gender === 'm' ? '👦 ז' : player.gender === 'f' ? '👧 נ' : '<span style="color:#cbd5e0">—</span>'}</td>
+      <td class="birth">
+        ${player.birthYear
+          ? `<span class="year">${player.birthYear}</span><span class="age">גיל ${age}</span>`
+          : '<span style="color:#cbd5e0">לא ידוע</span>'}
+      </td>
+      <td class="${player.fedId ? 'fed-id' : 'fed-id empty'}">
+        ${player.fedId ? player.fedId : 'חסר'}
+      </td>
+      <td style="text-align:center">${player.rating ? `<span style="font-weight:600;color:#2b6cb0">${player.rating}</span>` : '<span style="color:#cbd5e0">—</span>'}</td>
+      <td style="text-align:center">${player.cardExpiry ? cardExpiryBadge(player.cardExpiry) : '<span style="color:#cbd5e0">—</span>'}</td>
+      <td style="text-align:center">${joinDateDisplay}</td>
+      <td style="text-align:center"><span class="pay-badge pay-${payStatus}">${payLabel}</span></td>
+    </tr>`;
+}
+window.renderCampPlayerRow = renderCampPlayerRow;
+
 // ===== TEAMS RENDERING =====
 
 function renderTeamPlayer(player, displayNum, teamIdx, subTeamIdx, originalIdx) {
@@ -697,7 +731,7 @@ window.formatTeamMeetingsSummary = formatTeamMeetingsSummary;
 // --- Add team player (reuses addPlayerModal) ---
 
 function toggleAddTeamPlayerForm(teamIdx, subTeamIdx) {
-  _addPlayerIsTeam = true;
+  _addPlayerKind = 'team';
   _modalGroupIdx   = teamIdx;
   _modalSubGroupIdx = subTeamIdx;
   const t  = teams[teamIdx];
@@ -1022,12 +1056,301 @@ async function transferTeamPlayer() {
 }
 window.transferTeamPlayer = transferTeamPlayer;
 
+// ===== CAMP PLAYER PROFILE (mirrors the team profile block above exactly —
+// levels stand in for sub-groups, identified by campId since camps already
+// use id-based lookup everywhere else) =====
+
+function openCampPlayerProfile(campId, levelIdx, playerIdx) {
+  _campProfileState = { campId, levelIdx, playerIdx };
+  _profileVersion++; // cancel any pending attendance load from a different player
+  const camp = camps.find(c => c.id === campId);
+  const lv = camp?.levels[levelIdx];
+  const p = lv?.players[playerIdx];
+  if (!p) return;
+  const modal = document.getElementById('playerProfileModal');
+  if (!modal) return;
+  const { first, last } = splitName(p.name);
+  document.getElementById('profileTitle').textContent = `${last} ${first}`;
+  document.getElementById('profileSubtitle').textContent = '🏕️ ' + (lv.name ? `${camp.name} · ${lv.name}` : camp.name);
+  const editBtn = document.getElementById('btnProfileEdit');
+  editBtn.style.display = '';
+  editBtn.onclick = enableCampProfileEdit;
+  const attHeader = modal.querySelector('.profile-section:last-of-type .profile-section-header span');
+  if (attHeader) attHeader.textContent = 'נוכחות במחנה';
+  document.getElementById('profileAttendance').innerHTML =
+    '<div style="color:#718096;font-size:13px">טוען...</div>';
+  renderCampProfileDetails();
+  modal.classList.add('open');
+  loadCampProfileAttendance();
+}
+window.openCampPlayerProfile = openCampPlayerProfile;
+
+function renderCampProfileDetails() {
+  const { campId, levelIdx, playerIdx } = _campProfileState;
+  const camp = camps.find(c => c.id === campId);
+  const p = camp?.levels[levelIdx]?.players[playerIdx];
+  if (!p) return;
+  const { first, last } = splitName(p.name);
+  const age = calcAge(p.birthYear);
+  const det = document.getElementById('profileDetails');
+  if (!det) return;
+  det.innerHTML = `
+    <div class="profile-detail-row">
+      <span class="profile-label">שם משפחה</span>
+      <span class="profile-value">${last || '—'}</span>
+    </div>
+    <div class="profile-detail-row">
+      <span class="profile-label">שם פרטי</span>
+      <span class="profile-value">${first || '—'}</span>
+    </div>
+    <div class="profile-detail-row">
+      <span class="profile-label">שנת לידה</span>
+      <span class="profile-value">${p.birthYear ? `${p.birthYear}${age ? ` (גיל ${age})` : ''}` : '—'}</span>
+    </div>
+    <div class="profile-detail-row">
+      <span class="profile-label">מספר שחקן</span>
+      <span class="profile-value">${p.fedId ? `<a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#2b6cb0">${p.fedId}</a>` : '—'}</span>
+    </div>
+    ${p.rating ? `<div class="profile-detail-row">
+      <span class="profile-label">מד כושר</span>
+      <span class="profile-value" style="color:#2b6cb0;font-weight:700">${p.rating}</span>
+    </div>` : ''}
+    ${p.cardExpiry ? `<div class="profile-detail-row">
+      <span class="profile-label">כרטיס שחמטאי</span>
+      <span class="profile-value">${cardExpiryBadge(p.cardExpiry)}</span>
+    </div>` : ''}
+    <div class="profile-detail-row">
+      <span class="profile-label">תשלום</span>
+      <span class="profile-value">
+        ${(s => `<span class="pay-badge pay-${s}">${{trial:'ניסיון',pending:'ממתין לתשלום',paid:'שילם ✓'}[s]}</span>`)(p.paymentStatus || 'trial')}
+      </span>
+    </div>
+    ${p.parentPhone ? `<div class="profile-detail-row">
+      <span class="profile-label">📞 הורה</span>
+      <span class="profile-value" dir="ltr"><a href="tel:${p.parentPhone}" style="color:#2b6cb0;text-decoration:none">${p.parentPhone}</a></span>
+    </div>` : ''}
+    ${p.parentEmail ? `<div class="profile-detail-row">
+      <span class="profile-label">✉ מייל</span>
+      <span class="profile-value" dir="ltr"><a href="mailto:${p.parentEmail}" style="color:#2b6cb0;text-decoration:none;font-size:13px">${p.parentEmail}</a></span>
+    </div>` : ''}`;
+  const footer = document.getElementById('profileFooter');
+  if (footer) footer.innerHTML =
+    '<button class="btn-remove-player" onclick="confirmRemoveCampPlayer()">🗑 הסר ממחנה</button>';
+}
+window.renderCampProfileDetails = renderCampProfileDetails;
+
+function enableCampProfileEdit() {
+  const { campId, levelIdx, playerIdx } = _campProfileState;
+  const camp = camps.find(c => c.id === campId);
+  const p = camp?.levels[levelIdx]?.players[playerIdx];
+  if (!p) return;
+  const { first, last } = splitName(p.name);
+  const age = p.birthYear ? `גיל ${CURRENT_YEAR - p.birthYear}` : '';
+  const det = document.getElementById('profileDetails');
+  if (!det) return;
+  det.innerHTML = `
+    <div class="modal-field">
+      <label>שם פרטי <span class="required">*</span></label>
+      <input type="text" id="pe-first" value="${first}">
+    </div>
+    <div class="modal-field">
+      <label>שם משפחה <span class="required">*</span></label>
+      <input type="text" id="pe-last" value="${last}">
+    </div>
+    <div class="modal-field">
+      <label>שנת לידה <span class="required">*</span></label>
+      <input type="number" id="pe-year" value="${p.birthYear || ''}" min="1900" max="${CURRENT_YEAR - 2}"
+        placeholder="לדוגמה: 2015" oninput="updatePeAge(this.value)">
+      <div class="age-hint" id="pe-age">${age}</div>
+    </div>
+    <div class="modal-field">
+      <label>מין <span class="required">*</span></label>
+      <div class="pay-select">
+        <button type="button" id="pe-gender-m" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" onclick="selectGender('m')">👦 זכר</button>
+        <button type="button" id="pe-gender-f" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" onclick="selectGender('f')">👧 נקבה</button>
+      </div>
+      <input type="hidden" id="pe-gender" value="${p.gender || ''}">
+    </div>
+    <div class="modal-field">
+      <label>📞 טלפון הורה <span class="required">*</span></label>
+      <input type="tel" id="pe-phone" value="${p.parentPhone || ''}" placeholder="05X-XXXXXXX" dir="ltr">
+    </div>
+    <div class="modal-field">
+      <label>✉ מייל הורה <span class="required">*</span></label>
+      <input type="email" id="pe-email" value="${p.parentEmail || ''}" placeholder="example@mail.com" dir="ltr">
+    </div>
+    <div class="modal-field" style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0">
+      <label>מספר שחקן</label>
+      <input type="number" id="pe-fed" value="${p.fedId || ''}" placeholder="לא חובה">
+    </div>
+    <div class="modal-field">
+      <label>מד כושר</label>
+      <input type="number" id="pe-rating" value="${p.rating || ''}" placeholder="לא חובה">
+    </div>
+    <div class="modal-field">
+      <label>תוקף כרטיס שחמטאי</label>
+      <input type="date" id="pe-card" value="${p.cardExpiry || ''}">
+    </div>
+    <div class="modal-field">
+      <label>סטטוס תשלום</label>
+      <div class="pay-select">
+        <button type="button" class="pay-btn${(p.paymentStatus||'trial')==='trial'?' active-trial':''}" onclick="selectPayStatus(this,'trial')">ניסיון</button>
+        <button type="button" class="pay-btn${p.paymentStatus==='pending'?' active-pending':''}" onclick="selectPayStatus(this,'pending')">ממתין לתשלום</button>
+        <button type="button" class="pay-btn${p.paymentStatus==='paid'?' active-paid':''}" onclick="selectPayStatus(this,'paid')">שילם ✓</button>
+      </div>
+      <input type="hidden" id="pe-pay" value="${p.paymentStatus || 'trial'}">
+    </div>
+    <div class="modal-actions" style="padding:0;margin-top:4px">
+      <button class="btn-form-cancel" onclick="document.getElementById('btnProfileEdit').style.display='';renderCampProfileDetails()">ביטול</button>
+      <button class="btn-form-submit" onclick="saveCampPlayerProfile()">💾 שמור</button>
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
+      <label style="font-size:12px;color:#718096;font-weight:600;display:block;margin-bottom:6px">↔ העבר למחנה אחר</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="pe-camp-transfer-target" class="modal-input" style="flex:1;min-width:180px">
+          <option value="">— בחר מחנה יעד —</option>
+          ${camps.flatMap(cm =>
+            cm.levels.map((lv, lvi) => {
+              if (cm.id === campId && lvi === levelIdx) return '';
+              const label = cm.levels.length > 1 ? `${cm.name} · ${lv.name||'רמה'}` : cm.name;
+              return `<option value="${cm.id}|${lvi}">${label}</option>`;
+            })
+          ).join('')}
+        </select>
+        <button onclick="transferCampPlayer()" style="background:#553c9a;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">↔ העבר</button>
+      </div>
+    </div>`;
+  det.querySelector('#pe-last')?.focus();
+  // Hide the header edit button while in edit mode (actions are in the form itself)
+  document.getElementById('btnProfileEdit').style.display = 'none';
+  const footer = document.getElementById('profileFooter');
+  if (footer) footer.innerHTML = '';
+}
+window.enableCampProfileEdit = enableCampProfileEdit;
+
+async function saveCampPlayerProfile() {
+  const { campId, levelIdx, playerIdx } = _campProfileState;
+  const camp = camps.find(c => c.id === campId);
+  const p = camp?.levels[levelIdx]?.players[playerIdx];
+  if (!p) return;
+  const firstName  = document.getElementById('pe-first')?.value?.trim() || '';
+  const lastName   = document.getElementById('pe-last')?.value?.trim()  || '';
+  const birthYear  = parseInt(document.getElementById('pe-year')?.value)   || null;
+  const gender     = document.getElementById('pe-gender')?.value         || null;
+  const fedId      = document.getElementById('pe-fed')?.value?.trim()   || null;
+  const rating     = parseInt(document.getElementById('pe-rating')?.value) || null;
+  const cardExpiry = document.getElementById('pe-card')?.value           || null;
+  const paymentStatus = document.getElementById('pe-pay')?.value   || 'trial';
+  const parentPhone   = document.getElementById('pe-phone')?.value?.trim() || null;
+  const parentEmail   = document.getElementById('pe-email')?.value?.trim() || null;
+  p.name = `${firstName} ${lastName}`.trim();
+  p.firstName = firstName; p.lastName = lastName;
+  p.birthYear = birthYear; p.gender = gender;
+  p.fedId = fedId; p.rating = rating; p.cardExpiry = cardExpiry;
+  p.paymentStatus = paymentStatus;
+  p.parentPhone = parentPhone; p.parentEmail = parentEmail;
+  if (db && p._key) {
+    try {
+      await db.ref(`camp_players/${camp.id}/${levelIdx}/${p._key}`).update(
+        { firstName, lastName, birthYear, gender, fedId, rating, cardExpiry, paymentStatus, parentPhone: parentPhone||null, parentEmail: parentEmail||null }
+      );
+      showToast('הנתונים נשמרו ✅');
+    } catch(e) { showToast('שגיאה: ' + e.message, 'error'); return; }
+  }
+  const panel = document.getElementById('panel-camp-' + camp.id);
+  if (panel) panel.innerHTML = renderCampOwnPage(camp);
+  const editBtn = document.getElementById('btnProfileEdit');
+  if (editBtn) { editBtn.style.display = ''; editBtn.onclick = enableCampProfileEdit; }
+  renderCampProfileDetails();
+}
+window.saveCampPlayerProfile = saveCampPlayerProfile;
+
+function confirmRemoveCampPlayer() {
+  const { campId, levelIdx, playerIdx } = _campProfileState;
+  const camp = camps.find(c => c.id === campId);
+  const p = camp?.levels[levelIdx]?.players[playerIdx];
+  if (!p) return;
+  const { first, last } = splitName(p.name);
+  const footer = document.getElementById('profileFooter');
+  if (footer) footer.innerHTML = `
+    <span style="font-size:13px;color:#c53030">האם להסיר את ${first} ${last} מהמחנה?</span>
+    <button class="btn-remove-player" onclick="executeRemoveCampPlayer()">✅ כן, הסר</button>
+    <button class="btn-form-cancel" onclick="renderCampProfileDetails()">ביטול</button>`;
+}
+window.confirmRemoveCampPlayer = confirmRemoveCampPlayer;
+
+async function executeRemoveCampPlayer() {
+  const { campId, levelIdx, playerIdx } = _campProfileState;
+  const camp = camps.find(c => c.id === campId);
+  if (!camp) { showToast('שגיאה: מחנה לא נמצא', 'error'); return; }
+  const p = camp.levels[levelIdx]?.players[playerIdx];
+  if (!p) { showToast('שגיאה: שחקן לא נמצא', 'error'); return; }
+  const { first, last } = splitName(p.name);
+  p.hidden = true;
+  document.getElementById('playerProfileModal')?.classList.remove('open');
+  const panel = document.getElementById('panel-camp-' + camp.id);
+  if (panel) panel.innerHTML = renderCampOwnPage(camp);
+  if (db && p._key) {
+    try {
+      await db.ref(`camp_players/${camp.id}/${levelIdx}/${p._key}/hidden`).set(true);
+      showToast(`${first} ${last} הוסר/ה מהמחנה ✅`);
+    } catch(e) {
+      p.hidden = false;
+      if (panel) panel.innerHTML = renderCampOwnPage(camp);
+      showToast('שגיאה בשמירה: ' + e.message, 'error');
+    }
+  }
+}
+window.executeRemoveCampPlayer = executeRemoveCampPlayer;
+
+async function transferCampPlayer() {
+  const val = document.getElementById('pe-camp-transfer-target')?.value;
+  if (!val) { showToast('בחר מחנה יעד', 'error'); return; }
+  const sep = val.indexOf('|');
+  const dstCampId = val.slice(0, sep);
+  const dstLevelIdx = parseInt(val.slice(sep + 1));
+  const { campId, levelIdx, playerIdx } = _campProfileState;
+  const srcCamp = camps.find(c => c.id === campId);
+  const dstCamp = camps.find(c => c.id === dstCampId);
+  const p = srcCamp?.levels[levelIdx]?.players[playerIdx];
+  if (!srcCamp || !dstCamp || !p) { showToast('שגיאה', 'error'); return; }
+  const { first, last } = splitName(p.name);
+  p.hidden = true;
+  document.getElementById('playerProfileModal')?.classList.remove('open');
+  const srcPanel = document.getElementById('panel-camp-' + srcCamp.id);
+  if (srcPanel) srcPanel.innerHTML = renderCampOwnPage(srcCamp);
+  if (db && p._key) {
+    try {
+      const newRef = await db.ref(`camp_players/${dstCamp.id}/${dstLevelIdx}`).push({
+        firstName: p.firstName, lastName: p.lastName, birthYear: p.birthYear,
+        gender: p.gender, fedId: p.fedId, rating: p.rating, cardExpiry: p.cardExpiry,
+        paymentStatus: p.paymentStatus, parentName: p.parentName||null, parentPhone: p.parentPhone||null,
+        parentEmail: p.parentEmail||null, joinDate: new Date().toISOString().split('T')[0]
+      });
+      await db.ref(`camp_players/${srcCamp.id}/${levelIdx}/${p._key}/hidden`).set(true);
+      const newP = { ...p, hidden: false, _key: newRef.key };
+      dstCamp.levels[dstLevelIdx].players.push(newP);
+      const dstPanel = document.getElementById('panel-camp-' + dstCamp.id);
+      if (dstPanel) dstPanel.innerHTML = renderCampOwnPage(dstCamp);
+      showToast(`${first} ${last} הועבר/ה ל"${dstCamp.name}" ✅`);
+    } catch(e) {
+      p.hidden = false;
+      if (srcPanel) srcPanel.innerHTML = renderCampOwnPage(srcCamp);
+      showToast('שגיאה: ' + e.message, 'error');
+    }
+  }
+}
+window.transferCampPlayer = transferCampPlayer;
+
 // ===== ADD PLAYER FUNCTIONS =====
 
 let _modalGroupIdx = 0;
 let _modalSubGroupIdx = 0;
+let _modalCampId = null;
+let _modalLevelIdx = 0;
 
 function toggleAddPlayerForm(groupIdx, subGroupIdx) {
+  _addPlayerKind = 'group';
   _modalGroupIdx = groupIdx;
   _modalSubGroupIdx = subGroupIdx;
   const g = groups[groupIdx];
@@ -1048,10 +1371,35 @@ function toggleAddPlayerForm(groupIdx, subGroupIdx) {
   setTimeout(() => document.getElementById('mf-first').focus(), 50);
 }
 
+// Mirrors toggleAddPlayerForm/toggleAddTeamPlayerForm exactly, routing the
+// same shared modal to submitAddPlayer()'s camp branch.
+function toggleAddCampPlayerForm(campId, levelIdx) {
+  _addPlayerKind = 'camp';
+  _modalCampId = campId;
+  _modalLevelIdx = levelIdx;
+  const camp = camps.find(c => c.id === campId);
+  const lv = camp?.levels[levelIdx];
+  document.getElementById('modalTitle').textContent = lv?.name ? `${camp.name} — ${lv.name}` : (camp?.name || '');
+  ['mf-first','mf-last','mf-year','mf-fed','mf-rating','mf-card-expiry','mf-phone','mf-parent-name'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('input-error'); }
+  });
+  const ageEl = document.getElementById('mf-age');
+  if (ageEl) ageEl.textContent = '';
+  const statusEl = document.getElementById('mf-fed-status');
+  if (statusEl) statusEl.textContent = '';
+  document.getElementById('mf-gender').value = '';
+  document.getElementById('mf-gender-m').className = 'pay-btn';
+  document.getElementById('mf-gender-f').className = 'pay-btn';
+  document.getElementById('addPlayerModal').classList.add('open');
+  setTimeout(() => document.getElementById('mf-first')?.focus(), 50);
+}
+window.toggleAddCampPlayerForm = toggleAddCampPlayerForm;
+
 function closeAddModal(e) {
   if (e && e.target !== document.getElementById('addPlayerModal')) return;
   document.getElementById('addPlayerModal').classList.remove('open');
-  _addPlayerIsTeam = false;
+  _addPlayerKind = 'group';
 }
 
 function updateModalAge(val, prefix = 'mf') {
@@ -1177,8 +1525,8 @@ async function submitAddPlayer() {
   const cardExpiry = document.getElementById('mf-card-expiry').value || null;
 
   // ── Route to team if adding to a נבחרת ──────────────────
-  if (_addPlayerIsTeam) {
-    _addPlayerIsTeam = false;
+  if (_addPlayerKind === 'team') {
+    _addPlayerKind = 'group';
     const teamIdx    = _modalGroupIdx;
     const subTeamIdx = _modalSubGroupIdx;
     const t  = teams[teamIdx];
@@ -1197,6 +1545,31 @@ async function submitAddPlayer() {
     const panel = document.getElementById('panel-team-' + t.id);
     if (panel) panel.innerHTML = renderTeamGroup(t, teamIdx);
     showToast(`${firstName} ${lastName} נוסף/ה לנבחרת ✅`);
+    return;
+  }
+
+  // ── Route to camp if adding to a מחנה ──────────────────
+  if (_addPlayerKind === 'camp') {
+    _addPlayerKind = 'group';
+    const campId    = _modalCampId;
+    const levelIdx  = _modalLevelIdx;
+    const camp = camps.find(c => c.id === campId);
+    const lv   = camp?.levels[levelIdx];
+    if (!camp || !lv) { showToast('שגיאה: מחנה לא נמצא', 'error'); return; }
+    const newPlayer = { name: `${firstName} ${lastName}`, firstName, lastName, birthYear, fedId, joinDate, rating, cardExpiry, gender: gender || null, paymentStatus: 'trial', parentPhone, parentName, hidden: false };
+    lv.players.push(newPlayer);
+    document.getElementById('addPlayerModal').classList.remove('open');
+    if (db) {
+      try {
+        const ref = await db.ref(`camp_players/${camp.id}/${levelIdx}`).push(
+          { firstName, lastName, birthYear, fedId: fedId || null, joinDate, rating: rating || null, cardExpiry: cardExpiry || null, gender: gender || null, parentPhone: parentPhone || null, parentName: parentName || null, paymentStatus: 'trial' }
+        );
+        newPlayer._key = ref.key;
+      } catch(e) { showToast('שגיאה בשמירה: ' + e.message, 'error'); }
+    }
+    const panel = document.getElementById('panel-camp-' + camp.id);
+    if (panel) panel.innerHTML = renderCampOwnPage(camp);
+    showToast(`${firstName} ${lastName} נוסף/ה למחנה ✅`);
     return;
   }
 

@@ -1058,6 +1058,36 @@ function printPlayerList(groupIdx, subGroupIdx) {
   setTimeout(() => win.print(), 400);
 }
 
+// Mirrors printPlayerList() exactly (same columns, same template) — camps
+// use id-based lookup, so this takes campId instead of an index.
+function printCampPlayerList(campId, levelIdx) {
+  const camp = camps.find(c => c.id === campId);
+  const lv = camp?.levels[levelIdx];
+  if (!camp || !lv) return;
+  const label = lv.name ? `${camp.name} · ${lv.name}` : camp.name;
+  const rows = sortedPlayers(lv.players).filter(({p}) => !p.hidden).map(({p}, num) => {
+    const {first, last} = splitName(p.name);
+    const age = p.birthYear ? `${p.birthYear} (גיל ${CURRENT_YEAR - p.birthYear})` : '—';
+    const status = p.paymentStatus || 'trial';
+    const statusLabel = {trial:'ניסיון', pending:'ממתין', paid:'שילם ✓'}[status];
+    return `<tr><td>${num+1}</td><td>${last}</td><td>${first}</td><td>${age}</td><td>${p.fedId ? `<a href="https://www.chess.org.il/Players/Player.aspx?Id=${p.fedId}" target="_blank" style="color:#2b6cb0">${p.fedId}</a>` : '—'}</td><td>${statusLabel}</td></tr>`;
+  }).join('');
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
+    <title>רשימת שחקנים — ${label}</title>
+    <style>body{font-family:Arial,sans-serif;padding:24px;color:#1a1a2e}h2{font-size:18px;margin-bottom:4px}.sub{font-size:13px;color:#718096;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#2b6cb0;color:white;padding:8px 12px;text-align:right}td{padding:7px 12px;border-bottom:1px solid #e2e8f0}tr:nth-child(even) td{background:#f7fafc}</style>
+    </head><body>
+    <h2>רשימת שחקנים — ${label}</h2>
+    <div class="sub">${new Date().toLocaleDateString('he-IL')} · ${lv.players.filter(p=>!p.hidden).length} שחקנים</div>
+    <table><thead><tr><th>#</th><th>שם משפחה</th><th>שם פרטי</th><th>שנת לידה</th><th>מספר שחקן</th><th>תשלום</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+window.printCampPlayerList = printCampPlayerList;
+
 // ===== SATURDAY LEAGUES (ליגות שבת) =====
 // _satDates: cached match data per date, loaded from Firebase satDates/
 // _satDates: { 'YYYY-MM-DD': { dateDisplay, matches: [...] } }

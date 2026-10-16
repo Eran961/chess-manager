@@ -422,6 +422,51 @@ async function loadTeamProfileAttendance() {
   }
 }
 
+async function loadCampProfileAttendance() {
+  const div = document.getElementById('profileAttendance');
+  if (!div || !db) { if (div) div.innerHTML = ''; return; }
+  const myVersion = _profileVersion;
+  const { campId, levelIdx, playerIdx } = _campProfileState;
+  const camp = camps.find(c => c.id === campId);
+  const p = camp?.levels[levelIdx]?.players[playerIdx];
+  if (!camp || !p) { div.innerHTML = ''; return; }
+  try {
+    const snap = await db.ref(`camp_attendance/${camp.id}/${levelIdx}`).get();
+    if (_profileVersion !== myVersion) return;
+    const allAtt   = snap.val() || {};
+    const allDates = Object.keys(allAtt).sort();
+    const total    = allDates.length;
+    if (total === 0) {
+      div.innerHTML = '<div style="color:#718096;font-size:13px">אין נתוני נוכחות עדיין למחנה.</div>';
+      return;
+    }
+    // Match by player key or by index
+    const pKey = p._key;
+    const presentCount = allDates.filter(d => pKey ? allAtt[d]?.[pKey] : allAtt[d]?.[playerIdx]).length;
+    const pct   = Math.round((presentCount / total) * 100);
+    const color = pct >= 80 ? '#276749' : pct >= 60 ? '#d69e2e' : '#e53e3e';
+    const recentDots = allDates.slice(-10).reverse().map(d => {
+      const was = pKey ? allAtt[d]?.[pKey] : allAtt[d]?.[playerIdx];
+      return `<span class="att-dot ${was ? 'present' : 'absent'}" title="${formatDate(d)}">${was ? '✓' : '✗'}</span>`;
+    }).join('');
+    if (_profileVersion !== myVersion) return;
+    div.innerHTML = `
+      <div class="profile-att-numbers">
+        <span class="profile-att-big" style="color:${color}">${presentCount}</span>
+        <span class="profile-att-small">מתוך ${total} ימים</span>
+        <span class="profile-att-pct" style="color:${color}">${pct}%</span>
+      </div>
+      <div class="progress-bar-wrap" style="margin:8px 0 10px">
+        <div class="progress-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <div class="att-dots-row">${recentDots}</div>
+      <div style="font-size:11px;color:#a0aec0;margin-top:6px">10 ימים אחרונים</div>`;
+  } catch(e) {
+    div.innerHTML = '';
+    console.error('Camp profile attendance error:', e);
+  }
+}
+
 // ===== REPORTS FUNCTIONS =====
 
 const reportsState = {

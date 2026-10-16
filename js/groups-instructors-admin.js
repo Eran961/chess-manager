@@ -1331,7 +1331,7 @@ window.renderCampsPanel = renderCampsPanel;
 // leagues-audit.js's renderFinancePanel/openCampFinanceModal.
 function renderCampOwnPage(camp) {
   const dates = camp.startDate ? `${formatDate(camp.startDate)}${camp.endDate ? ' – ' + formatDate(camp.endDate) : ''}` : '';
-  const levelsHtml = camp.levels.map((lv, li) => renderCampLevelCard(camp, lv, li)).join('');
+  const levelsHtml = camp.levels.map((lv, li) => renderCampLevel(camp, lv, li)).join('');
   return `
     <div style="direction:rtl;max-width:900px;padding:20px">
       <div style="margin-bottom:20px">
@@ -1353,28 +1353,50 @@ function refreshCampPanel(campId) {
 }
 window.refreshCampPanel = refreshCampPanel;
 
-function renderCampLevelCard(camp, lv, li) {
-  const players = sortedPlayers(lv.players);
-  const rows = players.map(({p}) => {
-    const { first, last } = splitName(p.name);
-    const age = p.birthYear ? `${p.birthYear} (גיל ${CURRENT_YEAR - p.birthYear})` : '—';
-    return `
-      <div onclick="openEditCampPlayerModal('${camp.id}',${li},'${p._key}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:6px;background:var(--bg-subtle);margin-bottom:4px;cursor:pointer">
-        <div style="font-size:13px;color:var(--text-primary)">${last} ${first} <span style="color:var(--text-muted);font-size:11px">· ${age}</span> <span style="color:var(--text-muted);font-size:12px">✎</span></div>
-        <button onclick="event.stopPropagation();removeCampPlayer('${camp.id}',${li},'${p._key}')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:14px">🗑</button>
-      </div>`;
-  }).join('');
+// Mirrors renderSubGroup()/renderTeamSubGroup() exactly (same table, same
+// columns, same header buttons) — levels stand in for sub-groups. The level
+// name + instructor annotation (camps have no groups equivalent for that)
+// stays in the header alongside the player count.
+function renderCampLevel(camp, lv, li) {
+  const totalPlayers = lv.players.filter(p => !p.hidden).length;
+  const sorted = sortedPlayers(lv.players);
   return `
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+    <div class="sub-group">
+      <div class="sub-group-header">
         <div>
-          <span style="font-weight:700;font-size:15px;color:var(--text-primary)">${lv.name || 'רמה'}</span>
-          <span style="font-size:12px;color:var(--text-muted);margin-right:8px">${lv.instructor ? '· מדריך: ' + lv.instructor : '· ⚠️ אין מדריך משוייך'}</span>
+          <h3>${lv.name || 'רמה'}</h3>
+          <div class="count">${totalPlayers} שחקנים ${lv.instructor ? '· מדריך: ' + lv.instructor : '· ⚠️ אין מדריך משוייך'}</div>
         </div>
-        <button onclick="openAddCampPlayerModal('${camp.id}',${li})" style="background:#276749;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">➕ הוסף ילד</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-add-in-header" style="background:rgba(255,255,255,0.15)" onclick="printCampPlayerList('${camp.id}',${li})">🖨️ הדפס</button>
+          <button class="btn-add-in-header" onclick="toggleAddCampPlayerForm('${camp.id}',${li})">➕ הוסף משתתף</button>
+        </div>
       </div>
-      <div>
-        ${rows || '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">אין שחקנים ברמה זו</div>'}
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>שם משפחה</th>
+              <th>שם פרטי</th>
+              <th class="gender-col">מין</th>
+              <th>שנת לידה / גיל</th>
+              <th>מספר שחקן</th>
+              <th style="text-align:center">מד כושר</th>
+              <th style="text-align:center">כרטיס שחמטאי</th>
+              <th style="text-align:center">הצטרפות</th>
+              <th style="text-align:center">תשלום</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map(({ p, i }, displayNum) => renderCampPlayerRow(p, displayNum + 1, camp.id, li, i)).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="stats-bar">
+        ${lv.players.filter(p => p.fedId && !p.hidden).length} מתוך ${totalPlayers} עם מספר שחקן
+        &nbsp;·&nbsp;
+        ${lv.players.filter(p => p.birthYear && !p.hidden).length} מתוך ${totalPlayers} עם שנת לידה
       </div>
     </div>`;
 }
@@ -1558,261 +1580,7 @@ async function deleteDbCamp(campId) {
 }
 window.deleteDbCamp = deleteDbCamp;
 
-// ── Add / remove camp players ───────────────────
-
-function openAddCampPlayerModal(campId, li) {
-  const camp = camps.find(c => c.id === campId);
-  const lv = camp?.levels[li];
-  if (!camp || !lv) return;
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
-      <div class="modal-box" style="max-width:440px">
-        <div class="modal-header">
-          <span class="modal-title">➕ הוספת ילד — ${lv.name}</span>
-          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
-        </div>
-        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
-          <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:10px;padding:14px">
-            <label style="font-size:13px;font-weight:700;color:#2b6cb0;display:block;margin-bottom:2px">מספר שחקן באיגוד</label>
-            <div style="font-size:11px;color:#4a5568;margin-bottom:8px">לא חובה — רק אם כבר רשום/ה באיגוד. שליפה תמלא אוטומטית את הפרטים למטה.</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input type="text" id="cp-fed" placeholder="לדוגמה: 123456" inputmode="numeric" style="flex:1">
-              <button type="button" id="cp-fed-btn" onclick="lookupFedPlayer('cp')"
-                style="padding:9px 14px;background:#2b6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;font-family:inherit">
-                🔍 שלוף
-              </button>
-            </div>
-            <div id="cp-fed-status" style="font-size:12px;margin-top:6px;min-height:16px"></div>
-          </div>
-          <div class="modal-field">
-            <label>שם פרטי <span class="required">*</span></label>
-            <input type="text" id="cp-first" placeholder="שם פרטי">
-          </div>
-          <div class="modal-field">
-            <label>שם משפחה <span class="required">*</span></label>
-            <input type="text" id="cp-last" placeholder="שם משפחה">
-          </div>
-          <div class="modal-field">
-            <label>שנת לידה <span class="required">*</span></label>
-            <input type="number" id="cp-year" placeholder="לדוגמה: 2015" min="1900" max="2024" oninput="updateModalAge(this.value,'cp')">
-            <div class="age-hint" id="cp-age"></div>
-          </div>
-          <div class="modal-field">
-            <label>מין <span class="required">*</span></label>
-            <div class="pay-select" id="cp-gender-select">
-              <button type="button" class="pay-btn" id="cp-gender-m" onclick="selectModalGender('m','cp')">👦 זכר</button>
-              <button type="button" class="pay-btn" id="cp-gender-f" onclick="selectModalGender('f','cp')">👧 נקבה</button>
-            </div>
-            <input type="hidden" id="cp-gender" value="">
-          </div>
-          <div class="modal-field">
-            <label>מד כושר ישראלי</label>
-            <input type="text" id="cp-rating" placeholder="ממולא אוטומטית בשליפה" inputmode="numeric">
-          </div>
-          <div class="modal-field">
-            <label>תוקף כרטיס שחמטאי</label>
-            <input type="date" id="cp-card-expiry" placeholder="ממולא אוטומטית בשליפה">
-          </div>
-          <div style="margin-top:22px;padding-top:14px;border-top:1px dashed #e2e8f0">
-            <div style="font-size:13px;font-weight:700;color:#4a5568;margin-bottom:2px">👪 פרטי הורים של הילד/ה</div>
-            <div style="font-size:11px;color:#a0aec0;margin-bottom:14px">לא קיימים באתר האיגוד — נא למלא</div>
-            <div class="modal-field">
-              <label>שם הורה <span class="required">*</span></label>
-              <input type="text" id="cp-parent-name" placeholder="שם ההורה">
-            </div>
-            <div class="modal-field">
-              <label>טלפון הורה <span class="required">*</span></label>
-              <input type="tel" id="cp-phone" placeholder="05X-XXXXXXX" dir="ltr">
-            </div>
-          </div>
-          <button onclick="saveCampPlayer('${campId}',${li})" style="background:#276749;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 הוסף</button>
-        </div>
-      </div>
-    </div>`);
-}
-window.openAddCampPlayerModal = openAddCampPlayerModal;
-
-async function saveCampPlayer(campId, li) {
-  const v = validatePlayerForm('cp');
-  if (!v) return;
-  const { firstName, lastName, birthYear, gender, parentPhone, parentName } = v;
-
-  const fedIdRaw   = document.getElementById('cp-fed')?.value?.trim()   || '';
-  const fedId      = fedIdRaw ? (parseInt(fedIdRaw) || null) : null;
-  const ratingRaw  = document.getElementById('cp-rating')?.value?.trim() || '';
-  const rating     = ratingRaw ? (parseInt(ratingRaw) || null) : null;
-  const cardExpiry = document.getElementById('cp-card-expiry')?.value  || null;
-  const playerDef = { firstName, lastName, birthYear, fedId, gender, rating, cardExpiry, parentPhone, parentName, paymentStatus: 'trial' };
-  try {
-    const ref = await db.ref(`camp_players/${campId}/${li}`).push(playerDef);
-    const camp = camps.find(c => c.id === campId);
-    camp.levels[li].players.push({ name: `${firstName} ${lastName}`.trim(), ...playerDef, hidden: false, _key: ref.key });
-    document.querySelector('.friday-modal')?.remove();
-    showToast('השחקן נוסף ✅');
-    refreshCampPanel(campId);
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.saveCampPlayer = saveCampPlayer;
-
-async function removeCampPlayer(campId, li, playerKey) {
-  if (!confirm('להסיר את השחקן מהמחנה?')) return;
-  try {
-    await db.ref(`camp_players/${campId}/${li}/${playerKey}/hidden`).set(true);
-    const camp = camps.find(c => c.id === campId);
-    const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
-    if (p) p.hidden = true;
-    showToast('השחקן הוסר');
-    refreshCampPanel(campId);
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.removeCampPlayer = removeCampPlayer;
-
-function openEditCampPlayerModal(campId, li, playerKey) {
-  const camp = camps.find(c => c.id === campId);
-  const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
-  if (!camp || !p) return;
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-overlay open friday-modal" onclick="if(event.target===this)this.remove()">
-      <div class="modal-box" style="max-width:440px">
-        <div class="modal-header">
-          <span class="modal-title">✎ עריכת פרטי ילד — ${p.name}</span>
-          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
-        </div>
-        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:12px">
-          <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:10px;padding:14px">
-            <label style="font-size:13px;font-weight:700;color:#2b6cb0;display:block;margin-bottom:2px">מספר שחקן באיגוד</label>
-            <div style="font-size:11px;color:#4a5568;margin-bottom:8px">לא חובה — רק אם כבר רשום/ה באיגוד. שליפה תמלא אוטומטית את הפרטים למטה.</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input type="text" id="cpe-fed" value="${p.fedId || ''}" placeholder="לדוגמה: 123456" inputmode="numeric" style="flex:1">
-              <button type="button" id="cpe-fed-btn" onclick="lookupFedPlayer('cpe')"
-                style="padding:9px 14px;background:#2b6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;font-family:inherit">
-                🔍 שלוף
-              </button>
-            </div>
-            <div id="cpe-fed-status" style="font-size:12px;margin-top:6px;min-height:16px"></div>
-          </div>
-          <div class="modal-field">
-            <label>שם פרטי <span class="required">*</span></label>
-            <input type="text" id="cpe-first" value="${p.firstName || ''}" placeholder="שם פרטי">
-          </div>
-          <div class="modal-field">
-            <label>שם משפחה <span class="required">*</span></label>
-            <input type="text" id="cpe-last" value="${p.lastName || ''}" placeholder="שם משפחה">
-          </div>
-          <div class="modal-field">
-            <label>שנת לידה <span class="required">*</span></label>
-            <input type="number" id="cpe-year" value="${p.birthYear || ''}" placeholder="לדוגמה: 2015" min="1900" max="2024" oninput="updateModalAge(this.value,'cpe')">
-            <div class="age-hint" id="cpe-age">${p.birthYear ? `גיל ${CURRENT_YEAR - p.birthYear}` : ''}</div>
-          </div>
-          <div class="modal-field">
-            <label>מין <span class="required">*</span></label>
-            <div class="pay-select" id="cpe-gender-select">
-              <button type="button" class="pay-btn${(p.gender||'')==='m'?' active-paid':''}" id="cpe-gender-m" onclick="selectModalGender('m','cpe')">👦 זכר</button>
-              <button type="button" class="pay-btn${(p.gender||'')==='f'?' active-pending':''}" id="cpe-gender-f" onclick="selectModalGender('f','cpe')">👧 נקבה</button>
-            </div>
-            <input type="hidden" id="cpe-gender" value="${p.gender || ''}">
-          </div>
-          <div class="modal-field">
-            <label>מד כושר ישראלי</label>
-            <input type="text" id="cpe-rating" value="${p.rating || ''}" placeholder="ממולא אוטומטית בשליפה" inputmode="numeric">
-          </div>
-          <div class="modal-field">
-            <label>תוקף כרטיס שחמטאי</label>
-            <input type="date" id="cpe-card-expiry" value="${p.cardExpiry || ''}" placeholder="ממולא אוטומטית בשליפה">
-          </div>
-          <div style="margin-top:22px;padding-top:14px;border-top:1px dashed #e2e8f0">
-            <div style="font-size:13px;font-weight:700;color:#4a5568;margin-bottom:2px">👪 פרטי הורים של הילד/ה</div>
-            <div class="modal-field">
-              <label>שם הורה <span class="required">*</span></label>
-              <input type="text" id="cpe-parent-name" value="${p.parentName || ''}" placeholder="שם ההורה">
-            </div>
-            <div class="modal-field">
-              <label>טלפון הורה <span class="required">*</span></label>
-              <input type="tel" id="cpe-phone" value="${p.parentPhone || ''}" placeholder="05X-XXXXXXX" dir="ltr">
-            </div>
-            <div class="modal-field">
-              <label>✉ מייל הורה</label>
-              <input type="email" id="cpe-email" value="${p.parentEmail || ''}" placeholder="example@mail.com" dir="ltr">
-            </div>
-          </div>
-          <div class="modal-field" style="margin-top:8px;padding-top:14px;border-top:1px solid #e2e8f0">
-            <label>סטטוס תשלום</label>
-            <div class="pay-select">
-              <button type="button" class="pay-btn${(p.paymentStatus||'trial')==='trial'?' active-trial':''}" onclick="selectPayStatus(this,'trial','cpe')">ניסיון</button>
-              <button type="button" class="pay-btn${p.paymentStatus==='pending'?' active-pending':''}" onclick="selectPayStatus(this,'pending','cpe')">ממתין לתשלום</button>
-              <button type="button" class="pay-btn${p.paymentStatus==='paid'?' active-paid':''}" onclick="selectPayStatus(this,'paid','cpe')">שילם ✓</button>
-            </div>
-            <input type="hidden" id="cpe-pay" value="${p.paymentStatus || 'trial'}">
-          </div>
-          <button onclick="saveEditedCampPlayer('${campId}',${li},'${playerKey}')" style="background:#276749;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">💾 שמור</button>
-          ${camp.levels.length > 1 ? `
-          <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
-            <label style="font-size:12px;color:#718096;font-weight:600;display:block;margin-bottom:6px">↔ העבר לרמה אחרת</label>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <select id="cpe-transfer-target" class="modal-input" style="flex:1;min-width:180px">
-                <option value="">— בחר רמה יעד —</option>
-                ${camp.levels.map((lv, lvi) => lvi === li ? '' : `<option value="${lvi}">${lv.name || 'רמה'}</option>`).join('')}
-              </select>
-              <button onclick="transferCampPlayer('${campId}',${li},'${playerKey}')" style="background:#744210;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">↔ העבר</button>
-            </div>
-          </div>` : ''}
-        </div>
-      </div>
-    </div>`);
-}
-window.openEditCampPlayerModal = openEditCampPlayerModal;
-
-// Mirrors transferPlayer() (groups): creates a fresh record at the
-// destination level, hides the source one — no attendance/notes history
-// carries over, same as groups' transfer.
-async function transferCampPlayer(campId, li, playerKey) {
-  const target = document.getElementById('cpe-transfer-target')?.value;
-  if (target === '' || target == null) { showToast('בחר רמה יעד', 'error'); return; }
-  const dstLi = parseInt(target);
-  const camp = camps.find(c => c.id === campId);
-  const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
-  if (!camp || !p) return;
-  const newPlayer = {
-    firstName: p.firstName || '', lastName: p.lastName || '', birthYear: p.birthYear || null,
-    fedId: p.fedId || null, gender: p.gender || null, rating: p.rating || null,
-    cardExpiry: p.cardExpiry || null, parentName: p.parentName || null,
-    parentPhone: p.parentPhone || null, parentEmail: p.parentEmail || null,
-    paymentStatus: p.paymentStatus || 'trial',
-  };
-  try {
-    const ref = await db.ref(`camp_players/${campId}/${dstLi}`).push(newPlayer);
-    await db.ref(`camp_players/${campId}/${li}/${playerKey}/hidden`).set(true);
-    p.hidden = true;
-    camp.levels[dstLi].players.push({ name: `${newPlayer.firstName} ${newPlayer.lastName}`.trim(), ...newPlayer, hidden: false, _key: ref.key });
-    document.querySelector('.friday-modal')?.remove();
-    showToast(`הועבר ל"${camp.levels[dstLi].name || 'רמה'}" ✅`);
-    refreshCampPanel(campId);
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.transferCampPlayer = transferCampPlayer;
-
-async function saveEditedCampPlayer(campId, li, playerKey) {
-  const v = validatePlayerForm('cpe');
-  if (!v) return;
-  const { firstName, lastName, birthYear, gender, parentPhone, parentName } = v;
-
-  const fedIdRaw   = document.getElementById('cpe-fed')?.value?.trim()   || '';
-  const fedId      = fedIdRaw ? (parseInt(fedIdRaw) || null) : null;
-  const ratingRaw  = document.getElementById('cpe-rating')?.value?.trim() || '';
-  const rating     = ratingRaw ? (parseInt(ratingRaw) || null) : null;
-  const cardExpiry = document.getElementById('cpe-card-expiry')?.value || null;
-  const parentEmail = document.getElementById('cpe-email')?.value?.trim() || null;
-  const paymentStatus = document.getElementById('cpe-pay')?.value || 'trial';
-  const updates = { firstName, lastName, birthYear, fedId, gender, rating, cardExpiry, parentPhone, parentName, parentEmail, paymentStatus };
-  try {
-    await db.ref(`camp_players/${campId}/${li}/${playerKey}`).update(updates);
-    const camp = camps.find(c => c.id === campId);
-    const p = camp?.levels[li]?.players.find(pl => pl._key === playerKey);
-    if (p) Object.assign(p, updates, { name: `${firstName} ${lastName}`.trim() });
-    document.querySelector('.friday-modal')?.remove();
-    showToast('הפרטים עודכנו ✅');
-    refreshCampPanel(campId);
-  } catch(e) { showToast('שגיאה: ' + e.message, 'error'); }
-}
-window.saveEditedCampPlayer = saveEditedCampPlayer;
+// Add/edit/remove/transfer for camp players now goes through the shared
+// player-profile system in core-teams.js (openCampPlayerProfile etc.) and
+// the shared addPlayerModal (toggleAddCampPlayerForm), same as groups/teams.
 
