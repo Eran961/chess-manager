@@ -544,7 +544,6 @@ function renderSubGroup(sg, showTime, groupIdx, subGroupIdx) {
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn-add-in-header" style="background:rgba(255,255,255,0.15)" onclick="printPlayerList(${groupIdx},${subGroupIdx})">🖨️ הדפס</button>
-          <button class="btn-add-in-header" style="background:rgba(37,211,102,0.2);border:1px solid rgba(37,211,102,0.4)" onclick="openWhatsAppExport(${groupIdx},${subGroupIdx})">📲 WhatsApp</button>
           <button class="btn-add-in-header" id="addBtn-${fid}" onclick="toggleAddPlayerForm(${groupIdx},${subGroupIdx})">➕ הוסף משתתף</button>
         </div>
       </div>

@@ -1248,33 +1248,6 @@ async function loadParentContacts() {
   } catch(e) { console.error('Error loading parent contacts:', e); }
 }
 
-// ===== WHATSAPP EXPORT =====
-
-function openWhatsAppExport(groupIdx, subGroupIdx) {
-  const g = groups[groupIdx];
-  const sg = g.subGroups[subGroupIdx];
-  const label = sg.time ? `${g.name} · ${sg.time}` : g.name;
-  document.getElementById('waModalSubtitle').textContent = label;
-  const lines = [`*${label}*`, ''];
-  sortedPlayers(sg.players).forEach(({ p }) => {
-    if (p.hidden) return;
-    const { first, last } = splitName(p.name);
-    const phone = p.parentPhone || '—';
-    lines.push(`• ${last} ${first} — ${phone}`);
-  });
-  document.getElementById('waText').value = lines.join('\n');
-  document.getElementById('whatsappModal').classList.add('open');
-}
-function closeWhatsappModal(e) {
-  if (e && e.target !== document.getElementById('whatsappModal')) return;
-  document.getElementById('whatsappModal').classList.remove('open');
-}
-function copyWaText() {
-  navigator.clipboard.writeText(document.getElementById('waText').value)
-    .then(() => showToast('הועתק ✓'))
-    .catch(() => { document.getElementById('waText').select(); document.execCommand('copy'); showToast('הועתק ✓'); });
-}
-
 // ===== SEARCH PANEL =====
 
 function renderSearchPanel() {

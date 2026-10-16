@@ -1046,8 +1046,7 @@ function printPlayerList(groupIdx, subGroupIdx) {
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
     <title>רשימת שחקנים — ${label}</title>
-    <style>body{font-family:Arial,sans-serif;padding:24px;color:#1a1a2e}h2{font-size:18px;margin-bottom:4px}.sub{font-size:13px;color:#718096;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#2b6cb0;color:white;padding:8px 12px;text-align:right}td{padding:7px 12px;border-bottom:1px solid #e2e8f0}tr:nth-child(even) td{background:#f7fafc}
-    /* ========/style>
+    <style>body{font-family:Arial,sans-serif;padding:24px;color:#1a1a2e}h2{font-size:18px;margin-bottom:4px}.sub{font-size:13px;color:#718096;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#2b6cb0;color:white;padding:8px 12px;text-align:right}td{padding:7px 12px;border-bottom:1px solid #e2e8f0}tr:nth-child(even) td{background:#f7fafc}</style>
     </head><body>
     <h2>רשימת שחקנים — ${label}</h2>
     <div class="sub">${new Date().toLocaleDateString('he-IL')} · ${sg.players.filter(p=>!p.hidden).length} שחקנים</div>
