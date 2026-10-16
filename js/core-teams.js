@@ -5,6 +5,7 @@ const FIREBASE_CONFIG = {
   authDomain: 'rishon-lezion-chess-mana-e9f5b.firebaseapp.com',
   databaseURL: 'https://rishon-lezion-chess-mana-e9f5b-default-rtdb.europe-west1.firebasedatabase.app',
   projectId: 'rishon-lezion-chess-mana-e9f5b',
+  storageBucket: 'rishon-lezion-chess-mana-e9f5b.firebasestorage.app',
 };
 
 let db = null;
