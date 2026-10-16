@@ -476,8 +476,9 @@ function newsPostHasFullContent(p) {
 
 function renderNewsSlide(p) {
   const altText = (p.title || '').replace(/"/g,'&quot;');
-  const img = p.imageData
-    ? `<img class="news-card-img" src="${p.imageData}" alt="${altText}">`
+  const coverSrc = p.imageUrl || p.imageData;
+  const img = coverSrc
+    ? `<img class="news-card-img" src="${coverSrc}" alt="${altText}">`
     : `<div class="news-card-no-img">📰</div>`;
   const date  = p.date  ? `<div class="news-card-date">${p.date}</div>` : '';
   const title = p.title ? `<div class="news-card-title">${p.title}</div>` : '';
@@ -715,7 +716,8 @@ function renderActivitiesListView() {
   }
   const gridHtml = '<div class="activities-grid">' + filtered.map(p => {
     const altText = (p.title || '').replace(/"/g,'&quot;');
-    const img = p.imageData ? `<img class="activity-card-img" src="${p.imageData}" alt="${altText}">` : `<div class="activity-card-noimg">📰</div>`;
+    const coverSrc = p.imageUrl || p.imageData;
+    const img = coverSrc ? `<img class="activity-card-img" src="${coverSrc}" alt="${altText}">` : `<div class="activity-card-noimg">📰</div>`;
     const hasFull = newsPostHasFullContent(p);
     const extLink = p.link || p.linkIg; // Facebook wins if both are set — see the identical note in renderNewsCarousel
     const extLabel = p.link ? 'קרא עוד בפייסבוק' : 'קרא עוד באינסטגרם';
@@ -765,19 +767,21 @@ function renderActivityDetailView() {
   // image is a plain visual (matches every card elsewhere: clicking a card
   // navigates to the recap, it never opens an image preview instead), so
   // it's deliberately not part of the lightbox's image set here.
-  const galleryImages = photos.filter(ph => ph.imageData).map(ph => ({ src: ph.imageData, alt: ph.caption || post.title || '' }));
+  const galleryImages = photos.filter(ph => ph.imageUrl || ph.imageData).map(ph => ({ src: ph.imageUrl || ph.imageData, alt: ph.caption || post.title || '' }));
   const linksHtml = renderActivityLinksRow(post);
+  const coverSrc = post.imageUrl || post.imageData;
   root.innerHTML = `
     <div class="activity-detail">
       <button onclick="backToActivitiesList()" style="background:none;border:none;color:#f97316;font-size:14px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px">→ חזרה לכל העדכונים</button>
-      ${post.imageData ? `<img class="activity-detail-cover" src="${post.imageData}" alt="${(post.title||'').replace(/"/g,'&quot;')}">` : ''}
+      ${coverSrc ? `<img class="activity-detail-cover" src="${coverSrc}" alt="${(post.title||'').replace(/"/g,'&quot;')}">` : ''}
       <div class="activity-detail-title">${post.title || ''}</div>
       ${post.date ? `<div class="activity-detail-date">${post.date}</div>` : ''}
       ${linksHtml}
       ${post.fullBody ? `<div class="activity-detail-body">${post.fullBody}</div>` : (post.body ? `<div class="activity-detail-body">${post.body}</div>` : '')}
       ${photos.length ? `<div class="activity-detail-photos">${photos.map((ph, i) => {
         const capAlt = (ph.caption || 'תמונה נוספת ' + (i+1)).replace(/"/g,'&quot;');
-        return `<img src="${ph.imageData}" alt="${capAlt}" onclick="openActivityLightbox(${i})" title="${ph.caption || ''}" tabindex="0" role="button" aria-label="הגדלת ${capAlt}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">`;
+        const phSrc = ph.imageUrl || ph.imageData;
+        return `<img src="${phSrc}" alt="${capAlt}" onclick="openActivityLightbox(${i})" title="${ph.caption || ''}" tabindex="0" role="button" aria-label="הגדלת ${capAlt}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">`;
       }).join('')}</div>` : ''}
     </div>`;
   window._activityLightboxImages = galleryImages;
@@ -851,6 +855,19 @@ function compressImage(file, maxW=900, q=0.82) {
   });
 }
 
+// Uploads a compressed base64 dataURL (compressImage()'s output) to Firebase
+// Storage instead of embedding it inline in the Realtime Database — RTDB
+// records then hold a short URL string instead of the full image bytes
+// (which were bloating newsPosts/clubPeople reads: 3.4MB/1.4MB for just a
+// handful of posts/people, all downloaded on every single list fetch).
+// Throws (with the real Storage error, e.g. storage/unauthorized if Storage
+// rules/plan aren't set up yet) — callers decide how to surface that.
+async function uploadImageToStorage(dataUrl, path) {
+  const ref = storage.ref(path);
+  await ref.putString(dataUrl, 'data_url');
+  return await ref.getDownloadURL();
+}
+
 async function loadNewsAdmin() {
   const el = document.getElementById('news-admin-container');
   if (!el) return;
@@ -875,8 +892,8 @@ async function loadNewsAdmin() {
       ? '<div style="text-align:center;padding:40px;opacity:.5">אין עדכונים עדיין. צור עדכון ראשון!</div>'
       : posts.map(p => `
       <div style="display:flex;gap:14px;align-items:center;padding:14px;background:var(--bg-card);border-radius:12px;margin-bottom:10px;${p.archived ? 'opacity:.6' : ''}">
-        ${p.imageData
-          ? `<img src="${p.imageData}" style="width:80px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0">`
+        ${(p.imageUrl || p.imageData)
+          ? `<img src="${p.imageUrl || p.imageData}" style="width:80px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0">`
           : `<div style="width:80px;height:54px;background:rgba(255,255,255,.08);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px">📰</div>`}
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.title||'(ללא כותרת)'}</div>
@@ -906,8 +923,109 @@ function renderNewsSettingsAdmin() {
       <div id="news-categories-list"></div>
       <button onclick="addNewsCategory()" style="margin-top:6px;background:none;border:1px dashed rgba(255,255,255,.3);color:inherit;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit">+ הוסף קטגוריה</button>
       <div style="margin-top:14px"><button onclick="saveNewsSettings()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:9px 20px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">💾 שמור הגדרות</button></div>
+    </div>
+    <div style="border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:16px;margin-bottom:20px">
+      <h4 style="margin:0 0 8px">🖼️ אחסון תמונות</h4>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:12px">
+        תמונות ישנות (עדכוני המועדון ואנשי המועדון) שמורות כקובץ מוטבע ישירות במסד הנתונים — זה מה שמאט את טעינת העמודים האלה.
+        הכלי הזה מעביר אותן ל-Firebase Storage ומחליף אותן בקישור קצר. חד-פעמי, בטוח להרצה כמה פעמים (מדלג על מה שכבר הועבר).
+      </div>
+      <button onclick="openImageMigrationModal()" style="background:#2b6cb0;color:white;border:none;border-radius:8px;padding:9px 18px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">🔄 העבר תמונות ל-Storage</button>
     </div>`;
 }
+
+// ===== IMAGE MIGRATION: base64-in-RTDB → Firebase Storage =====
+function openImageMigrationModal() {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay open" id="imgMigrationOverlay" onclick="if(event.target===this)this.remove()">
+      <div style="background:var(--bg-card);border-radius:16px;max-width:480px;width:100%;padding:28px;direction:rtl">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h3 style="margin:0">🖼️ העברת תמונות ל-Storage</h3>
+          <button onclick="document.getElementById('imgMigrationOverlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:inherit">✕</button>
+        </div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+          מעביר תמונות שמוטבעות כקובץ בתוך מסד הנתונים (עדכוני המועדון + אנשי המועדון) ל-Firebase Storage,
+          ומחליף אותן בקישור קצר. אם תעצור באמצע או תריץ שוב — זה ידלג על מה שכבר הועבר.
+        </div>
+        <div id="img-migration-log" style="font-size:12px;color:var(--text-muted);background:var(--bg-subtle);border-radius:8px;padding:10px;max-height:220px;overflow-y:auto;margin-bottom:16px;white-space:pre-wrap;font-family:monospace">מוכן להתחלה.</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button onclick="document.getElementById('imgMigrationOverlay').remove()" style="background:rgba(255,255,255,.1);border:none;border-radius:8px;padding:10px 20px;cursor:pointer;color:inherit;font-size:14px">סגור</button>
+          <button id="img-migration-start-btn" onclick="runImageMigration()" style="background:#f97316;color:white;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-weight:700;font-size:14px">▶️ התחל</button>
+        </div>
+      </div>
+    </div>`);
+}
+window.openImageMigrationModal = openImageMigrationModal;
+
+async function runImageMigration() {
+  const logEl = document.getElementById('img-migration-log');
+  const btn = document.getElementById('img-migration-start-btn');
+  const log = (msg) => { if (logEl) { logEl.textContent += '\n' + msg; logEl.scrollTop = logEl.scrollHeight; } };
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ רץ...'; }
+  if (logEl) logEl.textContent = 'מתחיל...';
+  let migrated = 0, failed = 0;
+
+  try {
+    // News posts: cover image + per-post extra photos
+    const newsSnap = await db.ref('newsPosts').get();
+    if (newsSnap.exists()) {
+      const newsData = newsSnap.val();
+      for (const id of Object.keys(newsData)) {
+        const post = newsData[id];
+        if (post.imageData && !post.imageUrl) {
+          try {
+            const url = await uploadImageToStorage(post.imageData, `news/cover-${id}.jpg`);
+            await db.ref(`newsPosts/${id}`).update({ imageUrl: url, imageData: null });
+            migrated++; log(`✅ תמונת שער: ${post.title || id}`);
+          } catch(e) { failed++; log(`❌ נכשל (שער "${post.title || id}"): ${e.code || ''} ${e.message}`); }
+        }
+        if (Array.isArray(post.photos) && post.photos.some(ph => ph && ph.imageData && !ph.imageUrl)) {
+          const newPhotos = [];
+          let anyFailed = false;
+          for (let i = 0; i < post.photos.length; i++) {
+            const ph = post.photos[i];
+            if (ph && ph.imageData && !ph.imageUrl) {
+              try {
+                const url = await uploadImageToStorage(ph.imageData, `news/photo-${id}-${i}.jpg`);
+                newPhotos.push({ ...ph, imageUrl: url, imageData: null });
+                migrated++;
+              } catch(e) { failed++; anyFailed = true; newPhotos.push(ph); log(`❌ נכשל (תמונה נוספת ב"${post.title || id}"): ${e.code || ''} ${e.message}`); }
+            } else newPhotos.push(ph);
+          }
+          await db.ref(`newsPosts/${id}/photos`).set(newPhotos);
+          if (!anyFailed) log(`✅ תמונות נוספות: ${post.title || id}`);
+        }
+      }
+    }
+
+    // Club people photos
+    const peopleSnap = await db.ref('clubPeople').get();
+    if (peopleSnap.exists()) {
+      const peopleData = peopleSnap.val();
+      for (const id of Object.keys(peopleData)) {
+        const person = peopleData[id];
+        if (person.photoData && !person.photoUrl) {
+          try {
+            const url = await uploadImageToStorage(person.photoData, `people/photo-${id}.jpg`);
+            await db.ref(`clubPeople/${id}`).update({ photoUrl: url, photoData: null });
+            migrated++; log(`✅ תמונת איש מועדון: ${person.name || id}`);
+          } catch(e) { failed++; log(`❌ נכשל (${person.name || id}): ${e.code || ''} ${e.message}`); }
+        }
+      }
+    }
+
+    if (migrated === 0 && failed === 0) log('אין תמונות שצריך להעביר — הכול כבר מעודכן.');
+    log(`\n🏁 הסתיים. הועברו: ${migrated}, נכשלו: ${failed}`);
+    showToast(failed ? `⚠️ המיגרציה הסתיימה עם ${failed} שגיאות` : '✅ המיגרציה הושלמה בהצלחה!');
+    loadNewsAdmin(); loadNewsCarousel(); loadPeopleAdmin();
+  } catch(e) {
+    log(`❌ שגיאה כללית: ${e.code || ''} ${e.message}`);
+    log('💡 אם זו שגיאת הרשאה — ודא ש-Firebase Storage מופעל בפרויקט (דורש תכנית Blaze) ושחוקי ה-Storage מאפשרים כתיבה למשתמש מחובר.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '▶️ הרץ שוב'; }
+  }
+}
+window.runImageMigration = runImageMigration;
 
 function renderNewsCategoriesList() {
   const wrap = document.getElementById('news-categories-list');
@@ -977,7 +1095,7 @@ window.openNewsModal = async function(postId) {
   await ensureNewsCategoriesAndSettings();
   let post = {};
   if (postId) { const s = await db.ref('newsPosts/'+postId).get(); if (s.exists()) post = s.val(); }
-  const existImg = post.imageData || '';
+  const existImg = post.imageUrl || post.imageData || '';
   const hasFull = newsPostHasFullContent(post);
   const currentCat = newsEffectiveCategoryId(post);
   const catOptionsHtml = (_newsCategories || [{ ...DEFAULT_NEWS_CATEGORY }])
@@ -1065,7 +1183,7 @@ function renderNmPhotosList() {
   if (!wrap) return;
   wrap.innerHTML = _nmPhotos.map((p, i) => `
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <img src="${p.imageData}" style="width:56px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0">
+      <img src="${p.imageUrl || p.imageData}" style="width:56px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0">
       <input value="${(p.caption||'').replace(/"/g,'&quot;')}" oninput="_nmPhotos[${i}].caption=this.value" placeholder="כיתוב (אופציונלי)" style="flex:1;padding:7px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:inherit;font-family:inherit;font-size:12px;box-sizing:border-box">
       <button onclick="removeNmPhoto(${i})" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
     </div>`).join('') +
@@ -1074,8 +1192,11 @@ function renderNmPhotosList() {
 window.addNmPhoto = async function(input) {
   if (!input.files[0]) return;
   const data = await compressImage(input.files[0], 1100, 0.85);
-  _nmPhotos.push({ imageData: data, caption: '' });
-  renderNmPhotosList();
+  try {
+    const url = await uploadImageToStorage(data, `news/photo-${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`);
+    _nmPhotos.push({ imageUrl: url, caption: '' });
+    renderNmPhotosList();
+  } catch(e) { showToast('❌ שגיאה בהעלאת התמונה: ' + e.message); }
 };
 window.removeNmPhoto = function(i) { _nmPhotos.splice(i, 1); renderNmPhotosList(); };
 
@@ -1125,8 +1246,25 @@ window.saveNewsPost = async function(postId) {
     ? (_nmExtraLinks.map(l => ({ label: (l.label||'').trim(), url: normalizeExternalUrl(l.url) })).filter(l => l.url))
     : [];
   if (!data.extraLinks.length) data.extraLinks = null;
-  if (imgNew)       data.imageData = imgNew;
-  else if (imgKeep && postId) { const s = await db.ref('newsPosts/'+postId+'/imageData').get(); if (s.exists()) data.imageData = s.val(); }
+  if (imgNew) {
+    try {
+      data.imageUrl = await uploadImageToStorage(imgNew, `news/cover-${Date.now()}.jpg`);
+      data.imageData = null;
+    } catch(e) { showToast('❌ שגיאה בהעלאת תמונת השער: ' + e.message); return; }
+  } else if (imgKeep && postId) {
+    const s = await db.ref('newsPosts/'+postId).get();
+    const existing = s.val() || {};
+    if (existing.imageUrl) data.imageUrl = existing.imageUrl;
+    else if (existing.imageData) {
+      // Opportunistic migration: an old base64 cover gets moved to Storage
+      // the next time this post is simply edited and saved, even without
+      // touching the image itself.
+      try {
+        data.imageUrl = await uploadImageToStorage(existing.imageData, `news/cover-${Date.now()}.jpg`);
+        data.imageData = null;
+      } catch(e) { data.imageData = existing.imageData; } // migration failed — keep the legacy image rather than lose it
+    }
+  }
   try {
     if (postId) await db.ref('newsPosts/'+postId).update(data);
     else { data.createdAt = Date.now(); await db.ref('newsPosts').push(data); }
@@ -1172,8 +1310,9 @@ function renderPeopleCards(cat) {
     return;
   }
   grid.innerHTML = filtered.map(p => {
-    const photo = p.photoData
-      ? `<img class="person-photo" src="${p.photoData}" alt="${p.name||''}">`
+    const photoSrc = p.photoUrl || p.photoData;
+    const photo = photoSrc
+      ? `<img class="person-photo" src="${photoSrc}" alt="${p.name||''}">`
       : `<div class="person-photo-placeholder">👤</div>`;
     return `<div class="person-card">
       <div class="person-photo-wrap">${photo}</div>
@@ -1226,7 +1365,7 @@ window.loadPeopleAdmin = async function() {
         <button onclick="movePerson('${p.id}','${p.category}','down')" ${posInCat===catLen-1?'disabled':''} style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;width:26px;height:22px;cursor:${posInCat===catLen-1?'default':'pointer'};opacity:${posInCat===catLen-1?'.3':'1'};color:inherit;font-size:11px;line-height:1">▼</button>
       </div>
       <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--border)">
-        ${p.photoData?`<img src="${p.photoData}" style="width:100%;height:100%;object-fit:cover">`:'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>'}
+        ${(p.photoUrl||p.photoData)?`<img src="${p.photoUrl||p.photoData}" style="width:100%;height:100%;object-fit:cover">`:'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>'}
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;color:var(--text-primary)">${p.name||''}</div>
@@ -1278,7 +1417,7 @@ window.openPersonModal = async function(personId, defaultCat) {
   let person = {};
   if (personId) { const s = await db.ref('clubPeople/'+personId).get(); if (s.exists()) person = s.val(); }
   if (!personId && defaultCat && !person.category) person.category = defaultCat;
-  const existPhoto = person.photoData || '';
+  const existPhoto = person.photoUrl || person.photoData || '';
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open'; modal.style.cssText = 'z-index:9999;padding:20px';
   modal.onclick = e => { if (e.target===modal) modal.remove(); };
@@ -1335,8 +1474,24 @@ window.savePersonData = async function(personId) {
   const imgKeep = document.getElementById('pm-img-keep').value;
   if (!name) { showToast('⚠️ יש להזין שם'); return; }
   const data = { name, role, category: cat, bio, updatedAt: Date.now() };
-  if (imgNew) data.photoData = imgNew;
-  else if (imgKeep && personId) { const s = await db.ref('clubPeople/'+personId+'/photoData').get(); if (s.exists()) data.photoData = s.val(); }
+  if (imgNew) {
+    try {
+      data.photoUrl = await uploadImageToStorage(imgNew, `people/photo-${Date.now()}.jpg`);
+      data.photoData = null;
+    } catch(e) { showToast('❌ שגיאה בהעלאת התמונה: ' + e.message); return; }
+  } else if (imgKeep && personId) {
+    const s = await db.ref('clubPeople/'+personId).get();
+    const existing = s.val() || {};
+    if (existing.photoUrl) data.photoUrl = existing.photoUrl;
+    else if (existing.photoData) {
+      // Opportunistic migration, same as news post covers — this old photo
+      // moves to Storage the next time this person is simply edited and saved.
+      try {
+        data.photoUrl = await uploadImageToStorage(existing.photoData, `people/photo-${Date.now()}.jpg`);
+        data.photoData = null;
+      } catch(e) { data.photoData = existing.photoData; }
+    }
+  }
   try {
     if (personId) {
       await db.ref('clubPeople/'+personId).update(data);

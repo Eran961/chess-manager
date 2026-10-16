@@ -9,6 +9,7 @@ const FIREBASE_CONFIG = {
 
 let db = null;
 let auth = null;
+let storage = null;
 let _vacations = {};
 let _teamVacations = {};
 let _history = {};
@@ -18,6 +19,7 @@ function initFirebase() {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
     auth = firebase.auth();
+    storage = firebase.storage();
     return true;
   } catch(e) { console.error('Firebase init error:', e); return false; }
 }
