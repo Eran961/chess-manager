@@ -1329,19 +1329,58 @@ window.renderCampsPanel = renderCampsPanel;
 // The operational page for one camp — reached via its own top-nav tab (like a group/team page).
 // Finance (income/expenses) lives in the centralized 💰 כספים section, not here — see
 // leagues-audit.js's renderFinancePanel/openCampFinanceModal.
+//
+// Opening a camp shows a picker of its levels (מתחילים/ממשיכים/מתקדמים) first,
+// not every level's full roster table at once — only the selected level's
+// table renders below, same drill-down pattern as youth-tracking.js's age-group
+// list → player list. _campRosterSelectedLevel remembers the open level per
+// camp for this session only (reset on reload), same lifetime as _payGroupFilter.
+let _campRosterSelectedLevel = {};
+
 function renderCampOwnPage(camp) {
   const dates = camp.startDate ? `${formatDate(camp.startDate)}${camp.endDate ? ' – ' + formatDate(camp.endDate) : ''}` : '';
-  const levelsHtml = camp.levels.map((lv, li) => renderCampLevel(camp, lv, li)).join('');
+  const selectedLi = _campRosterSelectedLevel[camp.id];
+  const body = (selectedLi != null && camp.levels[selectedLi])
+    ? `
+      <button onclick="setCampRosterLevel('${camp.id}',null)" style="background:none;border:none;color:#2b6cb0;font-size:13px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px;font-family:inherit">→ חזרה לרשימת הקבוצות</button>
+      ${renderCampLevel(camp, camp.levels[selectedLi], selectedLi)}`
+    : renderCampLevelPicker(camp);
   return `
     <div style="direction:rtl;max-width:900px;padding:20px">
       <div style="margin-bottom:20px">
         <h3 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">🏕️ ${camp.name}</h3>
         ${dates ? `<div style="font-size:13px;color:var(--text-muted);margin-top:4px">${dates}</div>` : ''}
       </div>
-      ${levelsHtml}
+      ${body}
     </div>`;
 }
 window.renderCampOwnPage = renderCampOwnPage;
+
+function renderCampLevelPicker(camp) {
+  if (camp.levels.length === 0) return '<div style="color:var(--text-muted);padding:24px;text-align:center">אין קבוצות במחנה זה</div>';
+  const cards = camp.levels.map((lv, li) => {
+    const totalPlayers = lv.players.filter(p => !p.hidden).length;
+    return `
+      <div onclick="setCampRosterLevel('${camp.id}',${li})" style="cursor:pointer;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;transition:border-color .15s"
+        onmouseenter="this.style.borderColor='#2b6cb0'" onmouseleave="this.style.borderColor='var(--border)'">
+        <div>
+          <div style="font-weight:700;font-size:16px;color:var(--text-primary)">${lv.name || 'רמה'}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:3px">${totalPlayers} שחקנים ${lv.instructor ? '· מדריך: ' + lv.instructor : '· ⚠️ אין מדריך משוייך'}</div>
+        </div>
+        <span style="color:var(--text-muted);font-size:20px">‹</span>
+      </div>`;
+  }).join('');
+  return `<div>${cards}</div>`;
+}
+
+function setCampRosterLevel(campId, levelIdx) {
+  if (levelIdx === null) delete _campRosterSelectedLevel[campId];
+  else _campRosterSelectedLevel[campId] = levelIdx;
+  const camp = camps.find(c => c.id === campId);
+  const panel = document.getElementById('panel-camp-' + campId);
+  if (panel && camp) panel.innerHTML = renderCampOwnPage(camp);
+}
+window.setCampRosterLevel = setCampRosterLevel;
 
 // Refreshes whichever camp UI is currently on screen after a data change
 function refreshCampPanel(campId) {
